@@ -15,6 +15,7 @@ const PUBLIC_TABLES = [
   "image_pools",
   "image_pool_items",
   "theme_assignments",
+  "presentation_runs",
   "questions",
   "question_pools",
   "question_pool_items",

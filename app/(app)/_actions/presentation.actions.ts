@@ -1,0 +1,128 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
+import { actionError } from "@/lib/data/errors";
+import { requireUser } from "@/lib/data/auth";
+import { approveAllSlidesForClass } from "@/lib/data/materials";
+import {
+  getOrCreateRun,
+  startRun,
+  updateRunSettings,
+} from "@/lib/data/presentation-runs";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { assignThemeForRun, getAssignmentsForRun, listClassSlides } from "@/lib/themes/engine";
+import { DEFAULT_RUN_SETTINGS, parseRunSettings, type RunSettings } from "@/lib/themes/types";
+
+function revalidatePresent(classId: string) {
+  revalidatePath(`/class/${classId}`);
+  revalidatePath(`/class/${classId}/present`);
+  revalidatePath(`/class/${classId}/theme`);
+}
+
+export async function loadPresentSetupAction(input: unknown) {
+  const parsed = z.object({ classId: z.string().uuid() }).safeParse(input);
+  if (!parsed.success) return { ok: false as const, error: "Invalid class" };
+  try {
+    const { user } = await requireUser();
+    const run = await getOrCreateRun(parsed.data.classId, user.id);
+    const slides = await listClassSlides(parsed.data.classId);
+    let assignments = await getAssignmentsForRun(run.id);
+    if (assignments.length === 0 && slides.length) {
+      const reel = await assignThemeForRun(run.id);
+      assignments = reel.map((item) => ({
+        slide_id: item.slide_id,
+        theme_json: item.theme_json,
+        image_url: item.image_url,
+        image_attribution: item.image_attribution,
+      }));
+    }
+    const admin = createAdminClient();
+    const { data: themes } = await admin
+      .from("themes")
+      .select("id, name, palette_json")
+      .eq("is_professional_locked", true)
+      .is("deleted_at", null)
+      .order("name");
+    return {
+      ok: true as const,
+      run,
+      settings: parseRunSettings(run.settings_json),
+      slides,
+      assignments,
+      themes: themes ?? [],
+      counts: {
+        total: slides.length,
+        approved: slides.filter((slide) => slide.status === "approved").length,
+        draft: slides.filter((slide) => slide.status === "draft").length,
+      },
+    };
+  } catch (error) {
+    return { ok: false as const, error: actionError(error) };
+  }
+}
+
+export async function saveRunSettingsAction(input: unknown) {
+  const parsed = z
+    .object({
+      classId: z.string().uuid(),
+      runId: z.string().uuid(),
+      settings: z.object({
+        seconds_per_slide: z.number().int().min(0).max(600),
+        teleprompter_wpm: z.number().int().min(60).max(400),
+        use_image_pools: z.boolean(),
+        theme_mode: z.enum(["shuffle", "locked"]),
+        locked_theme_id: z.string().uuid().nullable().optional(),
+        theme_overrides: z.record(z.string(), z.string()).optional(),
+      }),
+    })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false as const, error: "Invalid settings" };
+  try {
+    const current = parseRunSettings(
+      (await (await import("@/lib/data/presentation-runs")).getRunByPk(parsed.data.runId))
+        .settings_json,
+    );
+    const settings: RunSettings = {
+      ...DEFAULT_RUN_SETTINGS,
+      ...current,
+      ...parsed.data.settings,
+      theme_overrides: parsed.data.settings.theme_overrides ?? current.theme_overrides,
+    };
+    await updateRunSettings(parsed.data.runId, settings);
+    revalidatePresent(parsed.data.classId);
+    return { ok: true as const };
+  } catch (error) {
+    return { ok: false as const, error: actionError(error) };
+  }
+}
+
+export async function approveAllClassSlidesAction(input: unknown) {
+  const parsed = z.object({ classId: z.string().uuid() }).safeParse(input);
+  if (!parsed.success) return { ok: false as const, error: "Invalid class" };
+  try {
+    const count = await approveAllSlidesForClass(parsed.data.classId);
+    revalidatePresent(parsed.data.classId);
+    return { ok: true as const, count };
+  } catch (error) {
+    return { ok: false as const, error: actionError(error) };
+  }
+}
+
+export async function startPresentationAction(input: unknown) {
+  const parsed = z
+    .object({ classId: z.string().uuid(), runId: z.string().uuid() })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false as const, error: "Invalid run" };
+  try {
+    const assignments = await getAssignmentsForRun(parsed.data.runId);
+    if (assignments.length === 0) {
+      await assignThemeForRun(parsed.data.runId);
+    }
+    const run = await startRun(parsed.data.runId);
+    revalidatePresent(parsed.data.classId);
+    return { ok: true as const, publicRunId: run.run_id };
+  } catch (error) {
+    return { ok: false as const, error: actionError(error) };
+  }
+}

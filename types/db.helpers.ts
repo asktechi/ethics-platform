@@ -31,6 +31,7 @@ export type Theme = Tables<"themes">;
 export type ImagePool = Tables<"image_pools">;
 export type ImagePoolItem = Tables<"image_pool_items">;
 export type ThemeAssignment = Tables<"theme_assignments">;
+export type PresentationRun = Tables<"presentation_runs">;
 export type Question = Tables<"questions">;
 export type QuestionPool = Tables<"question_pools">;
 export type QuestionPoolItem = Tables<"question_pool_items">;

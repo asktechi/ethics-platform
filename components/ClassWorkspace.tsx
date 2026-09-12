@@ -9,17 +9,18 @@ import {
 import { ConceptList } from "@/components/ConceptList";
 import { InlineEditableText } from "@/components/InlineEditableText";
 import { MaterialsPanel } from "@/components/materials/MaterialsPanel";
+import { PresentSetup } from "@/components/theme/PresentSetup";
+import { ThemeStudio } from "@/components/theme/ThemeStudio";
 import { SectionList } from "@/components/SectionList";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import Link from "next/link";
 import type { ClassDetail } from "@/lib/data/classes";
 import type { MaterialListRow } from "@/lib/data/materials.types";
 import type { Concept, Section } from "@/types/db.helpers";
 
 const comingSoon: Record<string, string> = {
   questions: "Coming in Phase 5 — question bank, AI tagging, and instructor approval.",
-  theme: "Coming in Phase 4 — professional palettes and locked concept images.",
-  present: "Coming in Phase 4 — presenter and audience views in lockstep.",
 };
 
 export function ClassWorkspace({
@@ -125,8 +126,8 @@ export function ClassWorkspace({
           ))}
         </div>
 
-        <Button disabled variant="outline" className="border-ivory/20 text-ivory/50">
-          Presenter link — Phase 4
+        <Button asChild variant="outline" className="border-ivory/20 text-ivory">
+          <Link href={`/class/${detail.id}/present`}>Open presentation setup</Link>
         </Button>
 
         <div className="border border-red-900/40 bg-card p-5">
@@ -188,6 +189,14 @@ export function ClassWorkspace({
 
       <TabsContent value="materials" className="mt-6">
         <MaterialsPanel classId={detail.id} initialMaterials={materials} />
+      </TabsContent>
+
+      <TabsContent value="theme" className="mt-6">
+        <ThemeStudio classId={detail.id} />
+      </TabsContent>
+
+      <TabsContent value="present" className="mt-6">
+        <PresentSetup classId={detail.id} />
       </TabsContent>
 
       {Object.entries(comingSoon).map(([key, copy]) => (

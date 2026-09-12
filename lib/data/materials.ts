@@ -290,6 +290,28 @@ export async function reorderSlides(materialId: string, orderedIds: string[]): P
   if (failed?.error) throw new Error(failed.error.message);
 }
 
+export async function approveAllSlidesForClass(classId: string): Promise<number> {
+  const admin = createAdminClient();
+  const { data: materials, error } = await admin
+    .from("materials")
+    .select("id")
+    .eq("class_id", classId)
+    .eq("is_current", true)
+    .is("deleted_at", null);
+  if (error) throw new Error(error.message);
+  const ids = (materials ?? []).map((row) => row.id);
+  if (ids.length === 0) return 0;
+  const { data, error: updateError } = await admin
+    .from("slides")
+    .update({ status: "approved" })
+    .in("material_id", ids)
+    .is("deleted_at", null)
+    .eq("status", "draft")
+    .select("id");
+  if (updateError) throw new Error(updateError.message);
+  return (data ?? []).length;
+}
+
 export async function approveAllSlides(materialId: string): Promise<void> {
   const { supabase } = await requireUser();
   const { error } = await supabase

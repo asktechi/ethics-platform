@@ -2,7 +2,7 @@
 
 Personal teaching platform for CFA Institute ethics instruction (Levels I–III). The owner is the sole instructor-author. Students join live quizzes with an open link and a display name.
 
-This repository is at **Phase 3**: immutable materials ingestion for `.txt`, `.md`, `.pdf`, `.docx`, `.csv`, and `.pptx` (JSZip text fallback). The Fly.io LibreOffice worker is deferred to Phase 3.5.
+This repository is at **Phase 4 Session A**: presentation foundations — theme shuffle, image-pool curation, and the setup / share screen. Presenter and audience views are Session B.
 
 Never commit `.env.local`, `SUPABASE_SERVICE_ROLE_KEY`, or `SUPABASE_DB_URL`.
 
@@ -17,7 +17,7 @@ pnpm dev
 The default Next.js port is `3000`. In this environment the preview server uses a non-default port (see the preview card). Open `/` for the landing page, `/login` for the magic-link instructor sign-in, and `/dashboard` for the class builder.
 
 Health check: `GET /api/health` returns `{ "ok": true }`.  
-Database check: `GET /api/health/db` returns `{ "ok": true, "tables": 19 }`.
+Database check: `GET /api/health/db` returns `{ "ok": true, "tables": 20 }`.
 
 `npm` works the same way (`npm install`, `npm run dev`) if you prefer it over pnpm.
 
@@ -60,9 +60,10 @@ Next.js 14 App Router, TypeScript, Tailwind, shadcn/ui, Framer Motion, dnd-kit, 
 0. **Bootstrap** — repo, deps, theme, env, instructor shell
 1. **Data and auth** — Supabase schema, RLS, magic-link instructor auth, seed Levels I–III and Standards I–VII
 2. **Navigation** — Level → Class → Section → Concept
-3. **Materials** — immutable uploads, parsers, slide reorder *(this phase)*
+3. **Materials** — immutable uploads, parsers, slide reorder
 3.5. **PPTX worker** — Fly.io LibreOffice high-fidelity conversion *(not started)*
-4. **Presentation** — dual view, teleprompter, dynamic theming
+4A. **Presentation foundations** — theme shuffle, image pools, setup screen *(this phase)*
+4B. **Presenter + audience** — dual view and realtime lockstep *(not started)*
 5. **Questions** — bank, AI tagging/generation, instructor approval, pools
 6. **Live quiz** — Jeopardy-style session, realtime leaderboard
 7. **Polish** — shortcuts, offline cache, PDF export, expand beyond CFA

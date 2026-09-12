@@ -320,6 +320,8 @@ export type Database = {
             | null;
           image_prompt: string | null;
           status: "draft" | "approved";
+          concept_id: string | null;
+          image_id: string | null;
           created_at: string;
           updated_at: string;
           deleted_at: string | null;
@@ -343,6 +345,8 @@ export type Database = {
             | null;
           image_prompt?: string | null;
           status?: "draft" | "approved";
+          concept_id?: string | null;
+          image_id?: string | null;
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
@@ -366,6 +370,8 @@ export type Database = {
             | null;
           image_prompt?: string | null;
           status?: "draft" | "approved";
+          concept_id?: string | null;
+          image_id?: string | null;
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
@@ -410,6 +416,9 @@ export type Database = {
           approved_at: string | null;
           approved_by: string | null;
           is_locked: boolean;
+          fallback_query: string | null;
+          last_generated_at: string | null;
+          generation_source: "unsplash" | "upload" | "none";
           created_at: string;
           updated_at: string;
           deleted_at: string | null;
@@ -421,6 +430,9 @@ export type Database = {
           approved_at?: string | null;
           approved_by?: string | null;
           is_locked?: boolean;
+          fallback_query?: string | null;
+          last_generated_at?: string | null;
+          generation_source?: "unsplash" | "upload" | "none";
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
@@ -432,6 +444,9 @@ export type Database = {
           approved_at?: string | null;
           approved_by?: string | null;
           is_locked?: boolean;
+          fallback_query?: string | null;
+          last_generated_at?: string | null;
+          generation_source?: "unsplash" | "upload" | "none";
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
@@ -446,6 +461,7 @@ export type Database = {
           thumb_url: string | null;
           source: string | null;
           photographer: string | null;
+          source_url: string | null;
           order: number;
           created_at: string;
           updated_at: string;
@@ -458,6 +474,7 @@ export type Database = {
           thumb_url?: string | null;
           source?: string | null;
           photographer?: string | null;
+          source_url?: string | null;
           order?: number;
           created_at?: string;
           updated_at?: string;
@@ -470,6 +487,7 @@ export type Database = {
           thumb_url?: string | null;
           source?: string | null;
           photographer?: string | null;
+          source_url?: string | null;
           order?: number;
           created_at?: string;
           updated_at?: string;
@@ -485,6 +503,9 @@ export type Database = {
           theme_id: string;
           image_url: string | null;
           run_id: string | null;
+          theme_override_id: string | null;
+          image_attribution: string | null;
+          variation_json: Json;
           assigned_at: string;
           created_at: string;
           updated_at: string;
@@ -497,6 +518,9 @@ export type Database = {
           theme_id: string;
           image_url?: string | null;
           run_id?: string | null;
+          theme_override_id?: string | null;
+          image_attribution?: string | null;
+          variation_json?: Json;
           assigned_at?: string;
           created_at?: string;
           updated_at?: string;
@@ -509,7 +533,55 @@ export type Database = {
           theme_id?: string;
           image_url?: string | null;
           run_id?: string | null;
+          theme_override_id?: string | null;
+          image_attribution?: string | null;
+          variation_json?: Json;
           assigned_at?: string;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Relationships: [];
+      };
+      presentation_runs: {
+        Row: {
+          id: string;
+          class_id: string;
+          run_id: string;
+          started_by: string;
+          started_at: string;
+          ended_at: string | null;
+          status: "setup" | "live" | "ended";
+          settings_json: Json;
+          theme_ids_used: string[];
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          class_id: string;
+          run_id?: string;
+          started_by: string;
+          started_at?: string;
+          ended_at?: string | null;
+          status?: "setup" | "live" | "ended";
+          settings_json?: Json;
+          theme_ids_used?: string[];
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          class_id?: string;
+          run_id?: string;
+          started_by?: string;
+          started_at?: string;
+          ended_at?: string | null;
+          status?: "setup" | "live" | "ended";
+          settings_json?: Json;
+          theme_ids_used?: string[];
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
@@ -747,6 +819,16 @@ export type Database = {
       health_public_table_count: {
         Args: Record<string, never>;
         Returns: number;
+      };
+      get_run_by_run_id: {
+        Args: { p_run_id: string };
+        Returns: {
+          id: string;
+          class_id: string;
+          run_id: string;
+          status: string;
+          settings_json: Json;
+        }[];
       };
     };
     Enums: {
