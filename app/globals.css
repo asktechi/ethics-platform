@@ -1,0 +1,66 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+@layer base {
+  :root,
+  .dark {
+    --background: 210 59% 11%;
+    --foreground: 41 39% 94%;
+    --card: 208 48% 14%;
+    --card-foreground: 41 39% 94%;
+    --popover: 208 48% 14%;
+    --popover-foreground: 41 39% 94%;
+    --primary: 46 68% 47%;
+    --primary-foreground: 210 59% 11%;
+    --secondary: 209 100% 22%;
+    --secondary-foreground: 41 39% 94%;
+    --muted: 210 40% 16%;
+    --muted-foreground: 40 18% 72%;
+    --accent: 209 100% 22%;
+    --accent-foreground: 41 39% 94%;
+    --destructive: 0 72% 46%;
+    --destructive-foreground: 41 39% 94%;
+    --border: 210 28% 22%;
+    --input: 210 28% 22%;
+    --ring: 46 68% 47%;
+    --chart-1: 46 68% 47%;
+    --chart-2: 209 100% 22%;
+    --chart-3: 41 39% 94%;
+    --chart-4: 210 40% 30%;
+    --chart-5: 0 0% 11%;
+    --radius: 0.35rem;
+    --sidebar: 210 59% 9%;
+    --sidebar-foreground: 41 39% 94%;
+    --sidebar-primary: 46 68% 47%;
+    --sidebar-primary-foreground: 210 59% 11%;
+    --sidebar-accent: 209 80% 16%;
+    --sidebar-accent-foreground: 41 39% 94%;
+    --sidebar-border: 210 28% 18%;
+    --sidebar-ring: 46 68% 47%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply bg-navy text-ivory;
+  }
+
+  body {
+    @apply bg-navy font-sans text-ivory antialiased;
+  }
+
+  h1,
+  h2,
+  .font-display {
+    @apply font-display;
+  }
+}
