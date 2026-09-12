@@ -42,7 +42,7 @@ export async function loadAssignmentsByPublicRunId(publicRunId: string) {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("theme_assignments")
-    .select("slide_id, theme_id, image_url, image_attribution, variation_json, themes(name, palette_json)")
+    .select("slide_id, theme_id, image_url, image_attribution, variation_json, themes!theme_assignments_theme_id_fkey(name, palette_json)")
     .eq("run_id", publicRunId)
     .is("deleted_at", null);
   if (error) throw new Error(error.message);
