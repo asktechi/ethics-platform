@@ -2,6 +2,15 @@ import Link from "next/link";
 import { ArrowUpRight, BookOpen, GraduationCap, Layers3 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { brandTokens } from "@/lib/theme/tokens";
+
+const swatches = [
+  { name: "navy", hex: brandTokens.navy },
+  { name: "cfaBlue", hex: brandTokens.cfaBlue },
+  { name: "gold", hex: brandTokens.gold },
+  { name: "ivory", hex: brandTokens.ivory },
+  { name: "charcoal", hex: brandTokens.charcoal },
+] as const;
 
 const levels = [
   {
@@ -48,6 +57,27 @@ export default function DashboardPage() {
           <Link href="/login">Instructor sign-in stub</Link>
         </Button>
       </div>
+
+      <section aria-label="Brand palette" className="mt-8">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gold">
+          Brand palette
+        </p>
+        <div className="mt-3 flex flex-wrap gap-4">
+          {swatches.map((swatch) => (
+            <div key={swatch.name} className="flex min-w-[6.5rem] flex-col gap-2">
+              <div
+                className="h-14 w-full border border-ivory/20"
+                style={{ backgroundColor: swatch.hex }}
+                title={`${swatch.name} ${swatch.hex}`}
+              />
+              <p className="text-xs font-medium text-ivory">{swatch.name}</p>
+              <p className="font-mono text-[0.7rem] uppercase text-ivory/55">
+                {swatch.hex}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
 
       <section className="mt-8 grid gap-4 md:grid-cols-3">
         {levels.map((level) => {
