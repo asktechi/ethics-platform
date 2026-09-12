@@ -225,12 +225,23 @@ const report = {
   ],
 };
 
-const { data: users, error: userError } = await admin.from("users").select("id").limit(1);
+let { data: users, error: userError } = await admin.from("users").select("id").limit(1);
 if (userError) throw new Error(userError.message);
-const userId = users?.[0]?.id;
+let userId = users?.[0]?.id;
 if (!userId) {
-  console.log(JSON.stringify({ ...report, db: "skipped — no instructor user yet" }, null, 2));
-  process.exit(0);
+  const created = await admin.auth.admin.createUser({
+    email: "phase3-verify@example.com",
+    email_confirm: true,
+  });
+  if (created.error) throw new Error(created.error.message);
+  const upsert = await admin.from("users").upsert({
+    id: created.data.user.id,
+    role: "instructor",
+    name: "Phase 3 verify",
+    email: "phase3-verify@example.com",
+  });
+  if (upsert.error) throw new Error(upsert.error.message);
+  userId = created.data.user.id;
 }
 
 const { data: level } = await admin.from("levels").select("id").eq("slug", "level-1").maybeSingle();
