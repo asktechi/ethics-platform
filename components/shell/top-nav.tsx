@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Menu, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { signOutAction } from "@/app/(app)/_actions/auth.actions";
 import { Logo } from "@/components/brand/logo";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -15,12 +16,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { SidebarNav } from "@/components/shell/sidebar-nav";
+import type { SidebarNavData } from "@/components/shell/nav-types";
 
 type TopNavProps = {
   collapsed: boolean;
   onToggleCollapsed: () => void;
   mobileOpen: boolean;
   onMobileOpenChange: (open: boolean) => void;
+  nav: SidebarNavData;
 };
 
 export function TopNav({
@@ -28,6 +31,7 @@ export function TopNav({
   onToggleCollapsed,
   mobileOpen,
   onMobileOpenChange,
+  nav,
 }: TopNavProps) {
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-navy/95 px-3 backdrop-blur md:px-5">
@@ -50,7 +54,11 @@ export function TopNav({
           <div className="border-b border-sidebar-border px-4 py-4">
             <Logo href="/dashboard" />
           </div>
-          <SidebarNav collapsed={false} onNavigate={() => onMobileOpenChange(false)} />
+          <SidebarNav
+            collapsed={false}
+            nav={nav}
+            onNavigate={() => onMobileOpenChange(false)}
+          />
         </SheetContent>
       </Sheet>
 
@@ -89,21 +97,25 @@ export function TopNav({
             >
               <Avatar className="h-9 w-9 border border-gold/50">
                 <AvatarFallback className="bg-cfaBlue text-xs font-semibold text-ivory">
-                  IN
+                  {nav.instructorInitials}
                 </AvatarFallback>
               </Avatar>
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>
-              <span className="block text-sm">Instructor</span>
+              <span className="block text-sm">{nav.instructorName}</span>
               <span className="block text-xs font-normal text-muted-foreground">
-                Auth connects in Phase 1
+                Instructor
               </span>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <Link href="/login">Sign out</Link>
+            <DropdownMenuItem
+              onSelect={() => {
+                void signOutAction();
+              }}
+            >
+              Sign out
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

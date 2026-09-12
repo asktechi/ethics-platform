@@ -4,12 +4,19 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { SidebarNav } from "@/components/shell/sidebar-nav";
+import type { SidebarNavData } from "@/components/shell/nav-types";
 import { TopNav } from "@/components/shell/top-nav";
 
 const EXPANDED = 260;
 const COLLAPSED = 76;
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({
+  children,
+  nav,
+}: {
+  children: React.ReactNode;
+  nav: SidebarNavData;
+}) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -20,6 +27,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         onToggleCollapsed={() => setCollapsed((value) => !value)}
         mobileOpen={mobileOpen}
         onMobileOpenChange={setMobileOpen}
+        nav={nav}
       />
       <div className="flex min-h-0 flex-1">
         <motion.aside
@@ -30,7 +38,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           className="hidden shrink-0 overflow-hidden border-r border-sidebar-border bg-sidebar md:block"
         >
           <ScrollArea className="h-[calc(100vh-4rem)]">
-            <SidebarNav collapsed={collapsed} />
+            <SidebarNav collapsed={collapsed} nav={nav} />
           </ScrollArea>
         </motion.aside>
         <main className="min-w-0 flex-1 px-4 py-8 md:px-8">{children}</main>

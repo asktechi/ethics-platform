@@ -2,7 +2,7 @@
 
 Personal teaching platform for CFA Institute ethics instruction (Levels I–III). The owner is the sole instructor-author. Students join live quizzes with an open link and a display name.
 
-This repository is at **Phase 1**: schema, RLS, seed data, and instructor magic-link auth.
+This repository is at **Phase 2**: Level → Class → Section → Concept navigation.
 
 Never commit `.env.local`, `SUPABASE_SERVICE_ROLE_KEY`, or `SUPABASE_DB_URL`.
 
@@ -45,8 +45,8 @@ Next.js 14 App Router, TypeScript, Tailwind, shadcn/ui, Framer Motion, dnd-kit, 
 ## Phase roadmap
 
 0. **Bootstrap** — repo, deps, theme, env, instructor shell
-1. **Data and auth** — Supabase schema, RLS, magic-link instructor auth, seed Levels I–III and Standards I–VII *(this phase)*
-2. **Navigation** — Level → Class → Section → Concept
+1. **Data and auth** — Supabase schema, RLS, magic-link instructor auth, seed Levels I–III and Standards I–VII
+2. **Navigation** — Level → Class → Section → Concept *(this phase)*
 3. **Materials** — immutable uploads, Fly worker, slide reorder
 4. **Presentation** — dual view, teleprompter, dynamic theming
 5. **Questions** — bank, AI tagging/generation, instructor approval, pools

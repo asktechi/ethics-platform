@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const APP_PATHS = ["/dashboard"];
+const APP_PATHS = ["/dashboard", "/level", "/class"];
 
 function isAppPath(pathname: string) {
   return APP_PATHS.some(
@@ -61,5 +61,11 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/dashboard", "/login"],
+  matcher: [
+    "/dashboard/:path*",
+    "/dashboard",
+    "/level/:path*",
+    "/class/:path*",
+    "/login",
+  ],
 };
