@@ -19,6 +19,8 @@ const initialState: PresentationBusState = {
   currentSlideIndex: 0,
   isPaused: false,
   teleprompterScrolling: true,
+  teleprompterLineIndex: -1,
+  revealFlushed: false,
   mode: "host",
   runId: null,
   assignments: [],
@@ -45,6 +47,8 @@ function reduce(state: PresentationBusState, event: BusEvent): PresentationBusSt
         ...state,
         currentSlideIndex: next,
         slidesAdvanced: state.slidesAdvanced + 1,
+        teleprompterLineIndex: -1,
+        revealFlushed: true,
       };
     }
     case "PREV": {
@@ -52,6 +56,8 @@ function reduce(state: PresentationBusState, event: BusEvent): PresentationBusSt
       return {
         ...state,
         currentSlideIndex: clampIndex(state.currentSlideIndex - 1, state.slideCount),
+        teleprompterLineIndex: -1,
+        revealFlushed: false,
       };
     }
     case "GOTO": {
@@ -62,8 +68,30 @@ function reduce(state: PresentationBusState, event: BusEvent): PresentationBusSt
         ...state,
         currentSlideIndex: next,
         slidesAdvanced: state.slidesAdvanced + 1,
+        teleprompterLineIndex: -1,
+        revealFlushed: false,
       };
     }
+    case "TELEPROMPTER_LINE":
+    case "SET_TELEPROMPTER_LINE": {
+      if (state.isPaused && event.lineIndex > state.teleprompterLineIndex) {
+        return state;
+      }
+      return {
+        ...state,
+        currentSlideIndex: clampIndex(event.slideIndex, state.slideCount || event.slideIndex + 1),
+        teleprompterLineIndex: event.lineIndex,
+        revealFlushed: false,
+      };
+    }
+    case "SET_REVEAL_FLUSH":
+      return {
+        ...state,
+        revealFlushed: event.flushed,
+        teleprompterLineIndex: event.flushed
+          ? Number.MAX_SAFE_INTEGER
+          : state.teleprompterLineIndex,
+      };
     case "PAUSE":
       return { ...state, isPaused: true, teleprompterScrolling: false };
     case "RESUME":
@@ -110,7 +138,10 @@ function emit(event: BusEvent, state: PresentationBusState, origin: EventOrigin)
 type BusStore = PresentationBusState & {
   dispatch: (event: BusEvent) => void;
   applyRemoteEvent: (event: BusEvent) => void;
-  applyRemoteIndex: (index: number, extras?: { ended?: boolean; isPaused?: boolean }) => void;
+  applyRemoteIndex: (
+    index: number,
+    extras?: { ended?: boolean; isPaused?: boolean; lineIndex?: number; revealAll?: boolean },
+  ) => void;
 };
 
 export const usePresentationBus = create<BusStore>((set, get) => ({
@@ -127,12 +158,15 @@ export const usePresentationBus = create<BusStore>((set, get) => ({
   },
   applyRemoteIndex: (index, extras) => {
     const current = get();
+    const slideChanged = clampIndex(index, current.slideCount) !== current.currentSlideIndex;
     const next: PresentationBusState = {
       ...current,
       currentSlideIndex: clampIndex(index, current.slideCount),
       ended: extras?.ended ?? current.ended,
       isPaused: extras?.isPaused ?? current.isPaused,
       teleprompterScrolling: extras?.isPaused === true ? false : current.teleprompterScrolling,
+      teleprompterLineIndex: extras?.lineIndex ?? (slideChanged ? -1 : current.teleprompterLineIndex),
+      revealFlushed: extras?.revealAll ?? current.revealFlushed,
     };
     set(next);
     emit({ type: "GOTO", index: next.currentSlideIndex }, next, "remote");
@@ -156,7 +190,7 @@ export function applyRemoteEvent(event: BusEvent) {
 
 export function applyRemoteIndex(
   index: number,
-  extras?: { ended?: boolean; isPaused?: boolean },
+  extras?: { ended?: boolean; isPaused?: boolean; lineIndex?: number; revealAll?: boolean },
 ) {
   usePresentationBus.getState().applyRemoteIndex(index, extras);
 }
@@ -177,6 +211,8 @@ export function resetPresentationBus() {
     currentSlideIndex: 0,
     isPaused: false,
     teleprompterScrolling: true,
+    teleprompterLineIndex: -1,
+    revealFlushed: false,
     mode: "host",
     runId: null,
     assignments: [],

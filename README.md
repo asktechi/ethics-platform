@@ -2,7 +2,7 @@
 
 Personal teaching platform for CFA Institute ethics instruction (Levels I–III). The owner is the sole instructor-author. Students join live quizzes with an open link and a display name.
 
-This repository is at **Phase 4 Session B**: presenter view, audience view, and Supabase Realtime lockstep. The host publishes on `presentation:{run_id}`; the audience subscribes read-only. All advance events go through `dispatch` in `lib/presentation/bus.ts` so voice input can plug in later.
+This repository is at **Phase 4.5**: audience slides reveal in lockstep with the host teleprompter (`TELEPROMPTER_LINE` on `presentation:{run_id}`), and `ThemeBackground` is a five-layer professional stack.
 
 Never commit `.env.local`, `SUPABASE_SERVICE_ROLE_KEY`, or `SUPABASE_DB_URL`.
 
@@ -73,7 +73,8 @@ Next.js 14 App Router, TypeScript, Tailwind, shadcn/ui, Framer Motion, dnd-kit, 
 3. **Materials** — immutable uploads, parsers, slide reorder
 3.5. **PPTX worker** — Fly.io LibreOffice high-fidelity conversion *(not started)*
 4A. **Presentation foundations** — theme shuffle, image pools, setup screen
-4B. **Presenter + audience** — dual view and realtime lockstep *(this phase)*
+4B. **Presenter + audience** — dual view and realtime lockstep
+4.5. **Teleprompter sync** — line-by-line audience reveal + background polish *(this phase)*
 5. **Questions** — bank, AI tagging/generation, instructor approval, pools
 6. **Live quiz** — Jeopardy-style session, realtime leaderboard
 7. **Polish** — shortcuts, offline cache, PDF export, expand beyond CFA

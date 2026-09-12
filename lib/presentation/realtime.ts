@@ -28,7 +28,8 @@ function isBusEventType(value: string): value is BusEventType {
     value === "GOTO" ||
     value === "PAUSE" ||
     value === "RESUME" ||
-    value === "END"
+    value === "END" ||
+    value === "TELEPROMPTER_LINE"
   );
 }
 
@@ -37,6 +38,7 @@ function snapshotEnvelope(): RealtimeEnvelope {
   return {
     type: "SNAPSHOT",
     slideIndex: state.currentSlideIndex,
+    lineIndex: state.teleprompterLineIndex,
     ts: Date.now(),
     ended: state.ended,
     isPaused: state.isPaused,
@@ -44,12 +46,20 @@ function snapshotEnvelope(): RealtimeEnvelope {
   };
 }
 
-function applyEnvelope(payload: RealtimeEnvelope) {
+function applyEnvelope(payload: RealtimeEnvelope, scheduleAdvance: (fn: () => void) => void) {
   if (payload.type === "SNAPSHOT") {
     applyRemoteIndex(payload.slideIndex, {
       ended: payload.ended,
       isPaused: payload.isPaused,
+      lineIndex: payload.lineIndex,
     });
+    if (typeof payload.lineIndex === "number") {
+      applyRemoteEvent({
+        type: "SET_TELEPROMPTER_LINE",
+        slideIndex: payload.slideIndex,
+        lineIndex: payload.lineIndex,
+      });
+    }
     if (payload.ended) applyRemoteEvent({ type: "END" });
     return;
   }
@@ -59,16 +69,40 @@ function applyEnvelope(payload: RealtimeEnvelope) {
     return;
   }
   if (payload.type === "PAUSE") {
-    applyRemoteIndex(payload.slideIndex, { isPaused: true });
+    applyRemoteIndex(payload.slideIndex, {
+      isPaused: true,
+      lineIndex: payload.lineIndex ?? getPresentationState().teleprompterLineIndex,
+    });
     applyRemoteEvent({ type: "PAUSE" });
     return;
   }
   if (payload.type === "RESUME") {
-    applyRemoteIndex(payload.slideIndex, { isPaused: false });
+    applyRemoteIndex(payload.slideIndex, {
+      isPaused: false,
+      lineIndex: payload.lineIndex ?? getPresentationState().teleprompterLineIndex,
+    });
     applyRemoteEvent({ type: "RESUME" });
     return;
   }
-  applyRemoteIndex(payload.slideIndex, { ended: false });
+  if (payload.type === "TELEPROMPTER_LINE") {
+    const state = getPresentationState();
+    if (state.isPaused) return;
+    const lineIndex = payload.lineIndex ?? 0;
+    applyRemoteEvent({
+      type: "SET_TELEPROMPTER_LINE",
+      slideIndex: payload.slideIndex,
+      lineIndex,
+    });
+    return;
+  }
+  if (payload.type === "NEXT") {
+    applyRemoteEvent({ type: "SET_REVEAL_FLUSH", flushed: true });
+    scheduleAdvance(() => {
+      applyRemoteIndex(payload.slideIndex, { ended: false, lineIndex: -1, revealAll: false });
+    });
+    return;
+  }
+  applyRemoteIndex(payload.slideIndex, { ended: false, lineIndex: payload.lineIndex ?? -1 });
 }
 
 export type PresentationRealtimeHandle = {
@@ -89,6 +123,7 @@ export function connectPresentationRealtime(options: {
   let channel: RealtimeChannel | null = null;
   let unsubBus: (() => void) | null = null;
   let disposed = false;
+  let advanceTimer: ReturnType<typeof setTimeout> | null = null;
 
   const send = (event: string, payload: RealtimeEnvelope | Record<string, never>) => {
     if (!channel) return;
@@ -111,7 +146,6 @@ export function connectPresentationRealtime(options: {
   const publish = (type: BusEventType | "SNAPSHOT") => {
     const state = getPresentationState();
     if (state.mode === "rehearsal") {
-      // Phase 4.9: rehearsal must never hit the Realtime channel.
       console.log("[presentation] rehearsal — not broadcasting", type);
       return;
     }
@@ -119,10 +153,12 @@ export function connectPresentationRealtime(options: {
     const payload: RealtimeEnvelope = {
       type,
       slideIndex: state.currentSlideIndex,
+      lineIndex: state.teleprompterLineIndex,
       ts: Date.now(),
       ended: state.ended,
       isPaused: state.isPaused,
       teleprompterScrolling: state.teleprompterScrolling,
+      revealAll: type === "NEXT",
     };
     send(type === "SNAPSHOT" ? SNAPSHOT_EVENT : CHANNEL_EVENT, payload);
   };
@@ -136,16 +172,24 @@ export function connectPresentationRealtime(options: {
     },
   });
 
+  const scheduleAdvance = (fn: () => void) => {
+    if (advanceTimer) window.clearTimeout(advanceTimer);
+    advanceTimer = setTimeout(() => {
+      advanceTimer = null;
+      if (!disposed) fn();
+    }, 200);
+  };
+
   if (role === "audience") {
     channel.on("broadcast", { event: CHANNEL_EVENT }, ({ payload }) => {
       const envelope = payload as RealtimeEnvelope;
       if (!envelope || typeof envelope.slideIndex !== "number") return;
-      applyEnvelope(envelope);
+      applyEnvelope(envelope, scheduleAdvance);
     });
     channel.on("broadcast", { event: SNAPSHOT_EVENT }, ({ payload }) => {
       const envelope = payload as RealtimeEnvelope;
       if (!envelope || typeof envelope.slideIndex !== "number") return;
-      applyEnvelope({ ...envelope, type: "SNAPSHOT" });
+      applyEnvelope({ ...envelope, type: "SNAPSHOT" }, scheduleAdvance);
     });
   }
 
@@ -161,7 +205,8 @@ export function connectPresentationRealtime(options: {
         event.type === "GOTO" ||
         event.type === "PAUSE" ||
         event.type === "RESUME" ||
-        event.type === "END"
+        event.type === "END" ||
+        event.type === "TELEPROMPTER_LINE"
       ) {
         publish(event.type);
       }
@@ -182,7 +227,6 @@ export function connectPresentationRealtime(options: {
       options.onConnectionChange?.("connected");
       await channel?.track({ role, at: Date.now() });
       if (role === "host") {
-        // Reconnect contract: host republishes a full snapshot so late joiners lockstep.
         broadcastSnapshot();
       } else {
         send(REQUEST_SNAPSHOT_EVENT, {});
@@ -197,6 +241,7 @@ export function connectPresentationRealtime(options: {
   return {
     disconnect: () => {
       disposed = true;
+      if (advanceTimer) window.clearTimeout(advanceTimer);
       unsubBus?.();
       unsubBus = null;
       if (channel) {

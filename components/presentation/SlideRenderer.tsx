@@ -1,8 +1,10 @@
 "use client";
 
+import { RevealLines } from "@/components/presentation/RevealLines";
 import { ThemeBackground } from "@/components/presentation/ThemeBackground";
 import { ensureAaText } from "@/lib/presentation/contrast";
 import { splitContrastBody, truncateSlideBody } from "@/lib/presentation/format";
+import { deriveSpeakerNotes } from "@/lib/presentation/speaker-notes";
 import type { PresentationMode, SlideAssignment, SlideLayout } from "@/lib/presentation/types";
 import type { ThemePalette } from "@/lib/themes/types";
 
@@ -13,6 +15,9 @@ export function SlideRenderer({
   imageAttribution,
   layout,
   mode,
+  revealMode = "instant",
+  lineIndex = Number.MAX_SAFE_INTEGER,
+  revealFlushed = false,
 }: {
   slide: SlideAssignment;
   theme: ThemePalette;
@@ -20,10 +25,17 @@ export function SlideRenderer({
   imageAttribution?: string | null;
   layout: SlideLayout;
   mode: PresentationMode;
+  revealMode?: "progressive" | "instant";
+  lineIndex?: number;
+  revealFlushed?: boolean;
 }) {
   const text = ensureAaText(theme.text ?? "#F5F1E8", theme.bg ?? "#0B1B2B");
   const resolved: SlideLayout = layout ?? slide.layout ?? "point";
-  const body = truncateSlideBody(slide.body ?? "", slide.slideId);
+  const progressive = mode === "audience" && revealMode === "progressive";
+  const body = progressive
+    ? (slide.body ?? "")
+    : truncateSlideBody(slide.body ?? "", slide.slideId);
+  const revealLines = deriveSpeakerNotes(slide).revealLines;
   const audienceCue = mode === "audience" && resolved === "cue";
 
   return (
@@ -44,6 +56,10 @@ export function SlideRenderer({
             mode={mode}
             accent={theme.accent}
             text={text}
+            revealLines={revealLines}
+            progressive={progressive}
+            lineIndex={lineIndex}
+            revealFlushed={revealFlushed}
           />
         )}
         {imageAttribution && mode !== "audience" ? (
@@ -64,6 +80,10 @@ function LayoutBody({
   mode,
   accent,
   text,
+  revealLines,
+  progressive,
+  lineIndex,
+  revealFlushed,
 }: {
   layout: SlideLayout;
   title: string;
@@ -72,7 +92,22 @@ function LayoutBody({
   mode: PresentationMode;
   accent: string;
   text: string;
+  revealLines: string[];
+  progressive: boolean;
+  lineIndex: number;
+  revealFlushed: boolean;
 }) {
+  const bodyNode = progressive ? (
+    <RevealLines
+      lines={revealLines}
+      lineIndex={lineIndex}
+      instant={false}
+      flushed={revealFlushed}
+      className="max-w-3xl text-xl md:text-2xl"
+    />
+  ) : body ? (
+    <p className="max-w-3xl text-xl leading-9 opacity-90 md:text-2xl">{body}</p>
+  ) : null;
   if (layout === "cue" && mode !== "audience") {
     return (
       <div className="flex h-full flex-col items-center justify-center text-center">
@@ -92,7 +127,16 @@ function LayoutBody({
       <div className="flex h-full flex-col items-center justify-center text-center">
         <h1 className="max-w-5xl font-display text-5xl leading-[1.05] md:text-7xl">{title}</h1>
         <div className="mt-8 h-px w-24" style={{ backgroundColor: accent }} />
-        {body ? <p className="mt-8 max-w-2xl text-lg leading-8 opacity-80">{body}</p> : null}
+        {progressive ? (
+          <RevealLines
+            lines={revealLines}
+            lineIndex={lineIndex}
+            flushed={revealFlushed}
+            className="mt-8 max-w-2xl text-lg"
+          />
+        ) : body ? (
+          <p className="mt-8 max-w-2xl text-lg leading-8 opacity-80">{body}</p>
+        ) : null}
       </div>
     );
   }
@@ -103,14 +147,12 @@ function LayoutBody({
         <div className="flex min-h-[33%] items-end pb-6">
           <h1 className="max-w-4xl font-display text-4xl leading-tight md:text-6xl">{title}</h1>
         </div>
-        <div className="min-h-0 flex-1 pt-4">
-          {body ? <p className="max-w-3xl text-xl leading-9 opacity-90 md:text-2xl">{body}</p> : null}
-        </div>
+        <div className="min-h-0 flex-1 pt-4">{bodyNode}</div>
       </div>
     );
   }
 
-  if (layout === "contrast") {
+  if (layout === "contrast" && !progressive) {
     const [left, right] = splitContrastBody(body);
     return (
       <div className="flex h-full flex-col">
@@ -138,7 +180,14 @@ function LayoutBody({
             Scenario
           </p>
           <h1 className="mt-4 font-display text-3xl leading-tight md:text-4xl">{title}</h1>
-          {body ? (
+          {progressive ? (
+            <RevealLines
+              lines={revealLines}
+              lineIndex={lineIndex}
+              flushed={revealFlushed}
+              className="mx-auto mt-6 max-w-xl text-base md:text-lg"
+            />
+          ) : body ? (
             <p className="mx-auto mt-6 max-w-xl text-base leading-7 opacity-90 md:text-lg">{body}</p>
           ) : null}
         </div>
@@ -156,7 +205,16 @@ function LayoutBody({
         >
           ?
         </p>
-        {body ? <p className="mt-8 max-w-2xl text-xl leading-8">{body}</p> : null}
+        {progressive ? (
+          <RevealLines
+            lines={revealLines}
+            lineIndex={lineIndex}
+            flushed={revealFlushed}
+            className="mt-8 max-w-2xl text-xl"
+          />
+        ) : body ? (
+          <p className="mt-8 max-w-2xl text-xl leading-8">{body}</p>
+        ) : null}
       </div>
     );
   }
@@ -165,7 +223,14 @@ function LayoutBody({
     return (
       <div className="flex h-full flex-col justify-center">
         <h1 className="max-w-4xl font-display text-4xl leading-tight md:text-6xl">{title}</h1>
-        {body ? (
+        {progressive ? (
+          <RevealLines
+            lines={revealLines}
+            lineIndex={lineIndex}
+            flushed={revealFlushed}
+            className="mt-10 max-w-3xl text-2xl"
+          />
+        ) : body ? (
           <p
             className="mt-10 max-w-3xl text-2xl leading-10"
             style={{
@@ -183,7 +248,16 @@ function LayoutBody({
   return (
     <div className="flex h-full flex-col justify-center">
       <h1 className="font-display text-4xl md:text-6xl">{title}</h1>
-      {body ? <p className="mt-8 max-w-3xl text-xl leading-9">{body}</p> : null}
+      {progressive ? (
+        <RevealLines
+          lines={revealLines}
+          lineIndex={lineIndex}
+          flushed={revealFlushed}
+          className="mt-8 max-w-3xl text-xl"
+        />
+      ) : (
+        bodyNode
+      )}
     </div>
   );
 }

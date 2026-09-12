@@ -3,9 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { dispatch, usePresentationBus } from "@/lib/presentation/bus";
-import { deriveSpeakerNotes } from "@/lib/presentation/speaker-notes";
+import {
+  deriveSpeakerNotes,
+  lineIndexForWords,
+  revealIndexForSpoken,
+} from "@/lib/presentation/speaker-notes";
 
 const FONT_STEPS = ["text-sm", "text-base", "text-lg", "text-xl"] as const;
+const LINE_DEBOUNCE_MS = 200;
 
 export function Teleprompter({
   initialWpm,
@@ -19,18 +24,30 @@ export function Teleprompter({
   const [font, setFont] = useState(1);
   const [markers, setMarkers] = useState<Set<string>>(new Set());
   const [elapsedMs, setElapsedMs] = useState(0);
-  const slideStarted = useRef(Date.now());
-  const wordRefs = useRef<Array<HTMLSpanElement | null>>([]);
+  const accumulated = useRef(0);
+  const lastTick = useRef(Date.now());
+  const lastSentLine = useRef<number | null>(null);
+  const debounceAt = useRef(0);
+  const lineRefs = useRef<Array<HTMLParagraphElement | null>>([]);
 
   useEffect(() => {
-    slideStarted.current = Date.now();
+    accumulated.current = 0;
+    lastTick.current = Date.now();
     setElapsedMs(0);
+    lastSentLine.current = null;
   }, [index]);
 
   useEffect(() => {
-    if (!scrolling) return;
+    if (!scrolling) {
+      lastTick.current = Date.now();
+      return;
+    }
+    lastTick.current = Date.now();
     const timer = window.setInterval(() => {
-      setElapsedMs(Date.now() - slideStarted.current);
+      const now = Date.now();
+      accumulated.current += now - lastTick.current;
+      lastTick.current = now;
+      setElapsedMs(accumulated.current);
     }, 200);
     return () => window.clearInterval(timer);
   }, [scrolling, index]);
@@ -39,11 +56,28 @@ export function Teleprompter({
   const upcoming = assignments.slice(index + 1, index + 3);
   const notes = useMemo(() => deriveSpeakerNotes(current, wpm), [current, wpm]);
   const spokenWords = Math.min(notes.wordCount, Math.floor((elapsedMs / 1000) * (wpm / 60)));
+  const currentLine = revealIndexForSpoken(notes.lines, notes.revealLines, spokenWords);
+  const displayLine = lineIndexForWords(notes.lines, spokenWords);
 
   useEffect(() => {
-    const node = wordRefs.current[spokenWords];
+    const node = lineRefs.current[Math.max(0, displayLine)];
     node?.scrollIntoView({ block: "center", behavior: "smooth" });
-  }, [spokenWords]);
+  }, [displayLine]);
+
+  useEffect(() => {
+    if (currentLine === lastSentLine.current) return;
+    const wait = Math.max(0, LINE_DEBOUNCE_MS - (Date.now() - debounceAt.current));
+    const timer = window.setTimeout(() => {
+      lastSentLine.current = currentLine;
+      debounceAt.current = Date.now();
+      dispatch({
+        type: "TELEPROMPTER_LINE",
+        slideIndex: index,
+        lineIndex: currentLine,
+      });
+    }, wait);
+    return () => window.clearTimeout(timer);
+  }, [currentLine, index]);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#07131f]">
@@ -80,112 +114,84 @@ export function Teleprompter({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
-        <ScriptBlock
-          label="Now"
-          text={notes.teleprompterText}
-          className={FONT_STEPS[font]}
-          highlight
-          spokenWords={spokenWords}
-          slideId={current?.slideId ?? "none"}
-          markers={markers}
-          onWordClick={(key) =>
-            setMarkers((prev) => {
-              const next = new Set(prev);
-              if (next.has(key)) next.delete(key);
-              else next.add(key);
-              return next;
+        <section className="mb-8">
+          <p className="mb-2 text-[10px] uppercase tracking-[0.16em] text-ivory/35">Now</p>
+          {notes.lines.length === 0 ? (
+            <p className={`italic text-ivory/40 ${FONT_STEPS[font]}`}>No speaker notes on this slide.</p>
+          ) : (
+            notes.lines.map((line, lineNumber) => {
+              const active = lineNumber === displayLine;
+              const passed = lineNumber < displayLine;
+              return (
+                <p
+                  key={`${current?.slideId ?? "none"}:${lineNumber}`}
+                  ref={(node) => {
+                    lineRefs.current[lineNumber] = node;
+                  }}
+                  data-prompter-line={lineNumber}
+                  className={`mb-3 border-l-2 pl-3 leading-8 text-ivory ${FONT_STEPS[font]} ${
+                    active
+                      ? "border-gold bg-gold/15"
+                      : passed
+                        ? "border-transparent text-ivory/55"
+                        : "border-transparent text-ivory/35"
+                  }`}
+                >
+                  {line.split(/\s+/).map((word, wordIndex) => {
+                    const key = `${current?.slideId ?? "none"}:${lineNumber}:${wordIndex}`;
+                    return (
+                      <span
+                        key={key}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() =>
+                          setMarkers((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(key)) next.delete(key);
+                            else next.add(key);
+                            return next;
+                          })
+                        }
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            setMarkers((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(key)) next.delete(key);
+                              else next.add(key);
+                              return next;
+                            });
+                          }
+                        }}
+                        className={`mr-[0.35em] inline-block cursor-pointer ${
+                          markers.has(key) ? "border-b-2 border-gold" : ""
+                        }`}
+                      >
+                        {word}
+                      </span>
+                    );
+                  })}
+                </p>
+              );
             })
-          }
-          wordRefs={wordRefs}
-        />
-        {upcoming.map((slide) => (
-          <ScriptBlock
-            key={slide.slideId}
-            label="Up next"
-            text={deriveSpeakerNotes(slide, wpm).teleprompterText}
-            className={`${FONT_STEPS[font]} opacity-40`}
-            highlight={false}
-            spokenWords={-1}
-            slideId={slide.slideId}
-            markers={markers}
-            onWordClick={(key) =>
-              setMarkers((prev) => {
-                const next = new Set(prev);
-                if (next.has(key)) next.delete(key);
-                else next.add(key);
-                return next;
-              })
-            }
-          />
-        ))}
+          )}
+        </section>
+        {upcoming.map((slide) => {
+          const nextNotes = deriveSpeakerNotes(slide, wpm);
+          return (
+            <section key={slide.slideId} className="mb-8 opacity-40">
+              <p className="mb-2 text-[10px] uppercase tracking-[0.16em] text-ivory/35">Up next</p>
+              <p className={`leading-8 text-ivory ${FONT_STEPS[font]}`}>{nextNotes.teleprompterText}</p>
+            </section>
+          );
+        })}
       </div>
       <p className="border-t border-white/10 px-3 py-2 text-[10px] text-ivory/40">
-        {notes.wordCount} words · ~{Math.round(notes.estimatedSeconds)}s at {wpm} WPM. Click a word
-        to drop a pause marker (visual only).
+        {notes.wordCount} words · {notes.revealLines.length} reveal lines · ~
+        {Math.round(notes.estimatedSeconds)}s at {wpm} WPM. Click a word to drop a pause marker
+        (visual only).
       </p>
     </div>
-  );
-}
-
-function ScriptBlock({
-  label,
-  text,
-  className,
-  highlight,
-  spokenWords,
-  slideId,
-  markers,
-  onWordClick,
-  wordRefs,
-}: {
-  label: string;
-  text: string;
-  className: string;
-  highlight: boolean;
-  spokenWords: number;
-  slideId: string;
-  markers: Set<string>;
-  onWordClick: (key: string) => void;
-  wordRefs?: React.MutableRefObject<Array<HTMLSpanElement | null>>;
-}) {
-  const words = text.split(/\s+/).filter(Boolean);
-  return (
-    <section className="mb-8">
-      <p className="mb-2 text-[10px] uppercase tracking-[0.16em] text-ivory/35">{label}</p>
-      <p className={`leading-8 text-ivory ${className}`}>
-        {words.length === 0 ? (
-          <span className="italic opacity-40">No speaker notes on this slide.</span>
-        ) : (
-          words.map((word, index) => {
-            const key = `${slideId}:${index}`;
-            const active = highlight && index === spokenWords;
-            const passed = highlight && index < spokenWords;
-            return (
-              <span
-                key={key}
-                ref={(node) => {
-                  if (wordRefs && highlight) wordRefs.current[index] = node;
-                }}
-                role="button"
-                tabIndex={0}
-                onClick={() => onWordClick(key)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    onWordClick(key);
-                  }
-                }}
-                className={`mr-[0.35em] inline-block cursor-pointer rounded-sm ${
-                  markers.has(key) ? "border-b-2 border-gold" : ""
-                } ${active ? "bg-gold/30 text-ivory" : passed ? "text-ivory/55" : ""}`}
-              >
-                {word}
-              </span>
-            );
-          })
-        )}
-      </p>
-    </section>
   );
 }

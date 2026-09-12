@@ -92,6 +92,7 @@ export function HostView(props: HostViewProps) {
         slidesAdvanced: props.settings.slides_advanced ?? 0,
         peakAudience: props.settings.peak_audience ?? 0,
         teleprompterScrolling: true,
+        teleprompterLineIndex: -1,
         isPaused: false,
       },
     });

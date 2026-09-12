@@ -1,17 +1,30 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { hashString } from "@/lib/presentation/contrast";
+import {
+  adjustHex,
+  deepenUntilContrast,
+  hashString,
+  mixHex,
+} from "@/lib/presentation/contrast";
 import type { ThemePalette } from "@/lib/themes/types";
 
-const NOISE =
-  "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.55'/></svg>\")";
+const GRAIN =
+  "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23g)' opacity='0.55'/></svg>\")";
 
-function vignetteFromId(slideId: string, themeVignette?: number) {
-  const hashed = hashString(slideId);
-  const wobble = (hashed % 40) / 100;
-  const base = themeVignette ?? 0.3;
-  return Math.min(0.72, Math.max(0.22, base * 0.7 + wobble + 0.18));
+function layerParams(slideId: string, theme: ThemePalette) {
+  const hash = hashString(slideId);
+  const angle = (hash % 160) + 16;
+  const glowX = 28 + (hash % 45);
+  const glowY = 18 + ((hash >> 5) % 36);
+  const baseVignette = 0.28 + ((hash >> 9) % 28) / 100;
+  const themeVignette = theme.vignette ?? 0.3;
+  const darker = adjustHex(theme.bg, -0.28);
+  const lighter = adjustHex(theme.bg, 0.16);
+  const mid = mixHex(theme.bg, theme.accent, 0.22);
+  const text = theme.text ?? "#F5F1E8";
+  const vignette = deepenUntilContrast(text, mid, Math.max(baseVignette, themeVignette * 0.7));
+  return { angle, glowX, glowY, darker, lighter, vignette };
 }
 
 export function ThemeBackground({
@@ -23,54 +36,69 @@ export function ThemeBackground({
   theme: ThemePalette;
   imageUrl: string | null;
 }) {
-  const depth = vignetteFromId(slideId, theme.vignette);
-  const angle = theme.gradientAngle ?? 210;
+  const { angle, glowX, glowY, darker, lighter, vignette } = layerParams(slideId, theme);
 
   return (
-    <div className="absolute inset-0 overflow-hidden" aria-hidden>
-      <motion.div
-        key={`${slideId}:${imageUrl ?? "gradient"}`}
-        className="absolute inset-0"
-        initial={{ scale: 1.05 }}
-        animate={{ scale: 1 }}
-        transition={{ duration: 0.6, ease: "easeOut" }}
-      >
-        {imageUrl ? (
-          <>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={imageUrl}
-              alt=""
-              className="absolute inset-0 h-full w-full object-cover grayscale"
-            />
-            <div
-              className="absolute inset-0"
-              style={{ backgroundColor: theme.bg, mixBlendMode: "multiply", opacity: 0.78 }}
-            />
-            <div
-              className="absolute inset-0"
-              style={{ backgroundColor: theme.accent, mixBlendMode: "color", opacity: 0.32 }}
-            />
-          </>
-        ) : (
-          <div
-            className="absolute inset-0"
-            style={{
-              background: `linear-gradient(${angle}deg, ${theme.bg} 0%, ${theme.accent} 140%)`,
-            }}
-          />
-        )}
-      </motion.div>
+    <div className="absolute inset-0 overflow-hidden" aria-hidden data-theme-layers="5">
+      {/* Layer 1 — Base gradient */}
       <div
-        className="pointer-events-none absolute inset-0"
+        data-bg-layer="base"
+        className="absolute inset-0"
         style={{
-          background: `radial-gradient(ellipse at center, transparent ${Math.round((1 - depth) * 55)}%, #000 ${Math.round(100 - depth * 18)}%)`,
-          opacity: 0.85,
+          background: `linear-gradient(${angle}deg, ${darker} 0%, ${theme.bg} 46%, ${lighter} 100%)`,
         }}
       />
+
+      {/* Layer 2 — Accent glow behind the headline */}
       <div
-        className="pointer-events-none absolute inset-0 opacity-[0.07] mix-blend-overlay"
-        style={{ backgroundImage: NOISE }}
+        data-bg-layer="glow"
+        className="absolute inset-0"
+        style={{
+          background: `radial-gradient(ellipse 80% 55% at ${glowX}% ${glowY}%, ${theme.accent} 0%, transparent 62%)`,
+          opacity: 0.18,
+        }}
+      />
+
+      {/* Layer 3 — Duotone image */}
+      {imageUrl ? (
+        <motion.div
+          key={`${slideId}:${imageUrl}`}
+          data-bg-layer="image"
+          className="absolute inset-0"
+          initial={{ scale: 1.05 }}
+          animate={{ scale: 1 }}
+          transition={{ duration: 0.8, ease: "easeOut" }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={imageUrl} alt="" className="absolute inset-0 h-full w-full object-cover grayscale" />
+          <div
+            className="absolute inset-0"
+            style={{ backgroundColor: theme.bg, mixBlendMode: "multiply", opacity: 0.72 }}
+          />
+          <div
+            className="absolute inset-0"
+            style={{ backgroundColor: theme.accent, mixBlendMode: "soft-light", opacity: 0.45 }}
+          />
+        </motion.div>
+      ) : (
+        <div data-bg-layer="image" className="hidden" />
+      )}
+
+      {/* Layer 4 — Static grain */}
+      <div
+        data-bg-layer="grain"
+        className="pointer-events-none absolute inset-0 mix-blend-overlay"
+        style={{ backgroundImage: GRAIN, opacity: 0.04 }}
+      />
+
+      {/* Layer 5 — Edge vignette (contrast-guarded) */}
+      <div
+        data-bg-layer="vignette"
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background: `radial-gradient(ellipse at 42% 32%, transparent ${Math.round((1 - vignette) * 48)}%, #000 ${Math.round(88 + vignette * 10)}%)`,
+          opacity: 0.88,
+        }}
       />
     </div>
   );

@@ -23,6 +23,8 @@ export function AudienceView({ runId }: { runId: string }) {
   const index = usePresentationBus((s) => s.currentSlideIndex);
   const assignments = usePresentationBus((s) => s.assignments);
   const ended = usePresentationBus((s) => s.ended);
+  const lineIndex = usePresentationBus((s) => s.teleprompterLineIndex);
+  const revealFlushed = usePresentationBus((s) => s.revealFlushed);
   const current = assignments[index] ?? null;
 
   useEffect(() => {
@@ -51,6 +53,7 @@ export function AudienceView({ runId }: { runId: string }) {
               assignments: json.slides,
               slideCount: json.slides.length,
               currentSlideIndex: json.settings.current_slide_index,
+              teleprompterLineIndex: -1,
               ended: false,
               teleprompterScrolling: false,
             },
@@ -136,6 +139,8 @@ export function AudienceView({ runId }: { runId: string }) {
   }
 
   const allowAdvance = payload.status === "live" && payload.settings.allow_audience_advance;
+  const revealMode =
+    payload.status === "live" ? payload.settings.audience_reveal_mode : "progressive";
 
   return (
     <main
@@ -161,6 +166,9 @@ export function AudienceView({ runId }: { runId: string }) {
               imageAttribution={null}
               layout={current.layout}
               mode="audience"
+              revealMode={revealMode}
+              lineIndex={revealMode === "instant" ? Number.MAX_SAFE_INTEGER : lineIndex}
+              revealFlushed={revealFlushed || revealMode === "instant"}
             />
           </motion.div>
         ) : (

@@ -23,7 +23,14 @@ export type SlideAssignment = {
   imageAttribution: string | null;
 };
 
-export type BusEventType = "NEXT" | "PREV" | "GOTO" | "PAUSE" | "RESUME" | "END";
+export type BusEventType =
+  | "NEXT"
+  | "PREV"
+  | "GOTO"
+  | "PAUSE"
+  | "RESUME"
+  | "END"
+  | "TELEPROMPTER_LINE";
 
 export type BusEvent =
   | { type: "NEXT" }
@@ -32,6 +39,9 @@ export type BusEvent =
   | { type: "PAUSE" }
   | { type: "RESUME" }
   | { type: "END" }
+  | { type: "TELEPROMPTER_LINE"; slideIndex: number; lineIndex: number }
+  | { type: "SET_TELEPROMPTER_LINE"; slideIndex: number; lineIndex: number }
+  | { type: "SET_REVEAL_FLUSH"; flushed: boolean }
   | { type: "SET_MODE"; mode: PresentationMode }
   | { type: "SET_ASSIGNMENTS"; assignments: SlideAssignment[] }
   | { type: "SET_PEAK_AUDIENCE"; count: number }
@@ -46,6 +56,8 @@ export type PresentationBusState = {
   currentSlideIndex: number;
   isPaused: boolean;
   teleprompterScrolling: boolean;
+  teleprompterLineIndex: number;
+  revealFlushed: boolean;
   mode: PresentationMode;
   runId: string | null;
   assignments: SlideAssignment[];
@@ -59,9 +71,11 @@ export type RealtimeEnvelope = {
   type: BusEventType | "SNAPSHOT";
   slideIndex: number;
   ts: number;
+  lineIndex?: number;
   ended?: boolean;
   isPaused?: boolean;
   teleprompterScrolling?: boolean;
+  revealAll?: boolean;
 };
 
 export type ConnectionStatus = "connecting" | "connected" | "disconnected";
@@ -76,6 +90,7 @@ export type AudienceDeckResponse =
       settings: {
         teleprompter_wpm: number;
         allow_audience_advance: boolean;
+        audience_reveal_mode: "progressive" | "instant";
         current_slide_index: number;
       };
       slides: SlideAssignment[];

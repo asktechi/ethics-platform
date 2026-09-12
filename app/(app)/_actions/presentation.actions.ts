@@ -83,6 +83,7 @@ export async function saveRunSettingsAction(input: unknown) {
         locked_theme_id: z.string().uuid().nullable().optional(),
         theme_overrides: z.record(z.string(), z.string()).optional(),
         allow_audience_advance: z.boolean().optional(),
+        audience_reveal_mode: z.enum(["progressive", "instant"]).optional(),
       }),
     })
     .safeParse(input);
@@ -99,6 +100,8 @@ export async function saveRunSettingsAction(input: unknown) {
       theme_overrides: parsed.data.settings.theme_overrides ?? current.theme_overrides,
       allow_audience_advance:
         parsed.data.settings.allow_audience_advance ?? current.allow_audience_advance,
+      audience_reveal_mode:
+        parsed.data.settings.audience_reveal_mode ?? current.audience_reveal_mode,
     };
     await updateRunSettings(parsed.data.runId, settings);
     revalidatePresent(parsed.data.classId);

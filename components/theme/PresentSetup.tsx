@@ -30,6 +30,7 @@ export function PresentSetup({ classId }: { classId: string }) {
   const [themeMode, setThemeMode] = useState<"shuffle" | "locked">("shuffle");
   const [lockedThemeId, setLockedThemeId] = useState<string>("");
   const [allowAudienceAdvance, setAllowAudienceAdvance] = useState(false);
+  const [revealMode, setRevealMode] = useState<"progressive" | "instant">("progressive");
   const [themes, setThemes] = useState<Array<{ id: string; name: string; palette_json: Json }>>([]);
   const [origin, setOrigin] = useState("");
   const router = useRouter();
@@ -50,6 +51,7 @@ export function PresentSetup({ classId }: { classId: string }) {
       setThemeMode(result.settings.theme_mode);
       setLockedThemeId(result.settings.locked_theme_id ?? "");
       setAllowAudienceAdvance(result.settings.allow_audience_advance === true);
+      setRevealMode(result.settings.audience_reveal_mode === "instant" ? "instant" : "progressive");
       setThemes(result.themes as Array<{ id: string; name: string; palette_json: Json }>);
       setReel(
         result.assignments.map((row) => {
@@ -88,6 +90,7 @@ export function PresentSetup({ classId }: { classId: string }) {
           theme_mode: themeMode,
           locked_theme_id: themeMode === "locked" ? lockedThemeId || null : null,
           allow_audience_advance: allowAudienceAdvance,
+          audience_reveal_mode: revealMode,
         },
       });
       if (!result.ok) setError(result.error);
@@ -180,6 +183,20 @@ export function PresentSetup({ classId }: { classId: string }) {
             />
             Allow audience click-to-advance if the host drops offline
           </label>
+          <div className="space-y-2">
+            <Label htmlFor="reveal-mode">Audience text reveal</Label>
+            <select
+              id="reveal-mode"
+              value={revealMode}
+              onChange={(event) =>
+                setRevealMode(event.target.value as "progressive" | "instant")
+              }
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm text-ivory"
+            >
+              <option value="progressive">Progressive — follow the teleprompter line by line</option>
+              <option value="instant">Instant — full slide text on change</option>
+            </select>
+          </div>
           <div className="space-y-2">
             <Label htmlFor="theme-mode">Theme</Label>
             <select

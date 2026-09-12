@@ -51,3 +51,52 @@ export function hashString(value: string) {
   }
   return hash >>> 0;
 }
+
+function toHex([r, g, b]: [number, number, number]) {
+  return `#${[r, g, b]
+    .map((value) => Math.max(0, Math.min(255, Math.round(value))).toString(16).padStart(2, "0"))
+    .join("")}`;
+}
+
+/** amount < 0 darkens, > 0 lightens. */
+export function adjustHex(color: string, amount: number) {
+  const rgb = parseHex(color) ?? [11, 27, 43];
+  const next = rgb.map((channel) => {
+    if (amount < 0) return channel * (1 + amount);
+    return channel + (255 - channel) * amount;
+  }) as [number, number, number];
+  return toHex(next);
+}
+
+export function mixHex(left: string, right: string, amount: number) {
+  const a = parseHex(left) ?? [11, 27, 43];
+  const b = parseHex(right) ?? [0, 0, 0];
+  const t = Math.max(0, Math.min(1, amount));
+  return toHex([
+    a[0] + (b[0] - a[0]) * t,
+    a[1] + (b[1] - a[1]) * t,
+    a[2] + (b[2] - a[2]) * t,
+  ]);
+}
+
+/**
+ * Deepen a vignette mix against black until theme text hits WCAG AA.
+ * Always returns a usable depth — never throws.
+ */
+export function deepenUntilContrast(text: string, background: string, startVignette: number) {
+  let depth = Math.max(0.18, Math.min(0.92, startVignette));
+  let effective = mixHex(background, "#000000", depth);
+  let steps = 0;
+  while (contrastRatio(text, effective) < 4.5 && depth < 0.92 && steps < 24) {
+    depth = Math.min(0.92, depth + 0.04);
+    effective = mixHex(background, "#000000", depth);
+    steps += 1;
+  }
+  if (contrastRatio(text, effective) < 4.5) {
+    depth = 0.92;
+    console.warn(
+      `[presentation] contrast guard deepened vignette to ${depth} for ${background} / ${text}`,
+    );
+  }
+  return depth;
+}

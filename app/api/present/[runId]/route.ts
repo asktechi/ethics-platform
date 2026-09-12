@@ -32,6 +32,7 @@ export async function GET(
         settings: {
           teleprompter_wpm: settings.teleprompter_wpm,
           allow_audience_advance: settings.allow_audience_advance === true,
+          audience_reveal_mode: settings.audience_reveal_mode ?? "progressive",
           current_slide_index: settings.current_slide_index ?? 0,
         },
         slides,

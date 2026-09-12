@@ -15,6 +15,7 @@ export type RunSettings = {
   locked_theme_id?: string | null;
   theme_overrides?: Record<string, string>;
   allow_audience_advance?: boolean;
+  audience_reveal_mode?: "progressive" | "instant";
   current_slide_index?: number;
   peak_audience?: number;
   slides_advanced?: number;
@@ -28,6 +29,7 @@ export const DEFAULT_RUN_SETTINGS: RunSettings = {
   locked_theme_id: null,
   theme_overrides: {},
   allow_audience_advance: false,
+  audience_reveal_mode: "progressive",
   current_slide_index: 0,
   peak_audience: 0,
   slides_advanced: 0,
@@ -60,6 +62,7 @@ export function parseRunSettings(value: unknown): RunSettings {
     locked_theme_id: typeof raw.locked_theme_id === "string" ? raw.locked_theme_id : null,
     theme_overrides: overrides,
     allow_audience_advance: raw.allow_audience_advance === true,
+    audience_reveal_mode: raw.audience_reveal_mode === "instant" ? "instant" : "progressive",
     current_slide_index: Math.max(0, Number(raw.current_slide_index ?? 0) || 0),
     peak_audience: Math.max(0, Number(raw.peak_audience ?? 0) || 0),
     slides_advanced: Math.max(0, Number(raw.slides_advanced ?? 0) || 0),
