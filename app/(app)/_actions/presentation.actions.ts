@@ -6,12 +6,20 @@ import { actionError } from "@/lib/data/errors";
 import { requireUser } from "@/lib/data/auth";
 import { approveAllSlidesForClass } from "@/lib/data/materials";
 import {
+  endRun,
   getOrCreateRun,
   startRun,
+  syncRunProgress,
   updateRunSettings,
 } from "@/lib/data/presentation-runs";
+import { loadApprovedDeck } from "@/lib/presentation/deck";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { assignThemeForRun, getAssignmentsForRun, listClassSlides } from "@/lib/themes/engine";
+import {
+  assignThemeForRun,
+  getAssignmentsForRun,
+  listClassSlides,
+  reshuffleRun,
+} from "@/lib/themes/engine";
 import { DEFAULT_RUN_SETTINGS, parseRunSettings, type RunSettings } from "@/lib/themes/types";
 
 function revalidatePresent(classId: string) {
@@ -74,6 +82,7 @@ export async function saveRunSettingsAction(input: unknown) {
         theme_mode: z.enum(["shuffle", "locked"]),
         locked_theme_id: z.string().uuid().nullable().optional(),
         theme_overrides: z.record(z.string(), z.string()).optional(),
+        allow_audience_advance: z.boolean().optional(),
       }),
     })
     .safeParse(input);
@@ -88,6 +97,8 @@ export async function saveRunSettingsAction(input: unknown) {
       ...current,
       ...parsed.data.settings,
       theme_overrides: parsed.data.settings.theme_overrides ?? current.theme_overrides,
+      allow_audience_advance:
+        parsed.data.settings.allow_audience_advance ?? current.allow_audience_advance,
     };
     await updateRunSettings(parsed.data.runId, settings);
     revalidatePresent(parsed.data.classId);
@@ -122,6 +133,70 @@ export async function startPresentationAction(input: unknown) {
     const run = await startRun(parsed.data.runId);
     revalidatePresent(parsed.data.classId);
     return { ok: true as const, publicRunId: run.run_id };
+  } catch (error) {
+    return { ok: false as const, error: actionError(error) };
+  }
+}
+
+export async function syncRunProgressAction(input: unknown) {
+  const parsed = z
+    .object({
+      classId: z.string().uuid(),
+      runId: z.string().uuid(),
+      slideIndex: z.number().int().min(0),
+      slidesAdvanced: z.number().int().min(0).optional(),
+    })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false as const, error: "Invalid progress" };
+  try {
+    await syncRunProgress(parsed.data.runId, {
+      current_slide_index: parsed.data.slideIndex,
+      slides_advanced: parsed.data.slidesAdvanced,
+    });
+    return { ok: true as const };
+  } catch (error) {
+    return { ok: false as const, error: actionError(error) };
+  }
+}
+
+export async function endPresentationAction(input: unknown) {
+  const parsed = z
+    .object({
+      classId: z.string().uuid(),
+      runId: z.string().uuid(),
+      peakAudience: z.number().int().min(0).optional(),
+      slidesAdvanced: z.number().int().min(0).optional(),
+      slideIndex: z.number().int().min(0).optional(),
+    })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false as const, error: "Invalid run" };
+  try {
+    await endRun(parsed.data.runId, {
+      peak_audience: parsed.data.peakAudience,
+      slides_advanced: parsed.data.slidesAdvanced,
+      current_slide_index: parsed.data.slideIndex,
+    });
+    revalidatePresent(parsed.data.classId);
+    return { ok: true as const };
+  } catch (error) {
+    return { ok: false as const, error: actionError(error) };
+  }
+}
+
+export async function reshuffleLiveRunAction(input: unknown) {
+  const parsed = z
+    .object({ classId: z.string().uuid(), runId: z.string().uuid() })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false as const, error: "Invalid run" };
+  try {
+    const { getRunByPk } = await import("@/lib/data/presentation-runs");
+    const run = await getRunByPk(parsed.data.runId);
+    await reshuffleRun(run.id);
+    const slides = await loadApprovedDeck(run.class_id, run.run_id, {
+      includeInstructorFields: true,
+    });
+    revalidatePresent(parsed.data.classId);
+    return { ok: true as const, slides };
   } catch (error) {
     return { ok: false as const, error: actionError(error) };
   }

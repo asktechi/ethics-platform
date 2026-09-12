@@ -1,9 +1,7 @@
-import { SessionBStub } from "@/components/theme/SessionBStub";
+import { AudienceView } from "@/components/presentation/AudienceView";
 
-export default function AudienceStubPage() {
-  return (
-    <main className="min-h-screen bg-navy px-6 py-16">
-      <SessionBStub role="audience" />
-    </main>
-  );
+export const dynamic = "force-dynamic";
+
+export default function AudiencePage({ params }: { params: { runId: string } }) {
+  return <AudienceView runId={params.runId} />;
 }

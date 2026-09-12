@@ -2,7 +2,7 @@
 
 Personal teaching platform for CFA Institute ethics instruction (Levels I–III). The owner is the sole instructor-author. Students join live quizzes with an open link and a display name.
 
-This repository is at **Phase 4 Session A**: presentation foundations — theme shuffle, image-pool curation, and the setup / share screen. Presenter and audience views are Session B.
+This repository is at **Phase 4 Session B**: presenter view, audience view, and Supabase Realtime lockstep. The host publishes on `presentation:{run_id}`; the audience subscribes read-only. All advance events go through `dispatch` in `lib/presentation/bus.ts` so voice input can plug in later.
 
 Never commit `.env.local`, `SUPABASE_SERVICE_ROLE_KEY`, or `SUPABASE_DB_URL`.
 
@@ -18,6 +18,16 @@ The default Next.js port is `3000`. In this environment the preview server uses 
 
 Health check: `GET /api/health` returns `{ "ok": true }`.  
 Database check: `GET /api/health/db` returns `{ "ok": true, "tables": 20 }`.
+
+## Present a class
+
+From a class, open **Present**, review the reel, then **Start presentation**.
+
+- Host (signed-in): `/class/{classId}/present/{runId}/host`
+- Audience (open): `/present/{runId}/audience`
+- Join QR: `/present/{runId}/audience/join`
+
+Keyboard on the host: Space / → / PageDown next, ← / PageUp previous, G jump grid, P teleprompter pause, F fullscreen, R rehearsal (does not broadcast), Cmd/Ctrl+E end. Voice input in Phase 4.5 should call `dispatch({ type: "NEXT" })` from `lib/presentation/bus.ts`.
 
 `npm` works the same way (`npm install`, `npm run dev`) if you prefer it over pnpm.
 
@@ -62,8 +72,8 @@ Next.js 14 App Router, TypeScript, Tailwind, shadcn/ui, Framer Motion, dnd-kit, 
 2. **Navigation** — Level → Class → Section → Concept
 3. **Materials** — immutable uploads, parsers, slide reorder
 3.5. **PPTX worker** — Fly.io LibreOffice high-fidelity conversion *(not started)*
-4A. **Presentation foundations** — theme shuffle, image pools, setup screen *(this phase)*
-4B. **Presenter + audience** — dual view and realtime lockstep *(not started)*
+4A. **Presentation foundations** — theme shuffle, image pools, setup screen
+4B. **Presenter + audience** — dual view and realtime lockstep *(this phase)*
 5. **Questions** — bank, AI tagging/generation, instructor approval, pools
 6. **Live quiz** — Jeopardy-style session, realtime leaderboard
 7. **Polish** — shortcuts, offline cache, PDF export, expand beyond CFA

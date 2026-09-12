@@ -14,6 +14,10 @@ export type RunSettings = {
   theme_mode: "shuffle" | "locked";
   locked_theme_id?: string | null;
   theme_overrides?: Record<string, string>;
+  allow_audience_advance?: boolean;
+  current_slide_index?: number;
+  peak_audience?: number;
+  slides_advanced?: number;
 };
 
 export const DEFAULT_RUN_SETTINGS: RunSettings = {
@@ -23,6 +27,10 @@ export const DEFAULT_RUN_SETTINGS: RunSettings = {
   theme_mode: "shuffle",
   locked_theme_id: null,
   theme_overrides: {},
+  allow_audience_advance: false,
+  current_slide_index: 0,
+  peak_audience: 0,
+  slides_advanced: 0,
 };
 
 export type ThemeReelItem = {
@@ -51,5 +59,9 @@ export function parseRunSettings(value: unknown): RunSettings {
     theme_mode: raw.theme_mode === "locked" ? "locked" : "shuffle",
     locked_theme_id: typeof raw.locked_theme_id === "string" ? raw.locked_theme_id : null,
     theme_overrides: overrides,
+    allow_audience_advance: raw.allow_audience_advance === true,
+    current_slide_index: Math.max(0, Number(raw.current_slide_index ?? 0) || 0),
+    peak_audience: Math.max(0, Number(raw.peak_audience ?? 0) || 0),
+    slides_advanced: Math.max(0, Number(raw.slides_advanced ?? 0) || 0),
   };
 }

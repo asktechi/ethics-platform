@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   approveAllClassSlidesAction,
@@ -8,6 +8,7 @@ import {
   saveRunSettingsAction,
   startPresentationAction,
 } from "@/app/(app)/_actions/presentation.actions";
+import { AudienceQr } from "@/components/presentation/AudienceQr";
 import { ThemeReel } from "@/components/theme/ThemeReel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +29,7 @@ export function PresentSetup({ classId }: { classId: string }) {
   const [usePools, setUsePools] = useState(true);
   const [themeMode, setThemeMode] = useState<"shuffle" | "locked">("shuffle");
   const [lockedThemeId, setLockedThemeId] = useState<string>("");
+  const [allowAudienceAdvance, setAllowAudienceAdvance] = useState(false);
   const [themes, setThemes] = useState<Array<{ id: string; name: string; palette_json: Json }>>([]);
   const [origin, setOrigin] = useState("");
   const router = useRouter();
@@ -47,6 +49,7 @@ export function PresentSetup({ classId }: { classId: string }) {
       setUsePools(result.settings.use_image_pools);
       setThemeMode(result.settings.theme_mode);
       setLockedThemeId(result.settings.locked_theme_id ?? "");
+      setAllowAudienceAdvance(result.settings.allow_audience_advance === true);
       setThemes(result.themes as Array<{ id: string; name: string; palette_json: Json }>);
       setReel(
         result.assignments.map((row) => {
@@ -70,10 +73,7 @@ export function PresentSetup({ classId }: { classId: string }) {
 
   const hostUrl = run ? `${origin}/class/${classId}/present/${run.run_id}/host` : "";
   const audienceUrl = run ? `${origin}/present/${run.run_id}/audience` : "";
-  const qrSrc = useMemo(() => {
-    if (!audienceUrl) return "";
-    return `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(audienceUrl)}`;
-  }, [audienceUrl]);
+  const joinUrl = run ? `${origin}/present/${run.run_id}/audience/join` : "";
 
   function saveSettings() {
     if (!run) return;
@@ -87,6 +87,7 @@ export function PresentSetup({ classId }: { classId: string }) {
           use_image_pools: usePools,
           theme_mode: themeMode,
           locked_theme_id: themeMode === "locked" ? lockedThemeId || null : null,
+          allow_audience_advance: allowAudienceAdvance,
         },
       });
       if (!result.ok) setError(result.error);
@@ -171,6 +172,14 @@ export function PresentSetup({ classId }: { classId: string }) {
             />
             Use locked concept image pools
           </label>
+          <label className="flex items-center gap-2 text-sm text-ivory">
+            <input
+              type="checkbox"
+              checked={allowAudienceAdvance}
+              onChange={(event) => setAllowAudienceAdvance(event.target.checked)}
+            />
+            Allow audience click-to-advance if the host drops offline
+          </label>
           <div className="space-y-2">
             <Label htmlFor="theme-mode">Theme</Label>
             <select
@@ -219,13 +228,11 @@ export function PresentSetup({ classId }: { classId: string }) {
             <p className="text-xs uppercase tracking-[0.14em] text-ivory/45">Audience (open)</p>
             <p className="mt-1 break-all font-mono text-xs text-ivory">{audienceUrl || "Loading…"}</p>
           </div>
-          {qrSrc ? (
-            <div>
-              <p className="text-xs uppercase tracking-[0.14em] text-ivory/45">Audience QR</p>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={qrSrc} alt="Audience QR code" className="mt-2 h-40 w-40 bg-ivory p-2" />
-            </div>
-          ) : null}
+          <div>
+            <p className="text-xs uppercase tracking-[0.14em] text-ivory/45">Join (QR + redirect)</p>
+            <p className="mt-1 break-all font-mono text-xs text-ivory">{joinUrl || "Loading…"}</p>
+          </div>
+          <AudienceQr url={audienceUrl} />
         </TabsContent>
       </Tabs>
 

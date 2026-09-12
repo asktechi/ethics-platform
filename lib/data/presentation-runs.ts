@@ -98,6 +98,43 @@ export async function startRun(id: string): Promise<PresentationRun> {
   return data as PresentationRun;
 }
 
+export async function endRun(
+  id: string,
+  extras: Pick<RunSettings, "peak_audience" | "slides_advanced" | "current_slide_index"> = {},
+): Promise<PresentationRun> {
+  const current = await getRunByPk(id);
+  const settings: RunSettings = {
+    ...settingsOf(current),
+    ...extras,
+  };
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("presentation_runs")
+    .update({
+      status: "ended",
+      ended_at: new Date().toISOString(),
+      settings_json: settings as unknown as Json,
+    })
+    .eq("id", id)
+    .select("*")
+    .single();
+  if (error) throw new Error(error.message);
+  return data as PresentationRun;
+}
+
+export async function syncRunProgress(
+  id: string,
+  extras: Pick<RunSettings, "current_slide_index" | "slides_advanced" | "peak_audience">,
+): Promise<void> {
+  const current = await getRunByPk(id);
+  if (current.status === "ended") return;
+  const settings: RunSettings = {
+    ...settingsOf(current),
+    ...extras,
+  };
+  await updateRunSettings(id, settings);
+}
+
 export function settingsOf(run: PresentationRun): RunSettings {
   return parseRunSettings(run.settings_json);
 }
