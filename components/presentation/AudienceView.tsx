@@ -7,6 +7,7 @@ import { SlideRenderer } from "@/components/presentation/SlideRenderer";
 import {
   applyRemoteEvent,
   dispatch,
+  resetPresentationBus,
   usePresentationBus,
 } from "@/lib/presentation/bus";
 import { prefetchUpcomingImages } from "@/lib/presentation/prefetch";
@@ -26,6 +27,7 @@ export function AudienceView({ runId }: { runId: string }) {
 
   useEffect(() => {
     let cancelled = false;
+    resetPresentationBus();
     async function load() {
       try {
         const response = await fetch(`/api/present/${runId}`, { cache: "no-store" });
@@ -33,6 +35,10 @@ export function AudienceView({ runId }: { runId: string }) {
         if (cancelled) return;
         if (response.status === 404 || json.status === "not_found") {
           setPayload({ status: "not_found" });
+          return;
+        }
+        if (!response.ok) {
+          setError(json.error ?? "Could not load this session.");
           return;
         }
         setPayload(json);

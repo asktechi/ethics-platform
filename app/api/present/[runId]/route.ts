@@ -17,10 +17,7 @@ export async function GET(
     const admin = createAdminClient();
     const { data, error } = await admin.rpc("get_run_by_run_id", { p_run_id: runId });
     if (error) {
-      return NextResponse.json(
-        { status: "not_found", error: "Live sync lookup failed" } as AudienceDeckResponse,
-        { status: 500 },
-      );
+      return NextResponse.json({ error: "Live sync lookup failed" }, { status: 500 });
     }
 
     const live = Array.isArray(data) ? data[0] : data;
@@ -53,6 +50,6 @@ export async function GET(
   } catch (caught) {
     const message = caught instanceof Error ? caught.message : "Deck load failed";
     console.error("[present] audience deck", message);
-    return NextResponse.json({ status: "not_found" } satisfies AudienceDeckResponse, { status: 500 });
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
