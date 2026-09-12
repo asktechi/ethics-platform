@@ -59,8 +59,7 @@
   }
 
   h1,
-  h2,
-  .font-display {
-    @apply font-display;
+  h2 {
+    font-family: var(--font-playfair), Georgia, serif;
   }
 }
