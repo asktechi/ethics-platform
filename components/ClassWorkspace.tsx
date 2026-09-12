@@ -8,14 +8,15 @@ import {
 } from "@/app/(app)/_actions/class.actions";
 import { ConceptList } from "@/components/ConceptList";
 import { InlineEditableText } from "@/components/InlineEditableText";
+import { MaterialsPanel } from "@/components/materials/MaterialsPanel";
 import { SectionList } from "@/components/SectionList";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ClassDetail } from "@/lib/data/classes";
+import type { MaterialListRow } from "@/lib/data/materials.types";
 import type { Concept, Section } from "@/types/db.helpers";
 
 const comingSoon: Record<string, string> = {
-  materials: "Coming in Phase 3 — immutable uploads, conversion, and slide reorder.",
   questions: "Coming in Phase 5 — question bank, AI tagging, and instructor approval.",
   theme: "Coming in Phase 4 — professional palettes and locked concept images.",
   present: "Coming in Phase 4 — presenter and audience views in lockstep.",
@@ -25,10 +26,12 @@ export function ClassWorkspace({
   detail,
   sections,
   concepts,
+  materials,
 }: {
   detail: ClassDetail;
   sections: Section[];
   concepts: Concept[];
+  materials: MaterialListRow[];
 }) {
   const firstActive = sections.find((section) => !section.deleted_at)?.id ?? null;
   const [selectedId, setSelectedId] = useState<string | null>(firstActive);
@@ -181,6 +184,10 @@ export function ClassWorkspace({
             showArchived={showArchived}
           />
         </div>
+      </TabsContent>
+
+      <TabsContent value="materials" className="mt-6">
+        <MaterialsPanel classId={detail.id} initialMaterials={materials} />
       </TabsContent>
 
       {Object.entries(comingSoon).map(([key, copy]) => (

@@ -33,7 +33,9 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
+    "file-type": "^22.1.0",
     "framer-motion": "^13.2.0",
+    "jszip": "^3.10.2",
     "lucide-react": "^1.45.0",
     "mammoth": "^1.12.3",
     "nanoid": "^6.0.1",
@@ -51,6 +53,7 @@
     "zod": "^4.6.2"
   },
   "devDependencies": {
+    "@types/jszip": "^3.4.1",
     "@types/node": "^20",
     "@types/papaparse": "^5.5.2",
     "@types/pdf-parse": "^1.1.5",

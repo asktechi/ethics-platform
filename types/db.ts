@@ -244,6 +244,8 @@ export type Database = {
           uploaded_by: string;
           version_of: string | null;
           is_current: boolean;
+          byte_size: number | null;
+          list_order: number | null;
           created_at: string;
           updated_at: string;
           deleted_at: string | null;
@@ -266,6 +268,8 @@ export type Database = {
           uploaded_by: string;
           version_of?: string | null;
           is_current?: boolean;
+          byte_size?: number | null;
+          list_order?: number | null;
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
@@ -288,6 +292,8 @@ export type Database = {
           uploaded_by?: string;
           version_of?: string | null;
           is_current?: boolean;
+          byte_size?: number | null;
+          list_order?: number | null;
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;

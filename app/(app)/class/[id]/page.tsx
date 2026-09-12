@@ -3,6 +3,7 @@ import { ClassWorkspace } from "@/components/ClassWorkspace";
 import { PageHeader } from "@/components/PageHeader";
 import { getClass } from "@/lib/data/classes";
 import { listConceptsByClass } from "@/lib/data/concepts";
+import { listMaterials } from "@/lib/data/materials";
 import { listSections } from "@/lib/data/sections";
 
 export default async function ClassPage({ params }: { params: { id: string } }) {
@@ -13,9 +14,10 @@ export default async function ClassPage({ params }: { params: { id: string } }) 
     notFound();
   }
 
-  const [sections, concepts] = await Promise.all([
+  const [sections, concepts, materials] = await Promise.all([
     listSections(detail.id, { includeArchived: true }),
     listConceptsByClass(detail.id, { includeArchived: true }),
+    listMaterials(detail.id, { includeArchived: true }),
   ]);
 
   return (
@@ -29,7 +31,12 @@ export default async function ClassPage({ params }: { params: { id: string } }) 
         title={detail.title}
         description={detail.audience || "Class builder"}
       />
-      <ClassWorkspace detail={detail} sections={sections} concepts={concepts} />
+      <ClassWorkspace
+        detail={detail}
+        sections={sections}
+        concepts={concepts}
+        materials={materials}
+      />
     </div>
   );
 }
