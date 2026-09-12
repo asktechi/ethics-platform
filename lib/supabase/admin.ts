@@ -3,6 +3,10 @@ import { createClient } from "@supabase/supabase-js";
 
 /** Service-role client. Server-only. Never import from client components. */
 export function createAdminClient() {
+  if (typeof window !== "undefined") {
+    throw new Error("server-only");
+  }
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 

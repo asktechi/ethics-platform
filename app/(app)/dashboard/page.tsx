@@ -54,7 +54,7 @@ export default function DashboardPage() {
           </p>
         </div>
         <Button asChild variant="outline" className="border-gold/40 text-ivory">
-          <Link href="/login">Instructor sign-in stub</Link>
+          <Link href="/login">Instructor sign in</Link>
         </Button>
       </div>
 

@@ -1,9 +1,20 @@
+import { redirect } from "next/navigation";
 import { AppShell } from "@/components/shell/app-shell";
+import { createClient } from "@/lib/supabase/server";
 
-/**
- * Auth-gated instructor shell.
- * Phase 0: visual shell only. Magic-link session checks land in Phase 1.
- */
-export default function AppLayout({ children }: { children: React.ReactNode }) {
+export default async function AppLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
   return <AppShell>{children}</AppShell>;
 }

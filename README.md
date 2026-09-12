@@ -2,7 +2,9 @@
 
 Personal teaching platform for CFA Institute ethics instruction (Levels I–III). The owner is the sole instructor-author. Students join live quizzes with an open link and a display name.
 
-This repository is at **Phase 0**: app shell, brand theme, and project structure. Schema, auth, and seed data start in Phase 1.
+This repository is at **Phase 1**: schema, RLS, seed data, and instructor magic-link auth.
+
+Never commit `.env.local`, `SUPABASE_SERVICE_ROLE_KEY`, or `SUPABASE_DB_URL`.
 
 ## Run locally
 
@@ -27,6 +29,8 @@ Copy [`.env.local.example`](.env.local.example) to `.env.local`. Phase 0 does no
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Browser / cookie client |
 | `SUPABASE_SERVICE_ROLE_KEY` | Server-only admin client |
+| `SUPABASE_DB_URL` | Direct Postgres URI for CLI / seed |
+| `SUPABASE_PROJECT_REF` | Cloud project ref |
 | `OPENAI_API_KEY` | Server-side tagging and generation |
 | `FLY_WORKER_URL` | PPTX → PDF worker (Phase 3) |
 | `FLY_WORKER_SECRET` | Worker auth (Phase 3) |
@@ -40,8 +44,8 @@ Next.js 14 App Router, TypeScript, Tailwind, shadcn/ui, Framer Motion, dnd-kit, 
 
 ## Phase roadmap
 
-0. **Bootstrap** — repo, deps, theme, env, instructor shell *(this phase)*
-1. **Data and auth** — Supabase schema, RLS, magic-link instructor auth, seed Levels I–III and Standards I–VII
+0. **Bootstrap** — repo, deps, theme, env, instructor shell
+1. **Data and auth** — Supabase schema, RLS, magic-link instructor auth, seed Levels I–III and Standards I–VII *(this phase)*
 2. **Navigation** — Level → Class → Section → Concept
 3. **Materials** — immutable uploads, Fly worker, slide reorder
 4. **Presentation** — dual view, teleprompter, dynamic theming

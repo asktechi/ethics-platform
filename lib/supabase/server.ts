@@ -24,7 +24,7 @@ export function createClient() {
             cookieStore.set(name, value, options);
           });
         } catch {
-          // Server Components cannot always write cookies; middleware will in Phase 1.
+          // Server Components cannot always write cookies; middleware refreshes the session.
         }
       },
     },
