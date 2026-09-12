@@ -236,8 +236,8 @@ export function MaterialsPanel({
                             selected={material.id === selectedId}
                             sortable
                             dragHandle={{
-                              attributes: attributes as Record<string, unknown>,
-                              listeners: listeners as Record<string, unknown> | undefined,
+                              attributes,
+                              listeners: listeners ?? undefined,
                             }}
                             onSelect={() => selectMaterial(material.id)}
                             onRename={() => {

@@ -74,7 +74,8 @@ export async function parsePptx(buffer: Buffer, filename: string): Promise<Parse
     });
 
   const slides: ParsedSlide[] = [];
-  for (const [index, name] of slideFiles.entries()) {
+  for (let index = 0; index < slideFiles.length; index += 1) {
+    const name = slideFiles[index];
     const xml = await zip.files[name].async("string");
     slides.push(parseSlideXml(xml, index + 1));
   }

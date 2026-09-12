@@ -5,9 +5,13 @@ import {
   type ParsedSlide,
 } from "@/lib/parsers/types";
 
+type MammothMarkdown = typeof mammoth & {
+  convertToMarkdown: (input: { buffer: Buffer }) => Promise<{ value: string }>;
+};
+
 export async function parseDocx(buffer: Buffer, filename: string): Promise<ParseResult> {
   const warnings: string[] = [];
-  const { value } = await mammoth.convertToMarkdown({ buffer });
+  const { value } = await (mammoth as MammothMarkdown).convertToMarkdown({ buffer });
   const markdown = value.replace(/\r\n/g, "\n").trim();
   const chunks = markdown.split(/\n(?=#{1,3}\s+)/);
   const slides: ParsedSlide[] = chunks

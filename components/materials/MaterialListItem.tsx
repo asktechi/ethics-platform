@@ -35,8 +35,8 @@ export function MaterialListItem({
   selected: boolean;
   sortable?: boolean;
   dragHandle?: {
-    attributes: Record<string, unknown>;
-    listeners: Record<string, unknown> | undefined;
+    attributes: object;
+    listeners?: object;
   };
   onSelect: () => void;
   onRename: () => void;
