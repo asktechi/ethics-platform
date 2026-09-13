@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   approveTagProposalsAction,
   autoTagUntaggedAction,
@@ -10,7 +10,7 @@ import {
   listMatchingQuestionIdsAction,
   updateQuestionAction,
 } from "@/app/(app)/_actions/question.actions";
-import { addToPoolAction, createPoolWithQuestionsAction } from "@/app/(app)/_actions/question-pool.actions";
+import { addToPoolAction, createPoolWithQuestionsAction, listPoolsAction } from "@/app/(app)/_actions/question-pool.actions";
 import { QuestionDrawer } from "@/components/questions/QuestionDrawer";
 import { QuickSelect } from "@/components/questions/QuickSelect";
 import { TagReview } from "@/components/questions/TagReview";
@@ -34,7 +34,7 @@ export function QuestionsBank({
   initialQuestions,
   standards,
   concepts,
-  pools: initialPools,
+  pools: initialPools = [],
   spend,
   importedCount = 0,
 }: {
@@ -42,7 +42,7 @@ export function QuestionsBank({
   initialQuestions: QuestionRow[];
   standards: Standard[];
   concepts: Concept[];
-  pools: PoolRow[];
+  pools?: PoolRow[];
   spend: number;
   importedCount?: number;
 }) {
@@ -131,6 +131,14 @@ export function QuestionsBank({
   }, [search, status, source, standardFilter, conceptFilter, difficulty, archived]);
 
   useEffect(() => {
+    if (initialPools.length) return;
+    start(async () => {
+      const result = await listPoolsAction(classId);
+      if (result.ok) setPools(result.pools);
+    });
+  }, [classId, initialPools.length]);
+
+  useEffect(() => {
     let cancelled = false;
     start(async () => {
       const result = await countMatchingQuestionsAction(classId, filters);
@@ -144,6 +152,13 @@ export function QuestionsBank({
   useEffect(() => {
     if (headerRef.current) headerRef.current.indeterminate = headerState === "some";
   }, [headerState]);
+
+  const selectMatching = useCallback(() => {
+    start(async () => {
+      const result = await listMatchingQuestionIdsAction(classId, filters);
+      if (result.ok) setSelected(replaceIds(result.ids));
+    });
+  }, [classId, filters]);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -164,7 +179,7 @@ export function QuestionsBank({
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [pageIds, classId, filters]);
+  }, [pageIds, selectMatching]);
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -172,13 +187,6 @@ export function QuestionsBank({
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
-    });
-  }
-
-  function selectMatching() {
-    start(async () => {
-      const result = await listMatchingQuestionIdsAction(classId, filters);
-      if (result.ok) setSelected(replaceIds(result.ids));
     });
   }
 
