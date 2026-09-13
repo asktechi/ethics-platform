@@ -32,6 +32,7 @@ export function SessionDetail({
 }) {
   const router = useRouter();
   const [index, setIndex] = useState(0);
+  const [sortKey, setSortKey] = useState<"name" | "choice" | "ms">("ms");
   const snapshot = instance.settings_snapshot;
   const question = questions[index];
   const rows = responses.filter((row) => row.question_id === question?.question_id);
@@ -104,16 +105,30 @@ export function SessionDetail({
         <table className="mt-4 w-full text-left text-sm">
           <thead className="text-[11px] uppercase text-ivory/45">
             <tr>
-              <th className="px-2 py-2">Player</th>
-              <th className="px-2 py-2">Choice</th>
-              <th className="px-2 py-2">ms</th>
+              <th className="cursor-pointer px-2 py-2" onClick={() => setSortKey("name")}>
+                Player
+              </th>
+              <th className="cursor-pointer px-2 py-2" onClick={() => setSortKey("choice")}>
+                Choice
+              </th>
+              <th className="cursor-pointer px-2 py-2" onClick={() => setSortKey("ms")}>
+                ms
+              </th>
               <th className="px-2 py-2">Correct</th>
             </tr>
           </thead>
           <tbody>
             {rows
               .slice()
-              .sort((a, b) => (a.ms_taken ?? 9e9) - (b.ms_taken ?? 9e9))
+              .sort((a, b) => {
+                if (sortKey === "choice") return (a.choice_key ?? "").localeCompare(b.choice_key ?? "");
+                if (sortKey === "name") {
+                  const left = participants.find((item) => item.id === a.participant_id)?.display_name ?? "";
+                  const right = participants.find((item) => item.id === b.participant_id)?.display_name ?? "";
+                  return left.localeCompare(right);
+                }
+                return (a.ms_taken ?? 9e9) - (b.ms_taken ?? 9e9);
+              })
               .map((row) => (
                 <tr key={row.participant_id} className="border-t border-white/5">
                   <td className="px-2 py-2">

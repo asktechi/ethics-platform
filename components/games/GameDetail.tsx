@@ -155,6 +155,7 @@ export function GameDetail({
                 <th className="px-2 py-2">Date</th>
                 <th className="px-2 py-2">Players</th>
                 <th className="px-2 py-2">Avg score</th>
+                <th className="px-2 py-2">Top scorer</th>
                 <th className="px-2 py-2">Duration</th>
                 <th className="px-2 py-2">Status</th>
               </tr>
@@ -169,6 +170,7 @@ export function GameDetail({
                   <td className="px-2 py-2">{new Date(row.created_at).toLocaleString()}</td>
                   <td className="px-2 py-2">{row.participant_count}</td>
                   <td className="px-2 py-2">{row.avg_score ?? "—"}</td>
+                  <td className="px-2 py-2">{row.top_scorer ?? "—"}</td>
                   <td className="px-2 py-2">{row.duration_seconds ? `${Math.round(row.duration_seconds / 60)}m` : "—"}</td>
                   <td className="px-2 py-2">{row.status}</td>
                 </tr>

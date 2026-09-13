@@ -68,6 +68,8 @@ export type GameTemplateRow = {
   pool_name?: string | null;
   pool_count?: number | null;
   class_title?: string | null;
+  standard_ids?: string[];
+  difficulties?: Array<"easy" | "medium" | "hard">;
 };
 
 export type GameInstanceRow = {
@@ -127,12 +129,45 @@ export async function listGameTemplates(options: { includeArchived?: boolean } =
   if (error) throw new Error(error.message);
   const rows = (data ?? []).map((row) => mapTemplate(row as Record<string, unknown>));
   const poolIds = rows.map((row) => row.pool_id).filter((id): id is string => Boolean(id));
-  const { data: items } = poolIds.length
-    ? await supabase.from("question_pool_items").select("pool_id").in("pool_id", poolIds)
+  const { data: poolMeta } = poolIds.length
+    ? await supabase
+        .from("question_pool_items")
+        .select("pool_id, question:questions(standard_id, difficulty)")
+        .in("pool_id", poolIds)
     : { data: [] };
   const counts = new Map<string, number>();
-  (items ?? []).forEach((item) => counts.set(item.pool_id, (counts.get(item.pool_id) ?? 0) + 1));
-  return rows.map((row) => ({ ...row, pool_count: row.pool_id ? (counts.get(row.pool_id) ?? 0) : null }));
+  (poolMeta ?? []).forEach((item) => counts.set(item.pool_id, (counts.get(item.pool_id) ?? 0) + 1));
+  const poolStandards = new Map<string, Set<string>>();
+  const poolDifficulties = new Map<string, Set<"easy" | "medium" | "hard">>();
+  (poolMeta ?? []).forEach((item) => {
+    const raw = item.question as
+      | { standard_id?: string | null; difficulty?: "easy" | "medium" | "hard" | null }
+      | Array<{ standard_id?: string | null; difficulty?: "easy" | "medium" | "hard" | null }>
+      | null;
+    const question = Array.isArray(raw) ? raw[0] : raw;
+    if (!item.pool_id) return;
+    if (question?.standard_id) {
+      const set = poolStandards.get(item.pool_id) ?? new Set<string>();
+      set.add(question.standard_id);
+      poolStandards.set(item.pool_id, set);
+    }
+    if (question?.difficulty) {
+      const set = poolDifficulties.get(item.pool_id) ?? new Set<"easy" | "medium" | "hard">();
+      set.add(question.difficulty);
+      poolDifficulties.set(item.pool_id, set);
+    }
+  });
+
+  return rows.map((row) => ({
+    ...row,
+    pool_count: row.pool_id ? (counts.get(row.pool_id) ?? 0) : null,
+    standard_ids: row.pool_id
+      ? [...(poolStandards.get(row.pool_id) ?? [])]
+      : row.filter_json.standards,
+    difficulties: row.pool_id
+      ? [...(poolDifficulties.get(row.pool_id) ?? [])]
+      : row.filter_json.difficulty,
+  }));
 }
 
 export async function listGameTags() {
@@ -284,9 +319,27 @@ export async function listTemplateInstances(templateId: string) {
     .is("deleted_at", null)
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
+  const sessionIds = (data ?? [])
+    .map((row) => row.quiz_session_id)
+    .filter((id): id is string => Boolean(id));
+  const { data: players } = sessionIds.length
+    ? await supabase
+        .from("quiz_participants")
+        .select("session_id, display_name, score")
+        .in("session_id", sessionIds)
+        .is("deleted_at", null)
+    : { data: [] };
+  const topBySession = new Map<string, { name: string; score: number }>();
+  (players ?? []).forEach((player) => {
+    const current = topBySession.get(player.session_id);
+    if (!current || player.score > current.score) {
+      topBySession.set(player.session_id, { name: player.display_name, score: player.score });
+    }
+  });
   return (data ?? []).map((row) => ({
     ...row,
     settings_snapshot: (row.settings_snapshot ?? {}) as SettingsSnapshot,
+    top_scorer: row.quiz_session_id ? (topBySession.get(row.quiz_session_id)?.name ?? null) : null,
   })) as GameInstanceRow[];
 }
 

@@ -378,6 +378,10 @@ as $$
 declare
   v_instance public.game_instances%rowtype;
   v_joined record;
+  v_session uuid;
+  v_participant uuid;
+  v_token uuid;
+  v_color text;
 begin
   select * into v_instance
   from public.game_instances gi
@@ -403,21 +407,26 @@ begin
   select * into v_joined
   from public.join_quiz(p_join_code, p_display_name, p_student_code);
 
+  v_session := v_joined.session_id;
+  v_participant := v_joined.participant_id;
+  v_token := v_joined.participant_token;
+  v_color := v_joined.avatar_color;
+
   if v_instance.id is not null then
     update public.game_instances
     set participant_count = (
-      select count(*)::int from public.quiz_participants
-      where session_id = v_joined.session_id and deleted_at is null
+      select count(*)::int from public.quiz_participants qp
+      where qp.session_id = v_session and qp.deleted_at is null
     )
     where id = v_instance.id;
   end if;
 
   return query select
     v_instance.id,
-    v_joined.session_id,
-    v_joined.participant_id,
-    v_joined.participant_token,
-    v_joined.avatar_color;
+    v_session,
+    v_participant,
+    v_token,
+    v_color;
 end;
 $$;
 

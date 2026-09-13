@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { GameCard } from "@/components/games/GameCard";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
@@ -19,9 +20,12 @@ export function GamesHub({
   templates: GameTemplateRow[];
   standards: Array<{ id: string; code: string }>;
 }) {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<GameMode | "all">("all");
   const [tag, setTag] = useState("all");
+  const [standard, setStandard] = useState("all");
+  const [difficulty, setDifficulty] = useState<"all" | "easy" | "medium" | "hard">("all");
   const [sort, setSort] = useState<SortKey>("recent");
   const [archived, setArchived] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -33,6 +37,8 @@ export function GamesHub({
       if (archived ? !hidden : hidden) return false;
       if (mode !== "all" && row.mode !== mode) return false;
       if (tag !== "all" && !row.tags.includes(tag)) return false;
+      if (standard !== "all" && !(row.standard_ids ?? []).includes(standard)) return false;
+      if (difficulty !== "all" && !(row.difficulties ?? []).includes(difficulty)) return false;
       if (query && !`${row.name} ${row.description ?? ""} ${row.tags.join(" ")}`.toLowerCase().includes(query.toLowerCase())) {
         return false;
       }
@@ -45,7 +51,7 @@ export function GamesHub({
       return b.updated_at.localeCompare(a.updated_at);
     });
     return rows;
-  }, [archived, mode, query, sort, tag, templates]);
+  }, [archived, difficulty, mode, query, sort, standard, tag, templates]);
 
   return (
     <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
@@ -81,16 +87,34 @@ export function GamesHub({
             ))}
           </select>
         </label>
-        <p className="text-xs text-ivory/40">
-          Standard coverage and difficulty mix are stored on each template and re-evaluated at launch.
-        </p>
-        <div className="flex flex-wrap gap-1">
-          {standards.slice(0, 7).map((item) => (
-            <span key={item.id} className="text-[11px] text-ivory/40">
-              {item.code}
-            </span>
-          ))}
-        </div>
+        <label className="block text-xs text-ivory/55">
+          Standard coverage
+          <select
+            className="mt-1 h-9 w-full border border-border bg-navy px-2 text-sm text-ivory"
+            value={standard}
+            onChange={(event) => setStandard(event.target.value)}
+          >
+            <option value="all">Any standard</option>
+            {standards.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.code}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block text-xs text-ivory/55">
+          Difficulty mix
+          <select
+            className="mt-1 h-9 w-full border border-border bg-navy px-2 text-sm text-ivory"
+            value={difficulty}
+            onChange={(event) => setDifficulty(event.target.value as "all" | "easy" | "medium" | "hard")}
+          >
+            <option value="all">Any difficulty</option>
+            <option value="easy">Includes easy</option>
+            <option value="medium">Includes medium</option>
+            <option value="hard">Includes hard</option>
+          </select>
+        </label>
         <label className="flex items-center gap-2 text-xs text-ivory/70">
           <input type="checkbox" checked={archived} onChange={(event) => setArchived(event.target.checked)} />
           Show archived
@@ -113,6 +137,12 @@ export function GamesHub({
         </div>
 
         {visible.length === 0 ? (
+          templates.some((row) => (archived ? row.deleted_at : !row.deleted_at)) ? (
+            <EmptyState
+              title="No games match"
+              description="Clear a filter or search term to see the rest of the library."
+            />
+          ) : (
           <EmptyState
             title="Build your first game →"
             description="Save a Jeopardy template once, then launch it without rebuilding the rules."
@@ -122,6 +152,7 @@ export function GamesHub({
               </Button>
             }
           />
+          )
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {visible.map((row) => (
@@ -143,7 +174,9 @@ export function GamesHub({
                     disabled={busy === row.id}
                     onClick={() => {
                       setBusy(row.id);
-                      void archiveGameAction(row.id, true).finally(() => setBusy(null));
+                      void archiveGameAction(row.id, true)
+                        .then(() => router.refresh())
+                        .finally(() => setBusy(null));
                     }}
                   >
                     Restore
