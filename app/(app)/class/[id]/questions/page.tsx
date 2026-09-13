@@ -5,6 +5,7 @@ import { classAiSpend } from "@/lib/ai/usage";
 import { getClass } from "@/lib/data/classes";
 import { listConceptsByClass } from "@/lib/data/concepts";
 import { listQuestions } from "@/lib/data/questions";
+import { listPools } from "@/lib/data/question-pools";
 import { listStandards } from "@/lib/data/standards";
 
 export default async function ClassQuestionsPage({
@@ -21,10 +22,11 @@ export default async function ClassQuestionsPage({
     notFound();
   }
 
-  const [questions, standards, concepts, spend] = await Promise.all([
+  const [questions, standards, concepts, pools, spend] = await Promise.all([
     listQuestions(detail.id, { includeArchived: true }),
     listStandards(),
     listConceptsByClass(detail.id),
+    listPools(detail.id),
     classAiSpend(detail.id),
   ]);
 
@@ -46,6 +48,7 @@ export default async function ClassQuestionsPage({
           initialQuestions={questions}
           standards={standards}
           concepts={concepts}
+          pools={pools}
           spend={spend}
           importedCount={Number(searchParams?.imported ?? 0) || 0}
         />

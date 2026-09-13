@@ -1,26 +1,40 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   approveTagProposalsAction,
   autoTagUntaggedAction,
   bulkQuestionAction,
+  countMatchingQuestionsAction,
+  listMatchingQuestionIdsAction,
   updateQuestionAction,
 } from "@/app/(app)/_actions/question.actions";
-import { addToPoolAction, createPoolAction } from "@/app/(app)/_actions/question-pool.actions";
+import { addToPoolAction, createPoolWithQuestionsAction } from "@/app/(app)/_actions/question-pool.actions";
 import { QuestionDrawer } from "@/components/questions/QuestionDrawer";
+import { QuickSelect } from "@/components/questions/QuickSelect";
 import { TagReview } from "@/components/questions/TagReview";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import type { QuestionRow } from "@/lib/data/questions";
+import type { PoolRow } from "@/lib/data/question-pools";
+import { PAGE_SIZE, headerSelectState, pageSlice, railFilters, replaceIds, unionIds } from "@/lib/questions/selection";
 import type { Concept, Standard } from "@/types/db.helpers";
+import { cn } from "@/lib/utils";
 
 export function QuestionsBank({
   classId,
   initialQuestions,
   standards,
   concepts,
+  pools: initialPools,
   spend,
   importedCount = 0,
 }: {
@@ -28,10 +42,12 @@ export function QuestionsBank({
   initialQuestions: QuestionRow[];
   standards: Standard[];
   concepts: Concept[];
+  pools: PoolRow[];
   spend: number;
   importedCount?: number;
 }) {
   const [questions, setQuestions] = useState(initialQuestions);
+  const [pools, setPools] = useState(initialPools);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [activeId, setActiveId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -41,6 +57,14 @@ export function QuestionsBank({
   const [conceptFilter, setConceptFilter] = useState<string[]>([]);
   const [difficulty, setDifficulty] = useState<string[]>([]);
   const [archived, setArchived] = useState(false);
+  const [page, setPage] = useState(0);
+  const [matchingCount, setMatchingCount] = useState(0);
+  const [headerMenu, setHeaderMenu] = useState(false);
+  const [newPoolOpen, setNewPoolOpen] = useState(false);
+  const [poolName, setPoolName] = useState("Full Mix");
+  const [poolShuffle, setPoolShuffle] = useState(true);
+  const [poolTime, setPoolTime] = useState("45");
+  const headerRef = useRef<HTMLInputElement>(null);
   const [proposals, setProposals] = useState<
     Array<{
       questionId: string;
@@ -57,27 +81,90 @@ export function QuestionsBank({
   const [aiSpend, setAiSpend] = useState(spend);
   const [pending, start] = useTransition();
 
-  const visible = useMemo(() => {
-    return questions.filter((question) => {
-      if (!archived && question.deleted_at) return false;
-      if (search && !question.stem.toLowerCase().includes(search.toLowerCase())) return false;
-      if (status === "approved" && !question.approved) return false;
-      if (status === "rejected" && !question.rejected) return false;
-      if (status === "pending" && (question.approved || question.rejected)) return false;
-      if (source !== "all" && question.source !== source) return false;
-      if (standardFilter.length && (!question.standard_id || !standardFilter.includes(question.standard_id))) {
-        return false;
-      }
-      if (conceptFilter.length && (!question.concept_id || !conceptFilter.includes(question.concept_id))) {
-        return false;
-      }
-      if (difficulty.length && (!question.difficulty || !difficulty.includes(question.difficulty))) return false;
-      return true;
-    });
-  }, [archived, conceptFilter, difficulty, questions, search, source, standardFilter, status]);
+  const filters = useMemo(
+    () =>
+      railFilters({
+        search,
+        status,
+        source,
+        standardFilter,
+        conceptFilter,
+        difficulty,
+        archived,
+      }),
+    [archived, conceptFilter, difficulty, search, source, standardFilter, status],
+  );
 
+  const visible = useMemo(
+    () =>
+      questions.filter((question) => {
+        if (!archived && question.deleted_at) return false;
+        if (search && !question.stem.toLowerCase().includes(search.toLowerCase())) return false;
+        if (status === "approved" && !question.approved) return false;
+        if (status === "rejected" && !question.rejected) return false;
+        if (status === "pending" && (question.approved || question.rejected)) return false;
+        if (source !== "all" && question.source !== source) return false;
+        if (standardFilter.length && (!question.standard_id || !standardFilter.includes(question.standard_id))) {
+          return false;
+        }
+        if (conceptFilter.length && (!question.concept_id || !conceptFilter.includes(question.concept_id))) {
+          return false;
+        }
+        if (difficulty.length && (!question.difficulty || !difficulty.includes(question.difficulty))) return false;
+        return true;
+      }),
+    [archived, conceptFilter, difficulty, questions, search, source, standardFilter, status],
+  );
+
+  const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount - 1);
+  const pageRows = pageSlice(visible, safePage);
+  const pageIds = pageRows.map((row) => row.id);
+  const headerState = headerSelectState(pageIds, selected);
+  const selectedInVisible = visible.filter((row) => selected.has(row.id)).length;
   const active = questions.find((question) => question.id === activeId) ?? null;
   const standardGroups = groupStandards(standards);
+  const selectedIds = [...selected];
+
+  useEffect(() => {
+    setPage(0);
+  }, [search, status, source, standardFilter, conceptFilter, difficulty, archived]);
+
+  useEffect(() => {
+    let cancelled = false;
+    start(async () => {
+      const result = await countMatchingQuestionsAction(classId, filters);
+      if (!cancelled && result.ok) setMatchingCount(result.count);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [classId, filters]);
+
+  useEffect(() => {
+    if (headerRef.current) headerRef.current.indeterminate = headerState === "some";
+  }, [headerState]);
+
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+      if (event.shiftKey && event.key.toLowerCase() === "a") {
+        event.preventDefault();
+        selectMatching();
+      }
+      if (event.shiftKey && event.key.toLowerCase() === "d") {
+        event.preventDefault();
+        setSelected(new Set());
+      }
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "a") {
+        event.preventDefault();
+        setSelected(replaceIds(pageIds));
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [pageIds, classId, filters]);
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -86,6 +173,22 @@ export function QuestionsBank({
       else next.add(id);
       return next;
     });
+  }
+
+  function selectMatching() {
+    start(async () => {
+      const result = await listMatchingQuestionIdsAction(classId, filters);
+      if (result.ok) setSelected(replaceIds(result.ids));
+    });
+  }
+
+  function onHeaderClick() {
+    if (headerState === "none") {
+      setHeaderMenu((open) => !open);
+      return;
+    }
+    setSelected(new Set());
+    setHeaderMenu(false);
   }
 
   return (
@@ -125,7 +228,16 @@ export function QuestionsBank({
         </label>
       </div>
 
-      {message ? <p className="text-sm text-ivory/70">{message}</p> : null}
+      {message ? (
+        <p className="text-sm text-ivory/70">
+          {message}{" "}
+          {message.toLowerCase().includes("pool") ? (
+            <Link href={`/class/${classId}/questions/pools`} className="text-gold underline">
+              Open pools
+            </Link>
+          ) : null}
+        </p>
+      ) : null}
 
       {proposals.length ? (
         <TagReview
@@ -170,9 +282,34 @@ export function QuestionsBank({
         />
       ) : null}
 
+      {selected.size > 0 ? (
+        <div className="sticky top-0 z-20 flex flex-wrap items-center gap-3 border border-gold bg-navy px-3 py-2 text-sm text-ivory">
+          <span>
+            {selected.size} selected ({selectedInVisible} in view)
+          </span>
+          {selected.size < matchingCount ? (
+            <button type="button" className="text-gold underline" onClick={selectMatching}>
+              Select all {matchingCount} matching
+            </button>
+          ) : null}
+          <button type="button" className="text-ivory/70 underline" onClick={() => setSelected(new Set())}>
+            Clear
+          </button>
+        </div>
+      ) : null}
+
       <div className="grid gap-4 lg:grid-cols-[220px_1fr_320px]">
         <aside className="space-y-4 border border-border bg-card p-3 text-sm">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gold">Filters</p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gold">Filters</p>
+            <QuickSelect
+              classId={classId}
+              standards={standards}
+              concepts={concepts}
+              selected={selected}
+              onChange={setSelected}
+            />
+          </div>
           <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search stem" />
           <label className="block text-xs text-ivory/55">
             Status
@@ -264,10 +401,25 @@ export function QuestionsBank({
         <section className="min-w-0 border border-border bg-card">
           {selected.size > 0 ? (
             <div className="flex flex-wrap gap-2 border-b border-white/10 px-3 py-2">
-              <Button size="sm" onClick={() => start(() => void bulkQuestionAction({ classId, ids: [...selected], action: "approve" }).then(() => window.location.reload()))}>
+              <Button
+                size="sm"
+                onClick={() =>
+                  start(() =>
+                    void bulkQuestionAction({ classId, ids: selectedIds, action: "approve" }).then(() => window.location.reload()),
+                  )
+                }
+              >
                 Approve
               </Button>
-              <Button size="sm" variant="outline" onClick={() => start(() => void bulkQuestionAction({ classId, ids: [...selected], action: "reject" }).then(() => window.location.reload()))}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  start(() =>
+                    void bulkQuestionAction({ classId, ids: selectedIds, action: "reject" }).then(() => window.location.reload()),
+                  )
+                }
+              >
                 Reject
               </Button>
               <Button
@@ -275,38 +427,49 @@ export function QuestionsBank({
                 variant="outline"
                 onClick={() =>
                   start(async () => {
-                    const result = await autoTagUntaggedAction(classId);
-                    if (result.ok) setProposals(result.results);
+                    const result = await autoTagUntaggedAction(classId, selectedIds);
+                    if (result.ok) {
+                      setProposals(result.results);
+                      setAiSpend((value) => value + (result.cost ?? 0));
+                    } else setMessage(result.error);
                   })
                 }
               >
                 Tag now
               </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() =>
-                  start(async () => {
-                    const name = window.prompt("Pool name", "Level 1 Mock Quiz");
-                    if (!name) return;
-                    const created = await createPoolAction(classId, name);
-                    if (!created.ok) {
-                      setMessage(created.error);
-                      return;
-                    }
-                    await addToPoolAction(classId, created.pool.id, [...selected]);
-                    setMessage(`Added ${selected.size} questions to ${name}.`);
-                  })
-                }
-              >
-                Add to pool
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="outline">
+                    Add to pool ▾
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="border-border bg-navy text-ivory">
+                  {pools.map((pool) => (
+                    <DropdownMenuItem
+                      key={pool.id}
+                      onClick={() =>
+                        start(async () => {
+                          const result = await addToPoolAction(classId, pool.id, selectedIds);
+                          if (!result.ok) {
+                            setMessage(result.error);
+                            return;
+                          }
+                          setMessage(`Added ${result.added ?? selected.size} questions to ${pool.name}.`);
+                        })
+                      }
+                    >
+                      {pool.name}
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuItem onClick={() => setNewPoolOpen(true)}>New pool…</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Button
                 size="sm"
                 variant="destructive"
                 onClick={() =>
                   start(async () => {
-                    await bulkQuestionAction({ classId, ids: [...selected], action: archived ? "restore" : "delete" });
+                    await bulkQuestionAction({ classId, ids: selectedIds, action: archived ? "restore" : "delete" });
                     window.location.reload();
                   })
                 }
@@ -319,7 +482,39 @@ export function QuestionsBank({
             <table className="w-full text-left text-sm">
               <thead className="text-[11px] uppercase tracking-[0.12em] text-ivory/45">
                 <tr>
-                  <th className="px-2 py-2" />
+                  <th className="relative px-2 py-2">
+                    <input
+                      ref={headerRef}
+                      type="checkbox"
+                      checked={headerState === "all" && pageIds.length > 0}
+                      onChange={onHeaderClick}
+                      aria-label="Select questions"
+                    />
+                    {headerMenu && headerState === "none" ? (
+                      <div className="absolute left-0 top-8 z-20 w-64 space-y-1 border border-gold/40 bg-navy p-2 text-left normal-case tracking-normal text-ivory shadow-xl">
+                        <button
+                          type="button"
+                          className="block w-full px-2 py-1 text-left text-xs hover:bg-gold/10"
+                          onClick={() => {
+                            setSelected(unionIds(selected, pageIds));
+                            setHeaderMenu(false);
+                          }}
+                        >
+                          Select this page ({pageIds.length})
+                        </button>
+                        <button
+                          type="button"
+                          className="block w-full px-2 py-1 text-left text-xs hover:bg-gold/10"
+                          onClick={() => {
+                            selectMatching();
+                            setHeaderMenu(false);
+                          }}
+                        >
+                          Select all {matchingCount} matching current filters
+                        </button>
+                      </div>
+                    ) : null}
+                  </th>
                   <th className="px-2 py-2">Stem</th>
                   <th className="px-2 py-2">Standard</th>
                   <th className="px-2 py-2">Concept</th>
@@ -329,10 +524,14 @@ export function QuestionsBank({
                 </tr>
               </thead>
               <tbody>
-                {visible.map((question) => (
+                {pageRows.map((question) => (
                   <tr
                     key={question.id}
-                    className={`cursor-pointer border-t border-white/5 ${activeId === question.id ? "bg-gold/10" : ""}`}
+                    className={cn(
+                      "cursor-pointer border-t border-white/5",
+                      selected.has(question.id) && "bg-[#C9A227]/10",
+                      activeId === question.id && "bg-gold/10",
+                    )}
                     onClick={() => setActiveId(question.id)}
                   >
                     <td className="px-2 py-2" onClick={(event) => event.stopPropagation()}>
@@ -354,6 +553,29 @@ export function QuestionsBank({
               <p className="px-3 py-8 text-sm text-ivory/45">No questions match these filters.</p>
             ) : null}
           </div>
+          {visible.length > PAGE_SIZE ? (
+            <div className="flex items-center justify-between border-t border-white/10 px-3 py-2 text-xs text-ivory/60">
+              <span>
+                Page {safePage + 1} of {pageCount} · {visible.length} matching
+              </span>
+              <div className="flex gap-2">
+                <Button type="button" size="sm" variant="ghost" disabled={safePage === 0} onClick={() => setPage((value) => Math.max(0, value - 1))}>
+                  Previous
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  disabled={safePage >= pageCount - 1}
+                  onClick={() => setPage((value) => Math.min(pageCount - 1, value + 1))}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <p className="border-t border-white/10 px-3 py-2 text-xs text-ivory/45">{visible.length} matching current filters</p>
+          )}
         </section>
 
         <QuestionDrawer
@@ -371,6 +593,57 @@ export function QuestionsBank({
         />
       </div>
       <p className="text-[11px] text-ivory/40">AI spend for this class: ${aiSpend.toFixed(4)}</p>
+
+      <Dialog open={newPoolOpen} onOpenChange={setNewPoolOpen}>
+        <DialogContent className="border-border bg-navy text-ivory">
+          <DialogHeader>
+            <DialogTitle>New pool</DialogTitle>
+          </DialogHeader>
+          <label className="block text-sm">
+            Name
+            <Input className="mt-1" value={poolName} onChange={(event) => setPoolName(event.target.value)} />
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={poolShuffle} onChange={(event) => setPoolShuffle(event.target.checked)} />
+            Shuffle on play
+          </label>
+          <label className="block text-sm">
+            Seconds per question
+            <Input className="mt-1" value={poolTime} onChange={(event) => setPoolTime(event.target.value)} />
+          </label>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => setNewPoolOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="bg-gold text-navy hover:bg-gold/90"
+              disabled={pending || selected.size === 0}
+              onClick={() =>
+                start(async () => {
+                  const time = Number(poolTime);
+                  const result = await createPoolWithQuestionsAction({
+                    classId,
+                    name: poolName,
+                    questionIds: selectedIds,
+                    shuffle_on_play: poolShuffle,
+                    time_per_q: Number.isFinite(time) && time > 0 ? time : null,
+                  });
+                  if (!result.ok) {
+                    setMessage(result.error);
+                    return;
+                  }
+                  setPools((current) => [result.pool, ...current]);
+                  setNewPoolOpen(false);
+                  setMessage(`Created ${result.pool.name} with ${selected.size} questions.`);
+                })
+              }
+            >
+              Create and add
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -385,4 +658,3 @@ function groupStandards(standards: Standard[]) {
   }
   return [...groups.entries()].map(([key, items]) => ({ key, items }));
 }
-

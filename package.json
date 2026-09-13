@@ -15,7 +15,8 @@
     "db:diff": "supabase db diff",
     "gen:types": "supabase gen types typescript --linked > types/db.ts",
     "test:import": "node --experimental-strip-types --import ./scripts/register-ts-alias.mjs scripts/verify-phase56.mjs",
-    "test:grammar": "node --experimental-strip-types --import ./scripts/register-ts-alias.mjs scripts/verify-phase58.mjs"
+    "test:grammar": "node --experimental-strip-types --import ./scripts/register-ts-alias.mjs scripts/verify-phase58.mjs",
+    "test:selection": "node --experimental-strip-types --import ./scripts/register-ts-alias.mjs scripts/verify-phase59.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

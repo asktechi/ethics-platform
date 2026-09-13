@@ -37,11 +37,20 @@ export async function listPools(classId: string, includeArchived = false): Promi
   return (data ?? []) as PoolRow[];
 }
 
-export async function createPool(classId: string, name: string) {
+export async function createPool(
+  classId: string,
+  name: string,
+  settings?: { shuffle_on_play?: boolean; time_per_q?: number | null },
+) {
   const { supabase } = await requireUser();
   const { data, error } = await supabase
     .from("question_pools")
-    .insert({ class_id: classId, name, shuffle_on_play: true })
+    .insert({
+      class_id: classId,
+      name,
+      shuffle_on_play: settings?.shuffle_on_play ?? true,
+      time_per_q: settings?.time_per_q ?? null,
+    })
     .select("*")
     .single();
   if (error) throw new Error(error.message);
@@ -63,26 +72,75 @@ export async function updatePool(
   return data;
 }
 
+async function addQuestionsToPoolFallback(
+  supabase: Awaited<ReturnType<typeof requireUser>>["supabase"],
+  poolId: string,
+  unique: string[],
+) {
+  const { data: existing, error: existingError } = await supabase
+    .from("question_pool_items")
+    .select("question_id, order, deleted_at")
+    .eq("pool_id", poolId);
+  if (existingError) throw new Error(existingError.message);
+  const active = new Set((existing ?? []).filter((row) => !row.deleted_at).map((row) => row.question_id));
+  const start = (existing ?? []).reduce((max, row) => Math.max(max, row.order ?? 0), -1) + 1;
+  const fresh = unique.filter((id) => !active.has(id) && !(existing ?? []).some((row) => row.question_id === id));
+  const restore = unique.filter((id) => (existing ?? []).some((row) => row.question_id === id && row.deleted_at));
+  if (restore.length) {
+    await supabase.from("question_pool_items").update({ deleted_at: null }).eq("pool_id", poolId).in("question_id", restore);
+  }
+  const rows = fresh.map((question_id, index) => ({
+    pool_id: poolId,
+    question_id,
+    order: start + index,
+  }));
+  if (rows.length) {
+    const { error } = await supabase.from("question_pool_items").insert(rows);
+    if (error) throw new Error(error.message);
+  }
+  return { added: rows.length + restore.length };
+}
+
 export async function addQuestionsToPool(poolId: string, questionIds: string[]) {
   const { supabase } = await requireUser();
-  const { data: existing } = await supabase
-    .from("question_pool_items")
-    .select("question_id, order")
-    .eq("pool_id", poolId)
-    .is("deleted_at", null);
-  const have = new Set((existing ?? []).map((row) => row.question_id));
-  const start = (existing ?? []).reduce((max, row) => Math.max(max, row.order ?? 0), -1) + 1;
-  const rows = questionIds
-    .filter((id) => !have.has(id))
-    .map((question_id, index) => ({
-      pool_id: poolId,
-      question_id,
-      order: start + index,
-    }));
-  if (!rows.length) return existing ?? [];
-  const { error } = await supabase.from("question_pool_items").insert(rows);
-  if (error) throw new Error(error.message);
-  return rows;
+  const unique = [...new Set(questionIds.filter(Boolean))];
+  if (unique.length === 0) return { added: 0 };
+  const { data, error } = await supabase.rpc("add_questions_to_pool", {
+    p_pool_id: poolId,
+    p_question_ids: unique,
+  });
+  if (!error) return { added: Number(data ?? 0) };
+  if (!/add_questions_to_pool|schema cache|does not exist/i.test(error.message)) {
+    throw new Error(error.message);
+  }
+  return addQuestionsToPoolFallback(supabase, poolId, unique);
+}
+
+export async function createPoolWithQuestions(
+  classId: string,
+  name: string,
+  questionIds: string[],
+  settings?: { shuffle_on_play?: boolean; time_per_q?: number | null },
+) {
+  const { supabase } = await requireUser();
+  const unique = [...new Set(questionIds.filter(Boolean))];
+  const { data, error } = await supabase.rpc("create_pool_with_questions", {
+    p_class_id: classId,
+    p_name: name.trim() || "Untitled pool",
+    p_shuffle_on_play: settings?.shuffle_on_play ?? true,
+    p_time_per_q: settings?.time_per_q ?? null,
+    p_question_ids: unique,
+  });
+  if (!error) {
+    const row = Array.isArray(data) ? data[0] : data;
+    return row as PoolRow & { added?: number };
+  }
+  if (!/create_pool_with_questions|schema cache|does not exist/i.test(error.message)) {
+    throw new Error(error.message);
+  }
+  const pool = await createPool(classId, name, settings);
+  const added = await addQuestionsToPool(pool.id, unique);
+  return { ...pool, added: added.added };
 }
 
 export async function removeQuestionsFromPool(poolId: string, questionIds: string[]) {

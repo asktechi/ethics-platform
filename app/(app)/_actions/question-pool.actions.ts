@@ -6,6 +6,7 @@ import { actionError } from "@/lib/data/errors";
 import {
   addQuestionsToPool,
   createPool,
+  createPoolWithQuestions,
   getPoolWithQuestions,
   listPools,
   removeQuestionsFromPool,
@@ -22,10 +23,33 @@ function refresh(classId: string) {
   revalidatePath(`/class/${classId}/questions/pools`);
 }
 
-export async function createPoolAction(classId: string, name: string) {
+export async function createPoolAction(
+  classId: string,
+  name: string,
+  settings?: { shuffle_on_play?: boolean; time_per_q?: number | null },
+) {
   try {
-    const pool = await createPool(classId, name.trim() || "Untitled pool");
+    const pool = await createPool(classId, name.trim() || "Untitled pool", settings);
     refresh(classId);
+    return { ok: true as const, pool };
+  } catch (error) {
+    return { ok: false as const, error: actionError(error) };
+  }
+}
+
+export async function createPoolWithQuestionsAction(input: {
+  classId: string;
+  name: string;
+  questionIds: string[];
+  shuffle_on_play?: boolean;
+  time_per_q?: number | null;
+}) {
+  try {
+    const pool = await createPoolWithQuestions(input.classId, input.name, input.questionIds, {
+      shuffle_on_play: input.shuffle_on_play,
+      time_per_q: input.time_per_q,
+    });
+    refresh(input.classId);
     return { ok: true as const, pool };
   } catch (error) {
     return { ok: false as const, error: actionError(error) };
@@ -42,9 +66,9 @@ export async function listPoolsAction(classId: string) {
 
 export async function addToPoolAction(classId: string, poolId: string, questionIds: string[]) {
   try {
-    await addQuestionsToPool(poolId, questionIds);
+    const result = await addQuestionsToPool(poolId, questionIds);
     refresh(classId);
-    return { ok: true as const };
+    return { ok: true as const, added: result.added };
   } catch (error) {
     return { ok: false as const, error: actionError(error) };
   }

@@ -10,7 +10,9 @@ import { listConceptsByClass } from "@/lib/data/concepts";
 import { actionError } from "@/lib/data/errors";
 import {
   applyTagApprovals,
+  countQuestions,
   insertGeneratedQuestions,
+  listQuestionIds,
   listQuestions,
   restoreQuestion,
   softDeleteQuestion,
@@ -36,11 +38,27 @@ export async function listQuestionsAction(classId: string, filters: QuestionFilt
   }
 }
 
-export async function autoTagUntaggedAction(classId: string) {
+export async function countMatchingQuestionsAction(classId: string, filters: QuestionFilters) {
+  try {
+    return { ok: true as const, count: await countQuestions(classId, filters) };
+  } catch (error) {
+    return { ok: false as const, error: actionError(error) };
+  }
+}
+
+export async function listMatchingQuestionIdsAction(classId: string, filters: QuestionFilters) {
+  try {
+    return { ok: true as const, ids: await listQuestionIds(classId, filters) };
+  } catch (error) {
+    return { ok: false as const, error: actionError(error) };
+  }
+}
+
+export async function autoTagUntaggedAction(classId: string, questionIds?: string[]) {
   try {
     const { user } = await requireUser();
     const [ids, standards, concepts] = await Promise.all([
-      untaggedQuestionIds(classId),
+      questionIds?.length ? Promise.resolve(questionIds) : untaggedQuestionIds(classId),
       listStandards(),
       listConceptsByClass(classId),
     ]);

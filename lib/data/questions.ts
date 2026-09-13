@@ -7,9 +7,12 @@ export type QuestionFilters = {
   conceptIds?: string[];
   difficulty?: Array<"easy" | "medium" | "hard">;
   status?: "all" | "pending" | "approved" | "rejected";
+  statuses?: Array<"pending" | "approved" | "rejected">;
   source?: "all" | "imported" | "ai_generated" | "mine";
+  sources?: Array<"imported" | "ai_generated" | "mine">;
   search?: string;
   includeArchived?: boolean;
+  minConfidence?: number | null;
 };
 
 export type QuestionRow = {
@@ -37,27 +40,73 @@ export type QuestionRow = {
   concept?: { id: string; title: string } | null;
 };
 
+function applyQuestionFilters<T>(query: T, filters: QuestionFilters): T {
+  type Chain = T & {
+    eq: (column: string, value: unknown) => Chain;
+    in: (column: string, value: unknown[]) => Chain;
+    is: (column: string, value: unknown) => Chain;
+    ilike: (column: string, value: string) => Chain;
+    gte: (column: string, value: number) => Chain;
+    or: (value: string) => Chain;
+  };
+  let next = query as Chain;
+  if (!filters.includeArchived) next = next.is("deleted_at", null);
+  if (filters.standardIds?.length) next = next.in("standard_id", filters.standardIds);
+  if (filters.conceptIds?.length) next = next.in("concept_id", filters.conceptIds);
+  if (filters.difficulty?.length) next = next.in("difficulty", filters.difficulty);
+  if (filters.sources?.length) next = next.in("source", filters.sources);
+  else if (filters.source && filters.source !== "all") next = next.eq("source", filters.source);
+  if (filters.search?.trim()) next = next.ilike("stem", `%${filters.search.trim()}%`);
+  const statuses = filters.statuses?.length ? filters.statuses : filters.status && filters.status !== "all" ? [filters.status] : [];
+  if (statuses.length === 1) {
+    if (statuses[0] === "approved") next = next.eq("approved", true);
+    if (statuses[0] === "rejected") next = next.eq("rejected", true);
+    if (statuses[0] === "pending") next = next.eq("approved", false).eq("rejected", false);
+  } else if (statuses.length > 1) {
+    const parts = statuses.map((item) =>
+      item === "pending" ? "and(approved.eq.false,rejected.eq.false)" : item === "approved" ? "approved.eq.true" : "rejected.eq.true",
+    );
+    next = next.or(parts.join(","));
+  }
+  if (typeof filters.minConfidence === "number") next = next.gte("ai_tag_confidence", filters.minConfidence);
+  return next;
+}
+
 export async function listQuestions(classId: string, filters: QuestionFilters = {}) {
   const { supabase } = await requireUser();
-  let query = supabase
-    .from("questions")
-    .select("*, standard:standards(id, code, title), concept:concepts(id, title)")
-    .eq("class_id", classId)
-    .order("created_at", { ascending: false });
-
-  if (!filters.includeArchived) query = query.is("deleted_at", null);
-  if (filters.standardIds?.length) query = query.in("standard_id", filters.standardIds);
-  if (filters.conceptIds?.length) query = query.in("concept_id", filters.conceptIds);
-  if (filters.difficulty?.length) query = query.in("difficulty", filters.difficulty);
-  if (filters.source && filters.source !== "all") query = query.eq("source", filters.source);
-  if (filters.search?.trim()) query = query.ilike("stem", `%${filters.search.trim()}%`);
-  if (filters.status === "approved") query = query.eq("approved", true);
-  if (filters.status === "rejected") query = query.eq("rejected", true);
-  if (filters.status === "pending") query = query.eq("approved", false).eq("rejected", false);
-
+  const query = applyQuestionFilters(
+    supabase
+      .from("questions")
+      .select("*, standard:standards(id, code, title), concept:concepts(id, title)")
+      .eq("class_id", classId)
+      .order("created_at", { ascending: false }),
+    filters,
+  );
   const { data, error } = await query;
   if (error) throw new Error(error.message);
   return (data ?? []) as unknown as QuestionRow[];
+}
+
+export async function countQuestions(classId: string, filters: QuestionFilters = {}) {
+  const { supabase } = await requireUser();
+  const query = applyQuestionFilters(
+    supabase.from("questions").select("id", { count: "exact", head: true }).eq("class_id", classId),
+    filters,
+  );
+  const { count, error } = await query;
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}
+
+export async function listQuestionIds(classId: string, filters: QuestionFilters = {}) {
+  const { supabase } = await requireUser();
+  const query = applyQuestionFilters(
+    supabase.from("questions").select("id").eq("class_id", classId).order("created_at", { ascending: false }),
+    filters,
+  );
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => row.id);
 }
 
 export async function commitReviewedQuestions(input: {
