@@ -429,4 +429,9 @@ pass(
 );
 
 console.log(JSON.stringify({ sessionId: session.id, joinCode, results, maxLatency, publication }, null, 2));
-if (results.some((item) => !item.ok)) process.exit(1);
+await Promise.allSettled([
+  aliceClient.removeChannel(aliceChannel),
+  bobClient.removeChannel(bobChannel),
+  admin.removeChannel(hostChannel),
+]);
+process.exit(results.some((item) => !item.ok) ? 1 : 0);
