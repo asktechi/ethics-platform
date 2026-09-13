@@ -38,6 +38,7 @@ export function PlayerView({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const submitted = useRef(false);
   const choiceRef = useRef<string | null>(null);
+  const questionIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!identity) router.replace(`/quiz/join/${joinCode}`);
@@ -91,7 +92,11 @@ export function PlayerView({
 
   function handleEvent(event: QuizEvent) {
     if (event.type === "QUESTION") {
+      if (submitted.current && questionIdRef.current === event.question_id) {
+        return;
+      }
       submitted.current = false;
+      questionIdRef.current = event.question_id;
       setQuestion({
         question_id: event.question_id,
         stem: event.stem,
@@ -185,15 +190,17 @@ export function PlayerView({
   }
 
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-navy px-4 py-5 text-ivory">
-      <div className="flex items-center justify-between text-xs uppercase tracking-[0.14em] text-ivory/45">
+    <div className="flex h-[100dvh] flex-col overflow-hidden bg-navy px-4 py-4 text-ivory">
+      <div className="flex shrink-0 items-center justify-between text-xs uppercase tracking-[0.14em] text-ivory/45">
         <span>
           Question {questionIndex + 1} of {questionCount || "—"}
         </span>
-        <span className="tabular-nums text-gold">{remaining}s</span>
+        <span className="font-mono text-lg tabular-nums text-gold">{remaining}s</span>
       </div>
-      <h1 className="mt-4 font-display text-2xl leading-snug">{question?.stem}</h1>
-      <div className="mt-6 grid flex-1 content-start gap-3">
+      <h1 className="mt-3 max-h-[22vh] shrink-0 overflow-y-auto font-display text-xl leading-snug">
+        {question?.stem}
+      </h1>
+      <div className="mt-4 grid min-h-0 flex-1 content-start gap-2 overflow-y-auto">
         {(question?.choices ?? []).map((item) => {
           const selected = choice === item.key;
           const isCorrect = correctKey === item.key;
@@ -205,7 +212,7 @@ export function PlayerView({
               disabled={phase !== "question"}
               onClick={() => void lockIn(item.key)}
               className={cn(
-                "min-h-16 rounded-md border px-4 py-4 text-left text-lg font-medium",
+                "min-h-14 rounded-md border px-3 py-3 text-left text-base font-medium",
                 phase === "question" && "border-ivory/20 bg-card active:bg-gold active:text-navy",
                 selected && phase !== "reveal" && "border-gold bg-gold/20",
                 phase === "reveal" && isCorrect && "border-emerald-400 bg-emerald-900/50",
@@ -218,21 +225,24 @@ export function PlayerView({
           );
         })}
       </div>
-      {phase === "locked" ? (
-        <p className="mt-4 text-center text-sm text-ivory/60">Waiting for others…</p>
-      ) : null}
-      {submitError ? <p className="mt-3 text-center text-sm text-red-300">{submitError}</p> : null}
-      {phase === "reveal" ? (
-        <div className="mt-4 border border-white/10 bg-card p-4">
-          <p className="font-display text-2xl text-gold">
-            {lastDelta === "missed" ? "Missed" : lastDelta === 100 ? "+100" : "+0"}
-          </p>
-          <p className="text-sm text-ivory/70">
-            Score {score} · streak {streak}
-          </p>
-          {explanation ? <p className="mt-2 text-sm text-ivory/80">{explanation}</p> : null}
-        </div>
-      ) : null}
+      <div className="mt-3 shrink-0 border border-white/10 bg-card p-3 text-center">
+        {phase === "question" ? (
+          <p className="text-sm text-ivory/60">Tap an answer before the timer hits 0.</p>
+        ) : null}
+        {phase === "locked" ? <p className="text-sm text-ivory/80">Waiting for others…</p> : null}
+        {submitError ? <p className="text-sm text-red-300">{submitError}</p> : null}
+        {phase === "reveal" ? (
+          <div className="text-left">
+            <p className="font-display text-2xl text-gold">
+              {lastDelta === "missed" ? "Missed" : lastDelta === 100 ? "+100" : "+0"}
+            </p>
+            <p className="text-sm text-ivory/70">
+              Score {score} · streak {streak}
+            </p>
+            {explanation ? <p className="mt-2 max-h-24 overflow-y-auto text-sm text-ivory/80">{explanation}</p> : null}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
