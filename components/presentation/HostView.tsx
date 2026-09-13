@@ -7,10 +7,10 @@ import {
   reshuffleLiveRunAction,
   syncRunProgressAction,
 } from "@/app/(app)/_actions/presentation.actions";
+import { AudienceMirror } from "@/components/presentation/AudienceMirror";
 import { HostSummary } from "@/components/presentation/HostSummary";
 import { NextUpPanel } from "@/components/presentation/NextUpPanel";
 import { SlideGrid } from "@/components/presentation/SlideGrid";
-import { SlideRenderer } from "@/components/presentation/SlideRenderer";
 import { Teleprompter } from "@/components/presentation/Teleprompter";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,6 +28,7 @@ import {
 } from "@/lib/presentation/bus";
 import { formatClock } from "@/lib/presentation/format";
 import { mapHostKey } from "@/lib/presentation/keyboard";
+import { audienceMirrorModel } from "@/lib/presentation/mirror";
 import { prefetchUpcomingImages } from "@/lib/presentation/prefetch";
 import { connectPresentationRealtime } from "@/lib/presentation/realtime";
 import type { ConnectionStatus, SlideAssignment } from "@/lib/presentation/types";
@@ -71,7 +72,19 @@ export function HostView(props: HostViewProps) {
   const slidesAdvanced = usePresentationBus((s) => s.slidesAdvanced);
   const peakAudience = usePresentationBus((s) => s.peakAudience);
   const scrolling = usePresentationBus((s) => s.teleprompterScrolling);
+  const currentBeatIndex = usePresentationBus((s) => s.currentBeatIndex);
+  const teleprompterLineIndex = usePresentationBus((s) => s.teleprompterLineIndex);
+  const revealFlushed = usePresentationBus((s) => s.revealFlushed);
   const current = assignments[index] ?? null;
+  const mirror = current
+    ? audienceMirrorModel({
+        slide: current,
+        currentBeatIndex,
+        teleprompterLineIndex,
+        revealFlushed,
+        revealMode: props.settings.audience_reveal_mode ?? "progressive",
+      })
+    : null;
 
   useLayoutEffect(() => {
     if (!props.audienceUrl.startsWith("http") && typeof window !== "undefined") {
@@ -93,6 +106,7 @@ export function HostView(props: HostViewProps) {
         peakAudience: props.settings.peak_audience ?? 0,
         teleprompterScrolling: true,
         teleprompterLineIndex: -1,
+        currentBeatIndex: 0,
         isPaused: false,
       },
     });
@@ -244,14 +258,15 @@ export function HostView(props: HostViewProps) {
           }
         />
         <div className="relative min-h-0 flex-1" style={{ flexBasis: `${widths[1]}%` }}>
-          {current ? (
-            <SlideRenderer
+          {current && mirror ? (
+            <AudienceMirror
               slide={current}
+              beat={mirror.beatIndex}
               theme={current.theme}
               imageUrl={current.imageUrl}
               imageAttribution={current.imageAttribution}
-              layout={current.layout}
-              mode="host"
+              revealLineCount={mirror.revealLineCount}
+              showChrome
             />
           ) : null}
           <div className="pointer-events-none absolute left-4 top-4 text-[11px] uppercase tracking-[0.16em] text-ivory/70">
@@ -282,6 +297,9 @@ export function HostView(props: HostViewProps) {
         </Button>
         <Button type="button" size="sm" onClick={() => dispatch({ type: "NEXT" })}>
           Next
+        </Button>
+        <Button type="button" size="sm" variant="ghost" onClick={() => dispatch({ type: "BEAT", direction: 1 })}>
+          Beat (B)
         </Button>
         <Button type="button" size="sm" variant="ghost" onClick={() => setGridOpen(true)}>
           Jump-to-grid

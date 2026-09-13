@@ -1,6 +1,7 @@
 "use client";
 
 import { create } from "zustand";
+import { beatIndexForLine, paginateAssignment } from "@/lib/presentation/beats";
 import type {
   BusEvent,
   EventOrigin,
@@ -17,6 +18,7 @@ export type BusListener = (
 
 const initialState: PresentationBusState = {
   currentSlideIndex: 0,
+  currentBeatIndex: 0,
   isPaused: false,
   teleprompterScrolling: true,
   teleprompterLineIndex: -1,
@@ -37,15 +39,42 @@ function clampIndex(index: number, count: number) {
   return Math.min(count - 1, Math.max(0, index));
 }
 
+function beatsFor(slide: SlideAssignment | undefined) {
+  if (!slide) return [];
+  return paginateAssignment(slide).beats;
+}
+
+function withBeatFromLine(
+  state: PresentationBusState,
+  slideIndex: number,
+  lineIndex: number,
+): Pick<PresentationBusState, "currentBeatIndex"> {
+  const beats = beatsFor(state.assignments[slideIndex]);
+  return { currentBeatIndex: beatIndexForLine(beats, lineIndex) };
+}
+
 function reduce(state: PresentationBusState, event: BusEvent): PresentationBusState {
   switch (event.type) {
     case "NEXT": {
       if (state.ended || state.slideCount === 0) return state;
+      if (state.mode === "rehearsal") {
+        const currentBeats = beatsFor(state.assignments[state.currentSlideIndex]);
+        if (state.currentBeatIndex < currentBeats.length - 1) {
+          const nextBeat = state.currentBeatIndex + 1;
+          return {
+            ...state,
+            currentBeatIndex: nextBeat,
+            teleprompterLineIndex: currentBeats[nextBeat]?.startLineIndex ?? 0,
+            revealFlushed: false,
+          };
+        }
+      }
       const next = clampIndex(state.currentSlideIndex + 1, state.slideCount);
       if (next === state.currentSlideIndex) return state;
       return {
         ...state,
         currentSlideIndex: next,
+        currentBeatIndex: 0,
         slidesAdvanced: state.slidesAdvanced + 1,
         teleprompterLineIndex: -1,
         revealFlushed: true,
@@ -53,10 +82,25 @@ function reduce(state: PresentationBusState, event: BusEvent): PresentationBusSt
     }
     case "PREV": {
       if (state.ended || state.slideCount === 0) return state;
+      if (state.currentBeatIndex > 0) {
+        const currentBeats = beatsFor(state.assignments[state.currentSlideIndex]);
+        const nextBeat = state.currentBeatIndex - 1;
+        return {
+          ...state,
+          currentBeatIndex: nextBeat,
+          teleprompterLineIndex: currentBeats[nextBeat]?.startLineIndex ?? 0,
+          revealFlushed: false,
+        };
+      }
+      const previous = clampIndex(state.currentSlideIndex - 1, state.slideCount);
+      if (previous === state.currentSlideIndex) return state;
+      const previousBeats = beatsFor(state.assignments[previous]);
+      const lastBeat = Math.max(0, previousBeats.length - 1);
       return {
         ...state,
-        currentSlideIndex: clampIndex(state.currentSlideIndex - 1, state.slideCount),
-        teleprompterLineIndex: -1,
+        currentSlideIndex: previous,
+        currentBeatIndex: lastBeat,
+        teleprompterLineIndex: previousBeats[lastBeat]?.startLineIndex ?? -1,
         revealFlushed: false,
       };
     }
@@ -67,8 +111,48 @@ function reduce(state: PresentationBusState, event: BusEvent): PresentationBusSt
       return {
         ...state,
         currentSlideIndex: next,
+        currentBeatIndex: 0,
         slidesAdvanced: state.slidesAdvanced + 1,
         teleprompterLineIndex: -1,
+        revealFlushed: false,
+      };
+    }
+    case "BEAT": {
+      if (state.ended || state.slideCount === 0) return state;
+      const slideIndex =
+        typeof event.slideIndex === "number" && event.slideIndex >= 0
+          ? clampIndex(event.slideIndex, state.slideCount)
+          : state.currentSlideIndex;
+      const beats = beatsFor(state.assignments[slideIndex]);
+      const maxBeat = Math.max(0, beats.length - 1);
+      let nextBeat = state.currentBeatIndex;
+      if (typeof event.direction === "number") {
+        nextBeat = clampIndex(state.currentBeatIndex + event.direction, maxBeat + 1);
+      } else if (typeof event.beatIndex === "number") {
+        nextBeat = clampIndex(event.beatIndex, maxBeat + 1);
+      }
+      const start = beats[nextBeat]?.startLineIndex ?? 0;
+      const end = beats[nextBeat]?.endLineIndex ?? start;
+      const line = state.teleprompterLineIndex;
+      const lineIndex = event.direction
+        ? start
+        : line >= start && line <= end
+          ? line
+          : line < 0
+            ? -1
+            : start;
+      if (
+        slideIndex === state.currentSlideIndex &&
+        nextBeat === state.currentBeatIndex &&
+        lineIndex === state.teleprompterLineIndex
+      ) {
+        return state;
+      }
+      return {
+        ...state,
+        currentSlideIndex: slideIndex,
+        currentBeatIndex: nextBeat,
+        teleprompterLineIndex: lineIndex,
         revealFlushed: false,
       };
     }
@@ -77,11 +161,13 @@ function reduce(state: PresentationBusState, event: BusEvent): PresentationBusSt
       if (state.isPaused && event.lineIndex > state.teleprompterLineIndex) {
         return state;
       }
+      const slideIndex = clampIndex(event.slideIndex, state.slideCount || event.slideIndex + 1);
       return {
         ...state,
-        currentSlideIndex: clampIndex(event.slideIndex, state.slideCount || event.slideIndex + 1),
+        currentSlideIndex: slideIndex,
         teleprompterLineIndex: event.lineIndex,
         revealFlushed: false,
+        ...withBeatFromLine({ ...state, currentSlideIndex: slideIndex }, slideIndex, event.lineIndex),
       };
     }
     case "SET_REVEAL_FLUSH":
@@ -123,6 +209,7 @@ function reduce(state: PresentationBusState, event: BusEvent): PresentationBusSt
           event.state.currentSlideIndex ?? state.currentSlideIndex,
           event.state.assignments?.length ?? event.state.slideCount ?? state.slideCount,
         ),
+        currentBeatIndex: event.state.currentBeatIndex ?? state.currentBeatIndex,
       };
     default:
       return state;
@@ -135,13 +222,18 @@ function emit(event: BusEvent, state: PresentationBusState, origin: EventOrigin)
   }
 }
 
+type RemoteIndexExtras = {
+  ended?: boolean;
+  isPaused?: boolean;
+  lineIndex?: number;
+  revealAll?: boolean;
+  beatIndex?: number;
+};
+
 type BusStore = PresentationBusState & {
   dispatch: (event: BusEvent) => void;
   applyRemoteEvent: (event: BusEvent) => void;
-  applyRemoteIndex: (
-    index: number,
-    extras?: { ended?: boolean; isPaused?: boolean; lineIndex?: number; revealAll?: boolean },
-  ) => void;
+  applyRemoteIndex: (index: number, extras?: RemoteIndexExtras) => void;
 };
 
 export const usePresentationBus = create<BusStore>((set, get) => ({
@@ -162,6 +254,8 @@ export const usePresentationBus = create<BusStore>((set, get) => ({
     const next: PresentationBusState = {
       ...current,
       currentSlideIndex: clampIndex(index, current.slideCount),
+      currentBeatIndex:
+        extras?.beatIndex ?? (slideChanged ? 0 : current.currentBeatIndex),
       ended: extras?.ended ?? current.ended,
       isPaused: extras?.isPaused ?? current.isPaused,
       teleprompterScrolling: extras?.isPaused === true ? false : current.teleprompterScrolling,
@@ -188,10 +282,7 @@ export function applyRemoteEvent(event: BusEvent) {
   usePresentationBus.getState().applyRemoteEvent(event);
 }
 
-export function applyRemoteIndex(
-  index: number,
-  extras?: { ended?: boolean; isPaused?: boolean; lineIndex?: number; revealAll?: boolean },
-) {
+export function applyRemoteIndex(index: number, extras?: RemoteIndexExtras) {
   usePresentationBus.getState().applyRemoteIndex(index, extras);
 }
 
@@ -207,20 +298,7 @@ export function getPresentationState() {
 }
 
 export function resetPresentationBus() {
-  usePresentationBus.setState({
-    currentSlideIndex: 0,
-    isPaused: false,
-    teleprompterScrolling: true,
-    teleprompterLineIndex: -1,
-    revealFlushed: false,
-    mode: "host",
-    runId: null,
-    assignments: [],
-    slideCount: 0,
-    ended: false,
-    slidesAdvanced: 0,
-    peakAudience: 0,
-  });
+  usePresentationBus.setState({ ...initialState });
 }
 
 export function currentAssignment(): SlideAssignment | null {

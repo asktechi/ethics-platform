@@ -2,7 +2,7 @@
 
 Personal teaching platform for CFA Institute ethics instruction (Levels I–III). The owner is the sole instructor-author. Students join live quizzes with an open link and a display name.
 
-This repository is at **Phase 4.5**: audience slides reveal in lockstep with the host teleprompter (`TELEPROMPTER_LINE` on `presentation:{run_id}`), and `ThemeBackground` is a five-layer professional stack.
+This repository is at **Phase 4.6**: the host center panel is a literal `AudienceMirror` of the audience page, with auto-scaled typography and beat pagination.
 
 Never commit `.env.local`, `SUPABASE_SERVICE_ROLE_KEY`, or `SUPABASE_DB_URL`.
 
@@ -27,7 +27,9 @@ From a class, open **Present**, review the reel, then **Start presentation**.
 - Audience (open): `/present/{runId}/audience`
 - Join QR: `/present/{runId}/audience/join`
 
-Keyboard on the host: Space / → / PageDown next, ← / PageUp previous, G jump grid, P teleprompter pause, F fullscreen, R rehearsal (does not broadcast), Cmd/Ctrl+E end. Voice input in Phase 4.5 should call `dispatch({ type: "NEXT" })` from `lib/presentation/bus.ts`.
+Keyboard on the host: Space / → / PageDown next slide (skips leftover beats), ← / PageUp previous beat then previous slide, **B** next beat, G jump grid, P teleprompter pause, F fullscreen, R rehearsal (does not broadcast), Cmd/Ctrl+E end. Voice input should call `dispatch({ type: "NEXT" })` from `lib/presentation/bus.ts`.
+
+Typography fixtures (Phase 4.6): open `/dev/phase46`.
 
 `npm` works the same way (`npm install`, `npm run dev`) if you prefer it over pnpm.
 
@@ -74,7 +76,8 @@ Next.js 14 App Router, TypeScript, Tailwind, shadcn/ui, Framer Motion, dnd-kit, 
 3.5. **PPTX worker** — Fly.io LibreOffice high-fidelity conversion *(not started)*
 4A. **Presentation foundations** — theme shuffle, image pools, setup screen
 4B. **Presenter + audience** — dual view and realtime lockstep
-4.5. **Teleprompter sync** — line-by-line audience reveal + background polish *(this phase)*
+4.5. **Teleprompter sync** — line-by-line audience reveal + background polish
+4.6. **Audience mirror + typography** — one renderer, auto-scale, beat pagination *(this phase)*
 5. **Questions** — bank, AI tagging/generation, instructor approval, pools
 6. **Live quiz** — Jeopardy-style session, realtime leaderboard
 7. **Polish** — shortcuts, offline cache, PDF export, expand beyond CFA

@@ -2,8 +2,9 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
+import { AudienceMirror } from "@/components/presentation/AudienceMirror";
 import { PresentationSkeleton, SessionStatusScreen } from "@/components/presentation/SessionStatusScreen";
-import { SlideRenderer } from "@/components/presentation/SlideRenderer";
+import { audienceMirrorModel } from "@/lib/presentation/mirror";
 import {
   applyRemoteEvent,
   dispatch,
@@ -25,6 +26,7 @@ export function AudienceView({ runId }: { runId: string }) {
   const ended = usePresentationBus((s) => s.ended);
   const lineIndex = usePresentationBus((s) => s.teleprompterLineIndex);
   const revealFlushed = usePresentationBus((s) => s.revealFlushed);
+  const currentBeatIndex = usePresentationBus((s) => s.currentBeatIndex);
   const current = assignments[index] ?? null;
 
   useEffect(() => {
@@ -54,6 +56,7 @@ export function AudienceView({ runId }: { runId: string }) {
               slideCount: json.slides.length,
               currentSlideIndex: json.settings.current_slide_index,
               teleprompterLineIndex: -1,
+              currentBeatIndex: 0,
               ended: false,
               teleprompterScrolling: false,
             },
@@ -141,6 +144,15 @@ export function AudienceView({ runId }: { runId: string }) {
   const allowAdvance = payload.status === "live" && payload.settings.allow_audience_advance;
   const revealMode =
     payload.status === "live" ? payload.settings.audience_reveal_mode : "progressive";
+  const mirror = current
+    ? audienceMirrorModel({
+        slide: current,
+        currentBeatIndex,
+        teleprompterLineIndex: lineIndex,
+        revealFlushed: revealFlushed || revealMode === "instant",
+        revealMode,
+      })
+    : null;
 
   return (
     <main
@@ -150,7 +162,7 @@ export function AudienceView({ runId }: { runId: string }) {
       }}
     >
       <AnimatePresence mode="wait">
-        {current ? (
+        {current && mirror ? (
           <motion.div
             key={current.slideId}
             className="absolute inset-0"
@@ -159,16 +171,14 @@ export function AudienceView({ runId }: { runId: string }) {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.4, ease: "easeOut" }}
           >
-            <SlideRenderer
+            <AudienceMirror
               slide={current}
+              beat={mirror.beatIndex}
               theme={current.theme}
               imageUrl={current.imageUrl}
-              imageAttribution={null}
-              layout={current.layout}
-              mode="audience"
-              revealMode={revealMode}
-              lineIndex={revealMode === "instant" ? Number.MAX_SAFE_INTEGER : lineIndex}
-              revealFlushed={revealFlushed || revealMode === "instant"}
+              imageAttribution={current.imageAttribution}
+              revealLineCount={mirror.revealLineCount}
+              showChrome={false}
             />
           </motion.div>
         ) : (

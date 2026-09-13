@@ -1,6 +1,6 @@
 "use client";
 
-import { SlideRenderer } from "@/components/presentation/SlideRenderer";
+import { SlideThumb } from "@/components/presentation/SlideThumb";
 import { formatClock, formatFinish } from "@/lib/presentation/format";
 import { deriveSpeakerNotes } from "@/lib/presentation/speaker-notes";
 import { usePresentationBus } from "@/lib/presentation/bus";
@@ -38,16 +38,7 @@ export function NextUpPanel({
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
         {next ? (
           <div className="aspect-[16/10] overflow-hidden border border-white/10">
-            <div className="h-full w-full origin-top scale-[0.34] [-webkit-transform-origin:top_left] [transform:scale(0.34)] [width:294%] [height:294%]">
-              <SlideRenderer
-                slide={next}
-                theme={next.theme}
-                imageUrl={next.imageUrl}
-                imageAttribution={null}
-                layout={next.layout}
-                mode="host"
-              />
-            </div>
+            <SlideThumb slide={next} />
           </div>
         ) : (
           <p className="text-xs text-ivory/45">Last slide.</p>

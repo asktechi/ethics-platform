@@ -30,7 +30,8 @@ export type BusEventType =
   | "PAUSE"
   | "RESUME"
   | "END"
-  | "TELEPROMPTER_LINE";
+  | "TELEPROMPTER_LINE"
+  | "BEAT";
 
 export type BusEvent =
   | { type: "NEXT" }
@@ -46,6 +47,12 @@ export type BusEvent =
   | { type: "SET_ASSIGNMENTS"; assignments: SlideAssignment[] }
   | { type: "SET_PEAK_AUDIENCE"; count: number }
   | {
+      type: "BEAT";
+      slideIndex?: number;
+      beatIndex?: number;
+      direction?: 1 | -1;
+    }
+  | {
       type: "HYDRATE";
       state: Partial<PresentationBusState>;
     };
@@ -54,6 +61,7 @@ export type EventOrigin = "local" | "remote";
 
 export type PresentationBusState = {
   currentSlideIndex: number;
+  currentBeatIndex: number;
   isPaused: boolean;
   teleprompterScrolling: boolean;
   teleprompterLineIndex: number;
@@ -72,6 +80,7 @@ export type RealtimeEnvelope = {
   slideIndex: number;
   ts: number;
   lineIndex?: number;
+  beatIndex?: number;
   ended?: boolean;
   isPaused?: boolean;
   teleprompterScrolling?: boolean;

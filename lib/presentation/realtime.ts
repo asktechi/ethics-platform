@@ -29,7 +29,8 @@ function isBusEventType(value: string): value is BusEventType {
     value === "PAUSE" ||
     value === "RESUME" ||
     value === "END" ||
-    value === "TELEPROMPTER_LINE"
+    value === "TELEPROMPTER_LINE" ||
+    value === "BEAT"
   );
 }
 
@@ -39,6 +40,7 @@ function snapshotEnvelope(): RealtimeEnvelope {
     type: "SNAPSHOT",
     slideIndex: state.currentSlideIndex,
     lineIndex: state.teleprompterLineIndex,
+    beatIndex: state.currentBeatIndex,
     ts: Date.now(),
     ended: state.ended,
     isPaused: state.isPaused,
@@ -52,12 +54,20 @@ function applyEnvelope(payload: RealtimeEnvelope, scheduleAdvance: (fn: () => vo
       ended: payload.ended,
       isPaused: payload.isPaused,
       lineIndex: payload.lineIndex,
+      beatIndex: payload.beatIndex,
     });
     if (typeof payload.lineIndex === "number") {
       applyRemoteEvent({
         type: "SET_TELEPROMPTER_LINE",
         slideIndex: payload.slideIndex,
         lineIndex: payload.lineIndex,
+      });
+    }
+    if (typeof payload.beatIndex === "number") {
+      applyRemoteEvent({
+        type: "BEAT",
+        slideIndex: payload.slideIndex,
+        beatIndex: payload.beatIndex,
       });
     }
     if (payload.ended) applyRemoteEvent({ type: "END" });
@@ -72,6 +82,7 @@ function applyEnvelope(payload: RealtimeEnvelope, scheduleAdvance: (fn: () => vo
     applyRemoteIndex(payload.slideIndex, {
       isPaused: true,
       lineIndex: payload.lineIndex ?? getPresentationState().teleprompterLineIndex,
+      beatIndex: payload.beatIndex,
     });
     applyRemoteEvent({ type: "PAUSE" });
     return;
@@ -80,6 +91,7 @@ function applyEnvelope(payload: RealtimeEnvelope, scheduleAdvance: (fn: () => vo
     applyRemoteIndex(payload.slideIndex, {
       isPaused: false,
       lineIndex: payload.lineIndex ?? getPresentationState().teleprompterLineIndex,
+      beatIndex: payload.beatIndex,
     });
     applyRemoteEvent({ type: "RESUME" });
     return;
@@ -95,14 +107,40 @@ function applyEnvelope(payload: RealtimeEnvelope, scheduleAdvance: (fn: () => vo
     });
     return;
   }
-  if (payload.type === "NEXT") {
-    applyRemoteEvent({ type: "SET_REVEAL_FLUSH", flushed: true });
-    scheduleAdvance(() => {
-      applyRemoteIndex(payload.slideIndex, { ended: false, lineIndex: -1, revealAll: false });
+  if (payload.type === "BEAT") {
+    applyRemoteEvent({
+      type: "BEAT",
+      slideIndex: payload.slideIndex,
+      beatIndex: payload.beatIndex ?? 0,
     });
     return;
   }
-  applyRemoteIndex(payload.slideIndex, { ended: false, lineIndex: payload.lineIndex ?? -1 });
+  if (payload.type === "NEXT") {
+    applyRemoteEvent({ type: "SET_REVEAL_FLUSH", flushed: true });
+    scheduleAdvance(() => {
+      applyRemoteIndex(payload.slideIndex, {
+        ended: false,
+        lineIndex: -1,
+        revealAll: false,
+        beatIndex: payload.beatIndex ?? 0,
+      });
+    });
+    return;
+  }
+  if (payload.type === "PREV") {
+    applyRemoteEvent({ type: "PREV" });
+    applyRemoteIndex(payload.slideIndex, {
+      ended: false,
+      lineIndex: payload.lineIndex ?? getPresentationState().teleprompterLineIndex,
+      beatIndex: payload.beatIndex ?? getPresentationState().currentBeatIndex,
+    });
+    return;
+  }
+  applyRemoteIndex(payload.slideIndex, {
+    ended: false,
+    lineIndex: payload.lineIndex ?? -1,
+    beatIndex: payload.beatIndex,
+  });
 }
 
 export type PresentationRealtimeHandle = {
@@ -154,6 +192,7 @@ export function connectPresentationRealtime(options: {
       type,
       slideIndex: state.currentSlideIndex,
       lineIndex: state.teleprompterLineIndex,
+      beatIndex: state.currentBeatIndex,
       ts: Date.now(),
       ended: state.ended,
       isPaused: state.isPaused,
@@ -197,7 +236,8 @@ export function connectPresentationRealtime(options: {
     channel.on("broadcast", { event: REQUEST_SNAPSHOT_EVENT }, () => {
       broadcastSnapshot();
     });
-    unsubBus = subscribe((event, _state, origin) => {
+    let lastBeatIndex = getPresentationState().currentBeatIndex;
+    unsubBus = subscribe((event, state, origin) => {
       if (origin !== "local") return;
       if (
         event.type === "NEXT" ||
@@ -206,9 +246,14 @@ export function connectPresentationRealtime(options: {
         event.type === "PAUSE" ||
         event.type === "RESUME" ||
         event.type === "END" ||
-        event.type === "TELEPROMPTER_LINE"
+        event.type === "TELEPROMPTER_LINE" ||
+        event.type === "BEAT"
       ) {
         publish(event.type);
+        if (event.type === "TELEPROMPTER_LINE" && state.currentBeatIndex !== lastBeatIndex) {
+          publish("BEAT");
+        }
+        lastBeatIndex = state.currentBeatIndex;
       }
     });
   }

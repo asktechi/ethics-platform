@@ -1,7 +1,7 @@
 "use client";
 
 import { dispatch, usePresentationBus } from "@/lib/presentation/bus";
-import { SlideRenderer } from "@/components/presentation/SlideRenderer";
+import { SlideThumb } from "@/components/presentation/SlideThumb";
 
 export function SlideGrid({ onClose }: { onClose: () => void }) {
   const assignments = usePresentationBus((s) => s.assignments);
@@ -29,16 +29,7 @@ export function SlideGrid({ onClose }: { onClose: () => void }) {
             }`}
           >
             <div className="aspect-video overflow-hidden">
-              <div className="h-full w-full origin-top-left scale-[0.28] [width:358%] [height:358%]">
-                <SlideRenderer
-                  slide={slide}
-                  theme={slide.theme}
-                  imageUrl={slide.imageUrl}
-                  imageAttribution={null}
-                  layout={slide.layout}
-                  mode="host"
-                />
-              </div>
+              <SlideThumb slide={slide} />
             </div>
             <p className="truncate px-2 py-1.5 text-[11px] text-ivory/75">
               {index + 1}. {slide.title}

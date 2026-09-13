@@ -20,6 +20,7 @@ function isEditableTarget(target: EventTarget | null) {
 /**
  * Map presenter key events to bus events or chrome actions.
  * Clickers emit Space / PageDown as ordinary keydown.
+ * B advances the audience beat without leaving the slide.
  * Phase 4.5 voice advance will skip this file and call dispatch({ type: "NEXT" }).
  */
 export function mapHostKey(event: KeyboardEvent): HostUiAction | null {
@@ -31,6 +32,9 @@ export function mapHostKey(event: KeyboardEvent): HostUiAction | null {
   }
   if (key === "ArrowLeft" || key === "PageUp") {
     return { kind: "bus", event: { type: "PREV" } };
+  }
+  if (key === "b" || key === "B") {
+    return { kind: "bus", event: { type: "BEAT", direction: 1 } };
   }
   if (key === "g" || key === "G") return { kind: "grid" };
   if (key === "p" || key === "P") return { kind: "toggle-prompter" };

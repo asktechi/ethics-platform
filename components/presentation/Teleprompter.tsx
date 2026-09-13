@@ -2,11 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { paginateAssignment } from "@/lib/presentation/beats";
 import { dispatch, usePresentationBus } from "@/lib/presentation/bus";
 import {
   deriveSpeakerNotes,
   lineIndexForWords,
   revealIndexForSpoken,
+  wordCountOf,
 } from "@/lib/presentation/speaker-notes";
 
 const FONT_STEPS = ["text-sm", "text-base", "text-lg", "text-xl"] as const;
@@ -20,6 +22,8 @@ export function Teleprompter({
   const assignments = usePresentationBus((s) => s.assignments);
   const index = usePresentationBus((s) => s.currentSlideIndex);
   const scrolling = usePresentationBus((s) => s.teleprompterScrolling);
+  const busLine = usePresentationBus((s) => s.teleprompterLineIndex);
+  const busBeat = usePresentationBus((s) => s.currentBeatIndex);
   const [wpm, setWpm] = useState(initialWpm);
   const [font, setFont] = useState(1);
   const [markers, setMarkers] = useState<Set<string>>(new Set());
@@ -65,7 +69,31 @@ export function Teleprompter({
   }, [displayLine]);
 
   useEffect(() => {
+    if (!current) return;
+    if (busLine === lastSentLine.current) return;
+    if (busLine < 0) {
+      accumulated.current = 0;
+      lastTick.current = Date.now();
+      setElapsedMs(0);
+      lastSentLine.current = null;
+      return;
+    }
+    const beats = paginateAssignment(current).beats;
+    const start = beats[busBeat]?.startLineIndex ?? 0;
+    if (busLine < start) return;
+    const wordsBefore = wordsBeforeRevealLine(notes, busLine);
+    accumulated.current = (wordsBefore / (wpm / 60)) * 1000;
+    lastTick.current = Date.now();
+    setElapsedMs(accumulated.current);
+    lastSentLine.current = busLine;
+  }, [busBeat, busLine, current, notes, wpm]);
+
+  useEffect(() => {
     if (currentLine === lastSentLine.current) return;
+    if (!current) return;
+    const beats = paginateAssignment(current).beats;
+    const minLine = beats[busBeat]?.startLineIndex ?? 0;
+    if (currentLine >= 0 && currentLine < minLine) return;
     const wait = Math.max(0, LINE_DEBOUNCE_MS - (Date.now() - debounceAt.current));
     const timer = window.setTimeout(() => {
       lastSentLine.current = currentLine;
@@ -77,7 +105,7 @@ export function Teleprompter({
       });
     }, wait);
     return () => window.clearTimeout(timer);
-  }, [currentLine, index]);
+  }, [busBeat, current, currentLine, index]);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#07131f]">
@@ -194,4 +222,15 @@ export function Teleprompter({
       </p>
     </div>
   );
+}
+
+function wordsBeforeRevealLine(
+  notes: ReturnType<typeof deriveSpeakerNotes>,
+  revealIndex: number,
+) {
+  if (revealIndex <= 0) return 0;
+  const text = notes.revealLines[revealIndex];
+  const allIndex = text ? notes.lines.indexOf(text) : -1;
+  const through = allIndex >= 0 ? allIndex : revealIndex;
+  return notes.lines.slice(0, through).reduce((sum, line) => sum + wordCountOf(line), 0);
 }
