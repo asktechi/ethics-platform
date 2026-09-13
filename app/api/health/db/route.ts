@@ -22,6 +22,8 @@ const PUBLIC_TABLES = [
   "questions",
   "question_pools",
   "question_pool_items",
+  "import_batches",
+  "ai_usage_log",
   "quiz_sessions",
   "quiz_participants",
   "quiz_responses",

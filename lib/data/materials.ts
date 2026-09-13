@@ -418,3 +418,21 @@ export async function getSignedOriginal(id: string): Promise<string> {
 export function canonicalPath(classId: string, sha256: string, filename: string) {
   return originalStoragePath(classId, sha256, filename);
 }
+
+export async function listApprovedClassSlides(classId: string) {
+  const { supabase } = await requireUser();
+  const { data, error } = await supabase
+    .from("slides")
+    .select("id, title, body, materials!inner(class_id, deleted_at)")
+    .eq("materials.class_id", classId)
+    .eq("status", "approved")
+    .is("deleted_at", null)
+    .is("materials.deleted_at", null)
+    .order("order", { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((slide) => ({
+    id: slide.id,
+    title: slide.title ?? "Untitled slide",
+    body: slide.body ?? "",
+  }));
+}

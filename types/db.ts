@@ -591,6 +591,7 @@ export type Database = {
       questions: {
         Row: {
           id: string;
+          class_id: string | null;
           stem: string;
           choices_json: Json | null;
           answer_key: string | null;
@@ -598,8 +599,13 @@ export type Database = {
           standard_id: string | null;
           concept_id: string | null;
           difficulty: "easy" | "medium" | "hard" | null;
-          source: "mine" | "ai_generated";
+          source: "mine" | "imported" | "ai_generated";
           approved: boolean;
+          rejected: boolean;
+          tag_approved: boolean;
+          ai_tag_confidence: number | null;
+          ai_tag_reasoning: string | null;
+          import_batch_id: string | null;
           created_by: string;
           created_at: string;
           updated_at: string;
@@ -607,6 +613,7 @@ export type Database = {
         };
         Insert: {
           id?: string;
+          class_id?: string | null;
           stem: string;
           choices_json?: Json | null;
           answer_key?: string | null;
@@ -614,8 +621,13 @@ export type Database = {
           standard_id?: string | null;
           concept_id?: string | null;
           difficulty?: "easy" | "medium" | "hard" | null;
-          source: "mine" | "ai_generated";
+          source: "mine" | "imported" | "ai_generated";
           approved?: boolean;
+          rejected?: boolean;
+          tag_approved?: boolean;
+          ai_tag_confidence?: number | null;
+          ai_tag_reasoning?: string | null;
+          import_batch_id?: string | null;
           created_by: string;
           created_at?: string;
           updated_at?: string;
@@ -623,6 +635,7 @@ export type Database = {
         };
         Update: {
           id?: string;
+          class_id?: string | null;
           stem?: string;
           choices_json?: Json | null;
           answer_key?: string | null;
@@ -630,12 +643,86 @@ export type Database = {
           standard_id?: string | null;
           concept_id?: string | null;
           difficulty?: "easy" | "medium" | "hard" | null;
-          source?: "mine" | "ai_generated";
+          source?: "mine" | "imported" | "ai_generated";
           approved?: boolean;
+          rejected?: boolean;
+          tag_approved?: boolean;
+          ai_tag_confidence?: number | null;
+          ai_tag_reasoning?: string | null;
+          import_batch_id?: string | null;
           created_by?: string;
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
+        };
+        Relationships: [];
+      };
+      import_batches: {
+        Row: {
+          id: string;
+          class_id: string;
+          filename: string;
+          question_count: number;
+          imported_by: string;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          class_id: string;
+          filename: string;
+          question_count?: number;
+          imported_by: string;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          class_id?: string;
+          filename?: string;
+          question_count?: number;
+          imported_by?: string;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Relationships: [];
+      };
+      ai_usage_log: {
+        Row: {
+          id: string;
+          user_id: string;
+          class_id: string | null;
+          feature: "tagging" | "generation";
+          model: string;
+          input_tokens: number;
+          output_tokens: number;
+          cost_usd: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          class_id?: string | null;
+          feature: "tagging" | "generation";
+          model: string;
+          input_tokens?: number;
+          output_tokens?: number;
+          cost_usd?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          class_id?: string | null;
+          feature?: "tagging" | "generation";
+          model?: string;
+          input_tokens?: number;
+          output_tokens?: number;
+          cost_usd?: number;
+          created_at?: string;
         };
         Relationships: [];
       };
@@ -644,6 +731,8 @@ export type Database = {
           id: string;
           class_id: string;
           name: string;
+          shuffle_on_play: boolean;
+          time_per_q: number | null;
           created_at: string;
           updated_at: string;
           deleted_at: string | null;
@@ -652,6 +741,8 @@ export type Database = {
           id?: string;
           class_id: string;
           name: string;
+          shuffle_on_play?: boolean;
+          time_per_q?: number | null;
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
@@ -660,6 +751,8 @@ export type Database = {
           id?: string;
           class_id?: string;
           name?: string;
+          shuffle_on_play?: boolean;
+          time_per_q?: number | null;
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
@@ -828,6 +921,18 @@ export type Database = {
           run_id: string;
           status: string;
           settings_json: Json;
+        }[];
+      };
+      load_pool_questions: {
+        Args: { p_pool_id: string };
+        Returns: {
+          question_id: string;
+          stem: string;
+          choices_json: Json;
+          answer_key: string;
+          explanation: string;
+          difficulty: string;
+          item_order: number;
         }[];
       };
     };

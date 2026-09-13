@@ -1,0 +1,224 @@
+import { requireUser } from "@/lib/data/auth";
+import { parseQuestions } from "@/lib/parsers/questions/parseQuestionsIndex";
+import type { QuestionHint } from "@/lib/parsers/questions/types";
+import { createAdminClient } from "@/lib/supabase/admin";
+
+export type QuestionFilters = {
+  standardIds?: string[];
+  conceptIds?: string[];
+  difficulty?: Array<"easy" | "medium" | "hard">;
+  status?: "all" | "pending" | "approved" | "rejected";
+  source?: "all" | "imported" | "ai_generated" | "mine";
+  search?: string;
+  includeArchived?: boolean;
+};
+
+export type QuestionRow = {
+  id: string;
+  stem: string;
+  choices_json: Array<{ key: string; text: string }> | null;
+  answer_key: string | null;
+  explanation: string | null;
+  standard_id: string | null;
+  concept_id: string | null;
+  difficulty: "easy" | "medium" | "hard" | null;
+  source: "mine" | "imported" | "ai_generated";
+  approved: boolean;
+  rejected: boolean;
+  tag_approved: boolean;
+  ai_tag_confidence: number | null;
+  ai_tag_reasoning: string | null;
+  import_batch_id: string | null;
+  class_id: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  standard?: { id: string; code: string; title: string } | null;
+  concept?: { id: string; title: string } | null;
+};
+
+export async function listQuestions(classId: string, filters: QuestionFilters = {}) {
+  const { supabase } = await requireUser();
+  let query = supabase
+    .from("questions")
+    .select("*, standard:standards(id, code, title), concept:concepts(id, title)")
+    .eq("class_id", classId)
+    .order("created_at", { ascending: false });
+
+  if (!filters.includeArchived) query = query.is("deleted_at", null);
+  if (filters.standardIds?.length) query = query.in("standard_id", filters.standardIds);
+  if (filters.conceptIds?.length) query = query.in("concept_id", filters.conceptIds);
+  if (filters.difficulty?.length) query = query.in("difficulty", filters.difficulty);
+  if (filters.source && filters.source !== "all") query = query.eq("source", filters.source);
+  if (filters.search?.trim()) query = query.ilike("stem", `%${filters.search.trim()}%`);
+  if (filters.status === "approved") query = query.eq("approved", true);
+  if (filters.status === "rejected") query = query.eq("rejected", true);
+  if (filters.status === "pending") query = query.eq("approved", false).eq("rejected", false);
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return (data ?? []) as unknown as QuestionRow[];
+}
+
+export async function importQuestionsFromFile(input: {
+  classId: string;
+  filename: string;
+  buffer: Buffer;
+  hint?: QuestionHint;
+}) {
+  const { supabase, user } = await requireUser();
+  const parsed = await parseQuestions(input.buffer, input.filename, input.hint);
+  const { data: batch, error: batchError } = await supabase
+    .from("import_batches")
+    .insert({
+      class_id: input.classId,
+      filename: input.filename,
+      question_count: parsed.questions.length,
+      imported_by: user.id,
+    })
+    .select("*")
+    .single();
+  if (batchError) throw new Error(batchError.message);
+
+  if (parsed.questions.length === 0) {
+    return { batch, questions: [], warnings: parsed.warnings };
+  }
+
+  const rows = parsed.questions.map((question) => ({
+    class_id: input.classId,
+    stem: question.stem,
+    choices_json: question.choices,
+    answer_key: question.answer_key || null,
+    explanation: question.explanation ?? null,
+    source: "imported" as const,
+    approved: false,
+    rejected: false,
+    tag_approved: false,
+    created_by: user.id,
+    import_batch_id: batch.id,
+  }));
+
+  const { data, error } = await supabase.from("questions").insert(rows).select("*");
+  if (error) throw new Error(error.message);
+  return { batch, questions: data ?? [], warnings: parsed.warnings };
+}
+
+export async function updateQuestion(
+  id: string,
+  patch: Partial<{
+    stem: string;
+    choices_json: Array<{ key: string; text: string }>;
+    answer_key: string | null;
+    explanation: string | null;
+    standard_id: string | null;
+    concept_id: string | null;
+    difficulty: "easy" | "medium" | "hard" | null;
+    approved: boolean;
+    rejected: boolean;
+    tag_approved: boolean;
+    ai_tag_confidence: number | null;
+    ai_tag_reasoning: string | null;
+  }>,
+) {
+  const { supabase } = await requireUser();
+  const { data, error } = await supabase
+    .from("questions")
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select("*")
+    .single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function softDeleteQuestion(id: string) {
+  const { supabase } = await requireUser();
+  const { error } = await supabase
+    .from("questions")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function restoreQuestion(id: string) {
+  const { supabase } = await requireUser();
+  const { error } = await supabase.from("questions").update({ deleted_at: null }).eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function applyTagApprovals(
+  items: Array<{
+    questionId: string;
+    standard_id: string | null;
+    concept_id: string | null;
+    difficulty: "easy" | "medium" | "hard";
+    confidence: number;
+    reasoning: string;
+  }>,
+) {
+  for (const item of items) {
+    await updateQuestion(item.questionId, {
+      standard_id: item.standard_id,
+      concept_id: item.concept_id,
+      difficulty: item.difficulty,
+      ai_tag_confidence: item.confidence,
+      ai_tag_reasoning: item.reasoning,
+      tag_approved: true,
+    });
+  }
+}
+
+export async function insertGeneratedQuestions(
+  classId: string,
+  drafts: Array<{
+    stem: string;
+    choices: Array<{ key: string; text: string }>;
+    answer_key: string;
+    explanation: string;
+    reasoning: string;
+    standard_id: string | null;
+    concept_id: string | null;
+    difficulty: "easy" | "medium" | "hard";
+  }>,
+) {
+  const { supabase, user } = await requireUser();
+  const rows = drafts.map((draft) => ({
+    class_id: classId,
+    stem: draft.stem,
+    choices_json: draft.choices,
+    answer_key: draft.answer_key,
+    explanation: draft.explanation,
+    standard_id: draft.standard_id,
+    concept_id: draft.concept_id,
+    difficulty: draft.difficulty,
+    source: "ai_generated" as const,
+    approved: false,
+    rejected: false,
+    tag_approved: false,
+    ai_tag_reasoning: draft.reasoning,
+    created_by: user.id,
+  }));
+  const { data, error } = await supabase.from("questions").insert(rows).select("*");
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+export async function untaggedQuestionIds(classId: string) {
+  const { supabase } = await requireUser();
+  const { data, error } = await supabase
+    .from("questions")
+    .select("id")
+    .eq("class_id", classId)
+    .eq("tag_approved", false)
+    .is("deleted_at", null)
+    .is("standard_id", null);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => row.id);
+}
+
+export async function classAiSpendForUser(classId: string) {
+  const admin = createAdminClient();
+  const { data } = await admin.from("ai_usage_log").select("cost_usd").eq("class_id", classId);
+  return (data ?? []).reduce((sum, row) => sum + Number(row.cost_usd ?? 0), 0);
+}

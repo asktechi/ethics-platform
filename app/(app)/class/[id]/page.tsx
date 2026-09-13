@@ -1,10 +1,13 @@
 import { notFound } from "next/navigation";
 import { ClassWorkspace } from "@/components/ClassWorkspace";
 import { PageHeader } from "@/components/PageHeader";
+import { classAiSpend } from "@/lib/ai/usage";
 import { getClass } from "@/lib/data/classes";
 import { listConceptsByClass } from "@/lib/data/concepts";
 import { listMaterials } from "@/lib/data/materials";
+import { listQuestions } from "@/lib/data/questions";
 import { listSections } from "@/lib/data/sections";
+import { listStandards } from "@/lib/data/standards";
 
 export default async function ClassPage({ params }: { params: { id: string } }) {
   let detail;
@@ -14,10 +17,13 @@ export default async function ClassPage({ params }: { params: { id: string } }) 
     notFound();
   }
 
-  const [sections, concepts, materials] = await Promise.all([
+  const [sections, concepts, materials, questions, standards, spend] = await Promise.all([
     listSections(detail.id, { includeArchived: true }),
     listConceptsByClass(detail.id, { includeArchived: true }),
     listMaterials(detail.id, { includeArchived: true }),
+    listQuestions(detail.id, { includeArchived: true }),
+    listStandards(),
+    classAiSpend(detail.id),
   ]);
 
   return (
@@ -36,6 +42,9 @@ export default async function ClassPage({ params }: { params: { id: string } }) 
         sections={sections}
         concepts={concepts}
         materials={materials}
+        questions={questions}
+        standards={standards}
+        spend={spend}
       />
     </div>
   );

@@ -9,6 +9,7 @@ import {
 import { ConceptList } from "@/components/ConceptList";
 import { InlineEditableText } from "@/components/InlineEditableText";
 import { MaterialsPanel } from "@/components/materials/MaterialsPanel";
+import { QuestionsBank } from "@/components/questions/QuestionsBank";
 import { PresentSetup } from "@/components/theme/PresentSetup";
 import { ThemeStudio } from "@/components/theme/ThemeStudio";
 import { SectionList } from "@/components/SectionList";
@@ -16,23 +17,26 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Link from "next/link";
 import type { ClassDetail } from "@/lib/data/classes";
+import type { QuestionRow } from "@/lib/data/questions";
 import type { MaterialListRow } from "@/lib/data/materials.types";
-import type { Concept, Section } from "@/types/db.helpers";
-
-const comingSoon: Record<string, string> = {
-  questions: "Coming in Phase 5 — question bank, AI tagging, and instructor approval.",
-};
+import type { Concept, Section, Standard } from "@/types/db.helpers";
 
 export function ClassWorkspace({
   detail,
   sections,
   concepts,
   materials,
+  questions,
+  standards,
+  spend,
 }: {
   detail: ClassDetail;
   sections: Section[];
   concepts: Concept[];
   materials: MaterialListRow[];
+  questions: QuestionRow[];
+  standards: Standard[];
+  spend: number;
 }) {
   const firstActive = sections.find((section) => !section.deleted_at)?.id ?? null;
   const [selectedId, setSelectedId] = useState<string | null>(firstActive);
@@ -199,11 +203,15 @@ export function ClassWorkspace({
         <PresentSetup classId={detail.id} />
       </TabsContent>
 
-      {Object.entries(comingSoon).map(([key, copy]) => (
-        <TabsContent key={key} value={key} className="mt-6 border border-dashed border-border bg-card/40 p-6">
-          <p className="font-display text-xl text-ivory">{copy}</p>
-        </TabsContent>
-      ))}
+      <TabsContent value="questions" className="mt-6">
+        <QuestionsBank
+          classId={detail.id}
+          initialQuestions={questions}
+          standards={standards}
+          concepts={concepts}
+          spend={spend}
+        />
+      </TabsContent>
     </Tabs>
   );
 }

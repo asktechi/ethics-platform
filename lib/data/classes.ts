@@ -111,30 +111,14 @@ export async function getClass(id: string): Promise<ClassDetail> {
 
 async function countClassQuestions(classId: string): Promise<number> {
   const { supabase } = await requireUser();
-  const { data, error } = await supabase
-    .from("concepts")
-    .select("id, sections!inner(class_id, deleted_at)")
-    .eq("sections.class_id", classId)
-    .is("deleted_at", null)
-    .is("sections.deleted_at", null);
+  const { count, error } = await supabase
+    .from("questions")
+    .select("id", { count: "exact", head: true })
+    .eq("class_id", classId)
+    .is("deleted_at", null);
 
   if (error) {
     throw new Error(error.message);
-  }
-
-  const ids = (data ?? []).map((row) => row.id);
-  if (ids.length === 0) {
-    return 0;
-  }
-
-  const { count, error: countError } = await supabase
-    .from("questions")
-    .select("id", { count: "exact", head: true })
-    .in("concept_id", ids)
-    .is("deleted_at", null);
-
-  if (countError) {
-    throw new Error(countError.message);
   }
 
   return count ?? 0;
