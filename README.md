@@ -2,7 +2,7 @@
 
 Personal teaching platform for CFA Institute ethics instruction (Levels I–III). The owner is the sole instructor-author. Students join live quizzes with an open link and a display name.
 
-This repository is at **Phase 5**: a full question bank with file import, AI tagging, AI generation, instructor approval, and question pools.
+This repository is at **Phase 6 Session A**: live quiz join, player view, and host broadcast. The host dashboard ships in Session B.
 
 Never commit `.env.local`, `SUPABASE_SERVICE_ROLE_KEY`, or `SUPABASE_DB_URL`.
 
@@ -58,7 +58,7 @@ Open a class and use the **Questions** tab, or go to `/class/{id}/questions`.
 
 Sample ethics CSV: [`fixtures/samples/questions-1.csv`](fixtures/samples/questions-1.csv).
 
-Phase 6 (live quiz) will load a pool with table `question_pools` / `question_pool_items` and RPC `load_pool_questions(p_pool_id)`.
+Phase 6 Session A: from a pool, **Launch live quiz** → `/quiz/host/{sessionId}`. Students open `/quiz/join/{code}` (or the QR page), enter a display name, and play on `/quiz/play/{sessionId}`. Host events go through `lib/quiz/bus.ts` on channel `quiz:{session_id}`.
 
 ## Environment variables
 
@@ -75,6 +75,7 @@ Copy [`.env.local.example`](.env.local.example) to `.env.local`.
 | `FLY_WORKER_URL` | PPTX → PDF worker (Phase 3.5) |
 | `FLY_WORKER_SECRET` | Worker auth (Phase 3.5) |
 | `UNSPLASH_ACCESS_KEY` | Curated concept image pools |
+| `NEXT_PUBLIC_QUIZ_TEST_PANEL` | Host stub publisher (`true` unless set to `false`) |
 
 Never expose `SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`, or `FLY_WORKER_SECRET` to the client.
 
@@ -93,8 +94,8 @@ Next.js 14 App Router, TypeScript, Tailwind, shadcn/ui, Framer Motion, dnd-kit, 
 4B. **Presenter + audience** — dual view and realtime lockstep
 4.5. **Teleprompter sync** — line-by-line audience reveal + background polish
 4.6. **Audience mirror + typography** — one renderer, auto-scale, beat pagination
-5. **Questions** — bank, AI tagging/generation, instructor approval, pools *(this phase)*
-6. **Live quiz** — Jeopardy-style session, realtime leaderboard
+5. **Questions** — bank, AI tagging/generation, instructor approval, pools
+6. **Live quiz** — Session A join/play/broadcast *(this phase)*; Session B host dashboard later
 7. **Polish** — shortcuts, offline cache, PDF export, expand beyond CFA
 
 Work phase by phase. Do not start the next phase until the instructor confirms.

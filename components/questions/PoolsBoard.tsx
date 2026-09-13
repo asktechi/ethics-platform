@@ -107,7 +107,7 @@ export function PoolsBoard({
         <div>
           <h1 className="font-display text-2xl text-ivory">Question pools</h1>
           <p className="text-sm text-ivory/55">
-            Build a shuffled set for a later live quiz. Phase 6 will load via <code>load_pool_questions</code>.
+            Build a shuffled set, then launch a live quiz. The host loads items via <code>load_pool_questions</code>.
           </p>
         </div>
         <Button variant="outline" className="border-ivory/20 text-ivory" asChild>
@@ -231,6 +231,9 @@ export function PoolsBoard({
                   }
                 >
                   Preview (shuffle dry run)
+                </Button>
+                <Button size="sm" className="bg-gold text-navy hover:bg-gold/90" asChild>
+                  <Link href={`/class/${classId}/questions/pools/${selected.id}/launch`}>Launch live quiz</Link>
                 </Button>
                 <Button
                   size="sm"

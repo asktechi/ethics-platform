@@ -1,0 +1,80 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
+import { actionError } from "@/lib/data/errors";
+import { getHostSession, launchQuizSession, loadHostQuestions } from "@/lib/data/quiz";
+import { requireUser } from "@/lib/data/auth";
+
+export async function launchQuizAction(input: unknown) {
+  const parsed = z
+    .object({
+      classId: z.string().uuid(),
+      poolId: z.string().uuid(),
+      mode: z.enum(["jeopardy", "standard"]),
+      timePerQ: z.number().int().min(5).max(300),
+      shuffle: z.boolean(),
+      allowLateJoin: z.boolean(),
+      showLeaderboard: z.boolean(),
+      showCorrectAnswer: z.boolean(),
+    })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false as const, error: "Invalid launch settings." };
+  try {
+    const session = await launchQuizSession(parsed.data);
+    revalidatePath(`/class/${parsed.data.classId}/questions/pools`);
+    return { ok: true as const, sessionId: session.id, joinCode: session.join_code };
+  } catch (error) {
+    return { ok: false as const, error: actionError(error) };
+  }
+}
+
+export async function quizSetQuestionAction(sessionId: string, index: number) {
+  try {
+    const { supabase } = await requireUser();
+    const { error } = await supabase.rpc("quiz_set_question", {
+      p_session_id: sessionId,
+      p_index: index,
+    });
+    if (error) throw new Error(error.message);
+    return { ok: true as const };
+  } catch (error) {
+    return { ok: false as const, error: actionError(error) };
+  }
+}
+
+export async function quizRevealAction(sessionId: string, questionId: string, correctKey: string) {
+  try {
+    const { supabase } = await requireUser();
+    const { error } = await supabase.rpc("quiz_apply_reveal", {
+      p_session_id: sessionId,
+      p_question_id: questionId,
+      p_correct_key: correctKey,
+    });
+    if (error) throw new Error(error.message);
+    return { ok: true as const };
+  } catch (error) {
+    return { ok: false as const, error: actionError(error) };
+  }
+}
+
+export async function quizEndAction(sessionId: string) {
+  try {
+    const { supabase } = await requireUser();
+    const { error } = await supabase.rpc("quiz_end_session", { p_session_id: sessionId });
+    if (error) throw new Error(error.message);
+    return { ok: true as const };
+  } catch (error) {
+    return { ok: false as const, error: actionError(error) };
+  }
+}
+
+export async function loadHostQuestionsAction(poolId: string) {
+  try {
+    return { ok: true as const, questions: await loadHostQuestions(poolId) };
+  } catch (error) {
+    return { ok: false as const, error: actionError(error) };
+  }
+}
+
+export { getHostSession };

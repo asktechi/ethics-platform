@@ -798,6 +798,11 @@ export type Database = {
           time_per_q: number | null;
           status: "draft" | "live" | "ended";
           join_code: string;
+          current_question_index: number;
+          started_at: string | null;
+          ended_at: string | null;
+          reveal_answer: boolean;
+          settings_json: Json;
           created_at: string;
           updated_at: string;
           deleted_at: string | null;
@@ -810,6 +815,11 @@ export type Database = {
           time_per_q?: number | null;
           status: "draft" | "live" | "ended";
           join_code: string;
+          current_question_index?: number;
+          started_at?: string | null;
+          ended_at?: string | null;
+          reveal_answer?: boolean;
+          settings_json?: Json;
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
@@ -822,6 +832,11 @@ export type Database = {
           time_per_q?: number | null;
           status?: "draft" | "live" | "ended";
           join_code?: string;
+          current_question_index?: number;
+          started_at?: string | null;
+          ended_at?: string | null;
+          reveal_answer?: boolean;
+          settings_json?: Json;
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
@@ -833,6 +848,12 @@ export type Database = {
           id: string;
           session_id: string;
           display_name: string;
+          participant_token: string;
+          score: number;
+          streak: number;
+          last_correct_at: string | null;
+          connected: boolean;
+          avatar_color: string | null;
           joined_at: string;
           created_at: string;
           updated_at: string;
@@ -842,6 +863,12 @@ export type Database = {
           id?: string;
           session_id: string;
           display_name: string;
+          participant_token?: string;
+          score?: number;
+          streak?: number;
+          last_correct_at?: string | null;
+          connected?: boolean;
+          avatar_color?: string | null;
           joined_at?: string;
           created_at?: string;
           updated_at?: string;
@@ -851,6 +878,12 @@ export type Database = {
           id?: string;
           session_id?: string;
           display_name?: string;
+          participant_token?: string;
+          score?: number;
+          streak?: number;
+          last_correct_at?: string | null;
+          connected?: boolean;
+          avatar_color?: string | null;
           joined_at?: string;
           created_at?: string;
           updated_at?: string;
@@ -865,9 +898,11 @@ export type Database = {
           participant_id: string;
           question_id: string;
           answer: string | null;
+          choice_key: string | null;
           is_correct: boolean | null;
           ms_taken: number | null;
           submitted_at: string;
+          revealed_at: string | null;
           created_at: string;
           updated_at: string;
           deleted_at: string | null;
@@ -878,9 +913,11 @@ export type Database = {
           participant_id: string;
           question_id: string;
           answer?: string | null;
+          choice_key?: string | null;
           is_correct?: boolean | null;
           ms_taken?: number | null;
           submitted_at?: string;
+          revealed_at?: string | null;
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
@@ -891,9 +928,11 @@ export type Database = {
           participant_id?: string;
           question_id?: string;
           answer?: string | null;
+          choice_key?: string | null;
           is_correct?: boolean | null;
           ms_taken?: number | null;
           submitted_at?: string;
+          revealed_at?: string | null;
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
@@ -902,12 +941,89 @@ export type Database = {
       };
     };
     Views: {
-      [_ in never]: never;
+      quiz_session_summary: {
+        Row: {
+          session_id: string;
+          pool_id: string;
+          host_id: string;
+          mode: string;
+          time_per_q: number | null;
+          status: string;
+          join_code: string;
+          participant_count: number;
+          current_question_index: number;
+          started_at: string | null;
+          ended_at: string | null;
+        };
+        Relationships: [];
+      };
     };
     Functions: {
       join_quiz: {
         Args: { p_join_code: string; p_display_name: string };
-        Returns: { participant_id: string; session_id: string }[];
+        Returns: {
+          participant_id: string;
+          session_id: string;
+          participant_token: string;
+          avatar_color: string;
+        }[];
+      };
+      lookup_quiz_by_code: {
+        Args: { p_code: string };
+        Returns: {
+          session_id: string;
+          pool_name: string;
+          host_name: string;
+          participant_count: number;
+          status: string;
+          join_code: string;
+          time_per_q: number | null;
+        }[];
+      };
+      get_participant_by_token: {
+        Args: { p_token: string };
+        Returns: {
+          id: string;
+          session_id: string;
+          display_name: string;
+          score: number;
+          streak: number;
+          avatar_color: string | null;
+          join_code: string;
+          status: string;
+        }[];
+      };
+      submit_answer: {
+        Args: {
+          p_participant_token: string;
+          p_question_id: string;
+          p_choice_key: string | null;
+          p_ms_taken: number;
+        };
+        Returns: { ok: boolean; already_answered: boolean }[];
+      };
+      quiz_set_question: {
+        Args: { p_session_id: string; p_index: number };
+        Returns: undefined;
+      };
+      quiz_apply_reveal: {
+        Args: { p_session_id: string; p_question_id: string; p_correct_key: string };
+        Returns: undefined;
+      };
+      quiz_end_session: {
+        Args: { p_session_id: string };
+        Returns: undefined;
+      };
+      get_final_leaderboard: {
+        Args: { p_session_id: string };
+        Returns: {
+          participant_id: string;
+          display_name: string;
+          score: number;
+          streak: number;
+          avatar_color: string | null;
+          rank: number;
+        }[];
       };
       health_public_table_count: {
         Args: Record<string, never>;
