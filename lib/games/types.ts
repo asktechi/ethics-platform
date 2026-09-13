@@ -12,6 +12,7 @@ export type GameFilter = {
   difficulty: Array<"easy" | "medium" | "hard">;
   sources: Array<"imported" | "ai_generated" | "mine">;
   approved_only: boolean;
+  search?: string;
 };
 
 export type GameSettings = {

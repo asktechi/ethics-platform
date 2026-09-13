@@ -1,8 +1,13 @@
 import { requireUser } from "@/lib/data/auth";
-import { listQuestions, type QuestionFilters, type QuestionRow } from "@/lib/data/questions";
-import { loadHostQuestions } from "@/lib/data/quiz";
+import type { QuestionFilters, QuestionRow } from "@/lib/data/questions";
 import { randomJoinCode } from "@/lib/quiz/codes";
 import type { QuizHostQuestion, QuizSettings } from "@/lib/quiz/types";
+import {
+  GameLaunchBlockedError,
+  launchBlockMessage,
+  resolveGameQuestions,
+  validateTemplateSource,
+} from "@/lib/games/resolve";
 import {
   defaultGameSettings,
   type GameFilter,
@@ -67,6 +72,7 @@ export type GameTemplateRow = {
   deleted_at: string | null;
   pool_name?: string | null;
   pool_count?: number | null;
+  playable_count?: number;
   class_title?: string | null;
   standard_ids?: string[];
   difficulties?: Array<"easy" | "medium" | "hard">;
@@ -135,8 +141,6 @@ export async function listGameTemplates(options: { includeArchived?: boolean } =
         .select("pool_id, question:questions(standard_id, difficulty)")
         .in("pool_id", poolIds)
     : { data: [] };
-  const counts = new Map<string, number>();
-  (poolMeta ?? []).forEach((item) => counts.set(item.pool_id, (counts.get(item.pool_id) ?? 0) + 1));
   const poolStandards = new Map<string, Set<string>>();
   const poolDifficulties = new Map<string, Set<"easy" | "medium" | "hard">>();
   (poolMeta ?? []).forEach((item) => {
@@ -158,16 +162,23 @@ export async function listGameTemplates(options: { includeArchived?: boolean } =
     }
   });
 
-  return rows.map((row) => ({
-    ...row,
-    pool_count: row.pool_id ? (counts.get(row.pool_id) ?? 0) : null,
-    standard_ids: row.pool_id
-      ? [...(poolStandards.get(row.pool_id) ?? [])]
-      : row.filter_json.standards,
-    difficulties: row.pool_id
-      ? [...(poolDifficulties.get(row.pool_id) ?? [])]
-      : row.filter_json.difficulty,
-  }));
+  const resolvedRows = await Promise.all(
+    rows.map(async (row) => {
+      const resolved = await resolveGameQuestions(row, { supabase, requireApproved: true });
+      return {
+        ...row,
+        pool_count: resolved.questions.length,
+        playable_count: resolved.questions.length,
+        standard_ids: row.pool_id
+          ? [...(poolStandards.get(row.pool_id) ?? [])]
+          : row.filter_json.standards,
+        difficulties: row.pool_id
+          ? [...(poolDifficulties.get(row.pool_id) ?? [])]
+          : row.filter_json.difficulty,
+      };
+    }),
+  );
+  return resolvedRows;
 }
 
 export async function listGameTags() {
@@ -191,6 +202,13 @@ export async function createGameTemplate(input: WizardState) {
   const { supabase, user } = await requireUser();
   if (!input.name.trim()) throw new Error("Name is required.");
   if (!input.classId) throw new Error("Pick a class.");
+  const poolId = input.source === "pool" ? input.poolId || null : null;
+  await validateTemplateSource(supabase, {
+    class_id: input.classId,
+    pool_id: poolId,
+    filter_json: input.source === "filter" ? input.filter : {},
+    mode: input.mode,
+  });
   const { data, error } = await supabase
     .from("game_templates")
     .insert({
@@ -199,8 +217,8 @@ export async function createGameTemplate(input: WizardState) {
       name: input.name.trim(),
       description: input.description.trim() || null,
       tags: input.tags,
-      mode: input.mode,
-      pool_id: input.source === "pool" ? input.poolId || null : null,
+      mode: "jeopardy",
+      pool_id: poolId,
       filter_json: input.source === "filter" ? input.filter : {},
       settings_json: input.settings,
     })
@@ -213,19 +231,41 @@ export async function createGameTemplate(input: WizardState) {
 export async function updateGameTemplate(id: string, input: Partial<WizardState> & { bumpVersion?: boolean }) {
   const current = await getGameTemplate(id);
   const { supabase } = await requireUser();
+  const nextPoolId = input.source === "filter" ? null : input.poolId ?? current.pool_id;
+  const nextClassId = input.classId ?? current.class_id;
+  const nextFilter = input.filter ?? current.filter_json;
+  await validateTemplateSource(supabase, {
+    class_id: nextClassId,
+    pool_id: nextPoolId,
+    filter_json: nextFilter,
+    mode: "jeopardy",
+  });
   const { data, error } = await supabase
     .from("game_templates")
     .update({
       name: input.name?.trim() ?? current.name,
       description: input.description !== undefined ? input.description.trim() || null : current.description,
       tags: input.tags ?? current.tags,
-      mode: input.mode ?? current.mode,
-      pool_id: input.source === "filter" ? null : input.poolId ?? current.pool_id,
-      filter_json: input.filter ?? current.filter_json,
+      mode: "jeopardy",
+      pool_id: nextPoolId,
+      filter_json: nextFilter,
       settings_json: input.settings ?? current.settings_json,
-      class_id: input.classId ?? current.class_id,
+      class_id: nextClassId,
       version: (input.bumpVersion ?? true) ? current.version + 1 : current.version,
     })
+    .eq("id", id)
+    .select("*")
+    .single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function convertGameToJeopardy(id: string) {
+  const current = await getGameTemplate(id);
+  const { supabase } = await requireUser();
+  const { data, error } = await supabase
+    .from("game_templates")
+    .update({ mode: "jeopardy", version: current.version + 1 })
     .eq("id", id)
     .select("*")
     .single();
@@ -266,12 +306,20 @@ export async function cloneGameTemplate(id: string) {
 }
 
 export async function resolveTemplateQuestions(template: GameTemplateRow): Promise<QuizHostQuestion[]> {
-  if (template.pool_id) return loadHostQuestions(template.pool_id);
-  const rows = await listQuestions(template.class_id, filterToQuestionFilters(template.filter_json));
-  return rows.map(questionToHost);
+  const { supabase } = await requireUser();
+  const resolved = await resolveGameQuestions(template, { supabase, requireApproved: true });
+  return resolved.questions.map((row) =>
+    questionToHost({
+      id: row.id,
+      stem: row.stem,
+      choices_json: (Array.isArray(row.choices_json) ? row.choices_json : []) as QuestionRow["choices_json"],
+      answer_key: row.answer_key,
+      explanation: row.explanation,
+    }),
+  );
 }
 
-function questionToHost(row: QuestionRow): QuizHostQuestion {
+function questionToHost(row: Pick<QuestionRow, "id" | "stem" | "choices_json" | "answer_key" | "explanation">): QuizHostQuestion {
   return {
     question_id: row.id,
     stem: row.stem,
@@ -305,8 +353,35 @@ export async function loadQuestionsByIds(ids: string[]): Promise<QuizHostQuestio
 }
 
 export async function countFilterMatches(classId: string, filter: GameFilter) {
-  const { countQuestions } = await import("@/lib/data/questions");
-  return countQuestions(classId, filterToQuestionFilters(filter));
+  const { supabase } = await requireUser();
+  const resolved = await resolveGameQuestions(
+    { class_id: classId, pool_id: null, filter_json: filter },
+    { supabase, requireApproved: true },
+  );
+  return resolved.questions.length;
+}
+
+export async function previewGameSource(input: {
+  classId: string;
+  source: "pool" | "filter";
+  poolId?: string;
+  filter?: GameFilter;
+}) {
+  const { supabase } = await requireUser();
+  const resolved = await resolveGameQuestions(
+    {
+      class_id: input.classId,
+      pool_id: input.source === "pool" ? input.poolId || null : null,
+      filter_json: input.source === "filter" ? input.filter : {},
+    },
+    { supabase, requireApproved: true },
+  );
+  return {
+    count: resolved.questions.length,
+    sample: resolved.questions.slice(0, 5).map((row) => row.stem),
+    source: resolved.source,
+    diagnostics: resolved.diagnostics,
+  };
 }
 
 export async function listTemplateInstances(templateId: string) {
@@ -400,8 +475,11 @@ export async function listUpcomingInstances() {
 export async function scheduleGameInstance(templateId: string, when: string) {
   const template = await getGameTemplate(templateId);
   const { supabase, user } = await requireUser();
-  const questions = await resolveTemplateQuestions(template);
-  const questionIds = questions.map((item) => item.question_id);
+  const resolved = await resolveGameQuestions(template, { supabase, requireApproved: true });
+  if (resolved.questions.length === 0) {
+    throw new GameLaunchBlockedError(launchBlockMessage(resolved), resolved.diagnostics);
+  }
+  const questionIds = resolved.questionIds;
   let joinCode = randomJoinCode();
   for (let attempt = 0; attempt < 8; attempt += 1) {
     const { data, error } = await supabase
@@ -436,14 +514,19 @@ export async function launchGameFromTemplate(templateId: string) {
   if (template.mode !== "jeopardy") {
     throw new Error("This mode is coming in Phase 6D.");
   }
-  const questions = await resolveTemplateQuestions(template);
-  if (questions.length === 0) throw new Error("This game has no questions yet.");
-  const settings = template.settings_json;
-  const questionIds = settings.shuffle_questions
-    ? shuffleIds(questions.map((item) => item.question_id))
-    : questions.map((item) => item.question_id);
-
   const { supabase, user } = await requireUser();
+  const resolved = await resolveGameQuestions(template, { supabase, requireApproved: true });
+  if (resolved.questions.length === 0) {
+    console.log("[games] launch blocked", {
+      templateId: template.id,
+      diagnostics: resolved.diagnostics,
+      source: resolved.source,
+    });
+    throw new GameLaunchBlockedError(launchBlockMessage(resolved), resolved.diagnostics);
+  }
+  const settings = template.settings_json;
+  const questionIds = settings.shuffle_questions ? shuffleIds(resolved.questionIds) : resolved.questionIds;
+
   const hostToken = crypto.randomUUID();
   const snapshot: SettingsSnapshot = {
     settings,

@@ -1,7 +1,10 @@
 import { redirect } from "next/navigation";
 import { GameDetail } from "@/components/games/GameDetail";
 import { PageHeader } from "@/components/PageHeader";
-import { coverageForQuestions, getGameTemplate, listTemplateInstances, resolveTemplateQuestions } from "@/lib/data/games";
+import { requireUser } from "@/lib/data/auth";
+import { coverageForQuestions, getGameTemplate, listTemplateInstances } from "@/lib/data/games";
+import { resolveGameQuestions } from "@/lib/games/resolve";
+import type { QuizHostQuestion } from "@/lib/quiz/types";
 
 export default async function GamePage({
   params,
@@ -16,10 +19,19 @@ export default async function GamePage({
   } catch {
     redirect("/games");
   }
-  const [questions, instances] = await Promise.all([
-    resolveTemplateQuestions(template),
+  const { supabase } = await requireUser();
+  const [resolved, instances] = await Promise.all([
+    resolveGameQuestions(template, { supabase, requireApproved: true }),
     listTemplateInstances(template.id),
   ]);
+  const questions: QuizHostQuestion[] = resolved.questions.map((row) => ({
+    question_id: row.id,
+    stem: row.stem,
+    choices: (Array.isArray(row.choices_json) ? row.choices_json : []) as QuizHostQuestion["choices"],
+    answer_key: row.answer_key ?? "",
+    explanation: row.explanation ?? "",
+    time_limit_seconds: template.settings_json.time_per_q,
+  }));
   const coverage = await coverageForQuestions(questions, template.class_id);
   const toast =
     searchParams.saved === "1"
@@ -40,6 +52,7 @@ export default async function GamePage({
         <GameDetail
           template={template}
           questions={questions}
+          resolved={resolved}
           instances={instances}
           coverage={coverage}
           toast={toast}

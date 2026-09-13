@@ -69,7 +69,9 @@ Scoring: 100 base + time bonus (max 100) + 20 per consecutive correct after the 
 
 Open **Games** in the sidebar (`/games`). Save a template once, then launch or schedule it without rebuilding the rules.
 
-- **New Game** — 5-step wizard (basics, pool or filter, mode, rules, preview). Jeopardy Classic is playable now; other modes save for Phase 6D.
+- **New Game** — 5-step wizard (basics, pool or filter, mode, rules, preview). Only Jeopardy Classic is selectable; other modes show a Coming in 6D ribbon.
+- A game cannot be saved or launched with 0 playable (approved) questions. Overview, wizard preview, and launch all call `resolveGameQuestions`.
+- Troubleshoot a template at `/games/{id}/diagnose`.
 - **Start Game** — creates a `game_instances` row with a frozen settings snapshot, then opens the existing host dashboard.
 - **Sessions** — `/sessions/{instanceId}` replays the snapshot (not the current template). Export CSV responses, CSV scores, or a PDF report.
 - Players may enter an optional **student code** (`AX7-9K2`) on join. It is remembered in `localStorage` and linked to `student_profiles`.

@@ -7,7 +7,7 @@ import type { WizardState } from "@/lib/games/types";
 export function EditHydrator({ state }: { state: Partial<WizardState> }) {
   const hydrate = useGameWizard((store) => store.hydrate);
   useEffect(() => {
-    hydrate(state);
+    hydrate({ ...state, mode: "jeopardy" });
   }, [hydrate, state]);
   return null;
 }

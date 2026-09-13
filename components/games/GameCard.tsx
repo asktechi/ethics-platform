@@ -45,7 +45,7 @@ export function GameCard({
         ))}
       </div>
       <p className="mt-3 text-xs text-ivory/45">
-        {poolCount != null ? `${poolCount} questions · ` : ""}
+        {poolCount != null ? `${poolCount} playable · ` : ""}
         {playCount} plays
         {lastPlayedAt ? ` · ${formatDistanceToNow(new Date(lastPlayedAt), { addSuffix: true })}` : ""}
       </p>

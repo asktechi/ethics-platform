@@ -2,17 +2,25 @@
 
 import { useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { countFilterAction, saveGameAction, updateGameAction } from "@/app/(app)/_actions/game.actions";
+import { previewGameSourceAction, saveGameAction, updateGameAction } from "@/app/(app)/_actions/game.actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import type { ResolveDiagnostics } from "@/lib/games/resolve";
 import { MODE_META, type GameMode } from "@/lib/games/types";
 import { useGameWizard } from "@/lib/games/wizard-store";
 import { cn } from "@/lib/utils";
 
 type PoolOption = { id: string; name: string; count: number; stems: string[] };
 type ClassOption = { id: string; title: string };
+type PreviewState = {
+  count: number;
+  sample: string[];
+  diagnostics: ResolveDiagnostics;
+};
+
+const COMING_SOON = "This mode is coming soon. Save a Jeopardy game for now, or check back after the next update.";
 
 export function GameWizard({
   classes,
@@ -33,26 +41,46 @@ export function GameWizard({
   const store = useGameWizard();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [matchCount, setMatchCount] = useState<number | null>(null);
+  const [stepToast, setStepToast] = useState<string | null>(null);
+  const [preview, setPreview] = useState<PreviewState | null>(null);
   const [tagDraft, setTagDraft] = useState(store.tags.join(", "));
 
   useEffect(() => {
     if (!store.classId && classes[0]) store.patch({ classId: classes[0].id });
   }, [classes, store]);
 
+  useEffect(() => {
+    if (store.mode !== "jeopardy") store.patch({ mode: "jeopardy" });
+  }, [store, store.mode]);
+
   const pools = poolsByClass[store.classId] ?? [];
   const concepts = conceptsByClass[store.classId] ?? [];
   const selectedPool = pools.find((item) => item.id === store.poolId);
 
   useEffect(() => {
-    if (store.source !== "filter" || !store.classId) return;
+    if (!store.classId) return;
+    if (store.source === "pool" && !store.poolId) {
+      setPreview(null);
+      return;
+    }
     const timer = window.setTimeout(() => {
-      void countFilterAction(store.classId, store.filter).then((result) => {
-        if (result.ok) setMatchCount(result.count);
+      void previewGameSourceAction({
+        classId: store.classId,
+        source: store.source,
+        poolId: store.poolId,
+        filter: store.filter,
+      }).then((result) => {
+        if (result.ok) {
+          setPreview({
+            count: result.count,
+            sample: result.sample,
+            diagnostics: result.diagnostics,
+          });
+        }
       });
-    }, 250);
+    }, 300);
     return () => window.clearTimeout(timer);
-  }, [store.classId, store.filter, store.source]);
+  }, [store.classId, store.filter, store.poolId, store.source]);
 
   const canNext = useMemo(() => {
     if (store.step === 1) return Boolean(store.name.trim() && store.classId);
@@ -60,8 +88,21 @@ export function GameWizard({
     return true;
   }, [store]);
 
+  function goNext() {
+    if (store.step === 2 && (preview?.count ?? 0) === 0) {
+      setStepToast("Add questions before continuing.");
+      return;
+    }
+    setStepToast(null);
+    store.setStep(store.step + 1);
+  }
+
   function submit() {
     setError(null);
+    if ((preview?.count ?? 0) === 0) {
+      setError("This game has 0 playable questions. Go back to Step 2 and fix the source.");
+      return;
+    }
     start(async () => {
       const payload = {
         classId: store.classId,
@@ -71,7 +112,7 @@ export function GameWizard({
         source: store.source,
         poolId: store.poolId,
         filter: store.filter,
-        mode: store.mode,
+        mode: "jeopardy" as const,
         settings: store.settings,
       };
       const result = editId ? await updateGameAction(editId, payload) : await saveGameAction(payload);
@@ -166,24 +207,16 @@ export function GameWizard({
                 <option value="">Select a pool</option>
                 {pools.map((pool) => (
                   <option key={pool.id} value={pool.id}>
-                    {pool.name} ({pool.count})
+                    {pool.name}
                   </option>
                 ))}
               </select>
-              {selectedPool ? (
-                <ul className="mt-3 space-y-1 text-sm text-ivory/60">
-                  <li>{selectedPool.count} questions</li>
-                  {selectedPool.stems.map((stem) => (
-                    <li key={stem} className="truncate">
-                      · {stem}
-                    </li>
-                  ))}
-                </ul>
+              {selectedPool && !preview ? (
+                <p className="mt-3 text-sm text-ivory/50">Resolving pool…</p>
               ) : null}
             </div>
           ) : (
             <div className="space-y-3">
-              <p className="text-sm text-ivory/60">Live match: {matchCount ?? "…"} questions</p>
               <div>
                 <p className="text-xs uppercase text-gold">Standards</p>
                 <div className="mt-2 grid gap-1 sm:grid-cols-2">
@@ -268,6 +301,7 @@ export function GameWizard({
               </label>
             </div>
           )}
+          <SourcePreview source={store.source} preview={preview} />
         </section>
       ) : null}
 
@@ -277,6 +311,23 @@ export function GameWizard({
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             {(Object.keys(MODE_META) as GameMode[]).map((mode) => {
               const meta = MODE_META[mode];
+              if (!meta.playable) {
+                return (
+                  <div
+                    key={mode}
+                    title={COMING_SOON}
+                    className="pointer-events-none relative cursor-not-allowed border border-white/10 p-4 text-left opacity-60"
+                  >
+                    <span className="absolute right-2 top-2 bg-[#E63946] px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-ivory">
+                      Coming in 6D
+                    </span>
+                    <p className="font-display text-lg" style={{ color: meta.accent }}>
+                      {meta.label}
+                    </p>
+                    <p className="mt-1 text-sm text-ivory/60">{meta.blurb}</p>
+                  </div>
+                );
+              }
               return (
                 <button
                   key={mode}
@@ -291,9 +342,6 @@ export function GameWizard({
                     {meta.label}
                   </p>
                   <p className="mt-1 text-sm text-ivory/60">{meta.blurb}</p>
-                  {!meta.playable ? (
-                    <p className="mt-2 text-[11px] uppercase tracking-[0.12em] text-ivory/40">Coming in Phase 6D</p>
-                  ) : null}
                 </button>
               );
             })}
@@ -304,9 +352,6 @@ export function GameWizard({
       {store.step === 4 ? (
         <section className="mt-8 space-y-3">
           <h1 className="font-display text-3xl">Rules</h1>
-          {store.mode !== "jeopardy" ? (
-            <p className="text-sm text-ivory/55">Rules for this mode land in Phase 6D. Jeopardy fields are stored for now.</p>
-          ) : null}
           <Field label="Seconds per question">
             <Input
               type="number"
@@ -353,24 +398,27 @@ export function GameWizard({
       {store.step === 5 ? (
         <section className="mt-8 space-y-3">
           <h1 className="font-display text-3xl">Preview</h1>
-          <p className="text-sm text-ivory/60">
-            {store.source === "pool"
-              ? `${selectedPool?.count ?? 0} questions from ${selectedPool?.name ?? "the selected pool"}`
-              : `${matchCount ?? 0} questions match the filter (re-evaluated on launch).`}
-          </p>
+          {(preview?.count ?? 0) === 0 ? (
+            <p className="border border-red-400/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+              This game has 0 playable questions. Go back to Step 2 and fix the source.
+            </p>
+          ) : (
+            <p className="text-sm text-ivory/60">{preview?.count} playable questions (same resolver as launch).</p>
+          )}
           <ul className="space-y-1 text-sm text-ivory/70">
-            {(selectedPool?.stems ?? []).slice(0, 5).map((stem) => (
+            {(preview?.sample ?? []).map((stem) => (
               <li key={stem}>{stem}</li>
             ))}
           </ul>
           <p className="text-sm text-ivory/55">
             Estimated length:{" "}
-            {(((selectedPool?.count ?? matchCount ?? 0) * store.settings.time_per_q) / 60 + 0.5 * (selectedPool?.count ?? matchCount ?? 0)).toFixed(1)}{" "}
-            minutes including reveal buffer.
+            {((((preview?.count ?? 0) * store.settings.time_per_q) / 60 + 0.5 * (preview?.count ?? 0))).toFixed(1)} minutes
+            including reveal buffer.
           </p>
         </section>
       ) : null}
 
+      {stepToast ? <p className="mt-4 text-sm text-gold">{stepToast}</p> : null}
       {error ? <p className="mt-4 text-sm text-red-300">{error}</p> : null}
 
       <div className="mt-8 flex gap-2">
@@ -378,15 +426,63 @@ export function GameWizard({
           Back
         </Button>
         {store.step < 5 ? (
-          <Button className="bg-gold text-navy hover:bg-gold/90" disabled={!canNext} onClick={() => store.setStep(store.step + 1)}>
+          <Button className="bg-gold text-navy hover:bg-gold/90" disabled={!canNext} onClick={goNext}>
             Next
           </Button>
         ) : (
-          <Button className="bg-gold text-navy hover:bg-gold/90" disabled={pending} onClick={submit}>
+          <Button
+            className="bg-gold text-navy hover:bg-gold/90"
+            disabled={pending || (preview?.count ?? 0) === 0}
+            onClick={submit}
+          >
             {pending ? "Saving…" : editId ? "Save changes" : "Save Game"}
           </Button>
         )}
       </div>
+    </div>
+  );
+}
+
+function SourcePreview({ source, preview }: { source: "pool" | "filter"; preview: PreviewState | null }) {
+  if (!preview) {
+    return (
+      <div className="border border-white/10 bg-card/40 p-3 text-sm text-ivory/50">
+        Preview will appear after you pick a source.
+      </div>
+    );
+  }
+  const { diagnostics, count, sample } = preview;
+  return (
+    <div className="border border-white/10 bg-card/40 p-3">
+      <p className="text-[11px] uppercase tracking-[0.14em] text-gold">Preview</p>
+      {source === "pool" ? (
+        <p className="mt-2 text-sm text-ivory/70">
+          {diagnostics.approvedCount} of {diagnostics.poolItemCount} approved
+        </p>
+      ) : (
+        <p className="mt-2 text-sm text-ivory/70">This filter matches {diagnostics.filterMatchCount} questions.</p>
+      )}
+      {count === 0 ? (
+        <p className="mt-2 text-sm text-red-300">
+          {source === "filter" ? "No questions match this filter. Adjust it." : "No playable questions in this pool."}
+        </p>
+      ) : count < 5 ? (
+        <p className="mt-2 text-sm text-amber-300">Only {count} questions match — consider broadening.</p>
+      ) : (
+        <p className="mt-2 text-sm text-ivory/70">{count} playable questions.</p>
+      )}
+      {source === "filter" && diagnostics.filterMatchCount > 0 && diagnostics.approvedCount === 0 ? (
+        <p className="mt-2 text-sm text-red-300">
+          {diagnostics.filterMatchCount} match but 0 are approved. Approve them first.
+        </p>
+      ) : null}
+      <ul className="mt-2 space-y-1 text-sm text-ivory/55">
+        {sample.map((stem) => (
+          <li key={stem} className="truncate">
+            · {stem}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

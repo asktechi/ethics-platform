@@ -4,24 +4,33 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
-import { archiveGameAction, scheduleGameAction, startGameAction } from "@/app/(app)/_actions/game.actions";
+import {
+  archiveGameAction,
+  convertToJeopardyAction,
+  scheduleGameAction,
+  startGameAction,
+} from "@/app/(app)/_actions/game.actions";
 import { ModeBadge } from "@/components/games/ModeBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { GameInstanceRow, GameTemplateRow } from "@/lib/data/games";
+import { launchBlockMessage, type ResolveGameResult } from "@/lib/games/resolve";
 import { MODE_META } from "@/lib/games/types";
 import type { QuizHostQuestion } from "@/lib/quiz/types";
 
 export function GameDetail({
   template,
   questions,
+  resolved,
   instances,
   coverage,
   toast,
 }: {
   template: GameTemplateRow;
   questions: QuizHostQuestion[];
+  resolved: ResolveGameResult;
   instances: GameInstanceRow[];
   coverage: Array<{ code: string; title: string; count: number }>;
   toast?: string;
@@ -31,7 +40,12 @@ export function GameDetail({
   const [error, setError] = useState<string | null>(null);
   const [when, setWhen] = useState("");
   const [scheduleOpen, setScheduleOpen] = useState(false);
-  const playable = MODE_META[template.mode].playable;
+  const [blockOpen, setBlockOpen] = useState(false);
+  const [blockMessage, setBlockMessage] = useState("");
+  const playableMode = MODE_META[template.mode].playable;
+  const playableCount = resolved.questions.length;
+  const canStart = playableMode && playableCount > 0;
+  const reason = playableCount === 0 ? launchBlockMessage(resolved) : null;
   const recent = instances.slice(0, 3);
   const scored = instances.filter((row) => row.avg_score != null);
   const avgScore = scored.length
@@ -41,39 +55,97 @@ export function GameDetail({
     instances.filter((row) => row.duration_seconds != null).reduce((sum, row) => sum + (row.duration_seconds ?? 0), 0) /
     Math.max(1, instances.filter((row) => row.duration_seconds != null).length);
 
+  function handleStart() {
+    if (!canStart) {
+      setBlockMessage(reason ?? "This game has 0 playable questions.");
+      setBlockOpen(true);
+      return;
+    }
+    setError(null);
+    start(async () => {
+      const result = await startGameAction(template.id);
+      if (!result.ok) {
+        if ("cannotStart" in result && result.cannotStart) {
+          console.log("[games] launch blocked", result.diagnostics);
+          setBlockMessage(result.error);
+          setBlockOpen(true);
+          return;
+        }
+        setError(result.error);
+        return;
+      }
+      router.push(`/quiz/host/${result.sessionId}`);
+    });
+  }
+
   return (
     <div>
       {toast ? <p className="mb-4 border border-gold/40 bg-gold/10 px-3 py-2 text-sm text-gold">{toast}</p> : null}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <ModeBadge mode={template.mode} />
-          <h1 className="mt-2 font-display text-4xl">{template.name}</h1>
-          <p className="mt-2 max-w-2xl text-sm text-ivory/60">{template.description}</p>
-          <p className="mt-2 text-xs text-ivory/40">v{template.version}</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
+      {!playableMode ? (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border border-gold/40 bg-gold/10 px-3 py-3">
+          <p className="text-sm text-ivory/80">This game uses an upcoming mode. Jeopardy version now?</p>
           <Button
+            size="sm"
             className="bg-gold text-navy hover:bg-gold/90"
-            disabled={!playable || pending}
+            disabled={pending}
             onClick={() => {
-              setError(null);
               start(async () => {
-                const result = await startGameAction(template.id);
-                if (!result.ok) {
-                  setError(result.error);
-                  return;
-                }
-                router.push(`/quiz/host/${result.sessionId}`);
+                const result = await convertToJeopardyAction(template.id);
+                if (!result.ok) setError(result.error);
+                else router.refresh();
               });
             }}
           >
-            Start Game
+            Convert to Jeopardy
           </Button>
+        </div>
+      ) : null}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <ModeBadge mode={template.mode} />
+          {playableCount === 0 ? (
+            <span className="ml-2 border border-red-400/50 bg-red-500/15 px-2 py-0.5 text-[11px] uppercase tracking-[0.12em] text-red-300">
+              0 playable questions
+            </span>
+          ) : (
+            <span className="ml-2 border border-white/15 px-2 py-0.5 text-[11px] uppercase tracking-[0.12em] text-ivory/55">
+              {playableCount} playable questions
+            </span>
+          )}
+          <h1 className="mt-2 font-display text-4xl">{template.name}</h1>
+          <p className="mt-2 max-w-2xl text-sm text-ivory/60">{template.description}</p>
+          <p className="mt-2 text-xs text-ivory/40">v{template.version}</p>
+          {reason ? <p className="mt-2 text-sm text-red-300">{reason}</p> : null}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <Button
+                    className="bg-gold text-navy hover:bg-gold/90"
+                    disabled={!canStart || pending}
+                    onClick={handleStart}
+                  >
+                    Start Game
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              {!canStart ? (
+                <TooltipContent className="max-w-xs bg-navy text-ivory">
+                  {reason ?? "This mode is coming in Phase 6D."}
+                </TooltipContent>
+              ) : null}
+            </Tooltip>
+          </TooltipProvider>
           <Button variant="outline" onClick={() => setScheduleOpen(true)}>
             Schedule
           </Button>
           <Button asChild variant="outline">
             <Link href={`/games/${template.id}/edit`}>Edit</Link>
+          </Button>
+          <Button asChild variant="ghost">
+            <Link href={`/games/${template.id}/diagnose`}>Diagnose</Link>
           </Button>
           <Button
             variant="ghost"
@@ -89,7 +161,6 @@ export function GameDetail({
         </div>
       </div>
       {error ? <p className="mt-3 text-sm text-red-300">{error}</p> : null}
-      {!playable ? <p className="mt-3 text-sm text-ivory/50">This mode is coming in Phase 6D. The template is saved.</p> : null}
 
       <Tabs defaultValue="overview" className="mt-8">
         <TabsList>
@@ -118,6 +189,7 @@ export function GameDetail({
                   {item.code}: {item.count} questions
                 </span>
               ))}
+              {coverage.length === 0 ? <span className="text-sm text-ivory/45">No playable questions to cover.</span> : null}
             </div>
           </div>
           <div>
@@ -137,7 +209,8 @@ export function GameDetail({
 
         <TabsContent value="questions" className="mt-6">
           <p className="mb-3 text-sm text-ivory/55">
-            {template.pool_id ? "Resolved from the pool." : "Filter re-evaluates on launch."}
+            {template.pool_id ? "Resolved from the pool (approved only)." : "Filter re-evaluates on launch."}{" "}
+            {playableCount} playable now.
           </p>
           <ol className="space-y-2">
             {questions.map((question, index) => (
@@ -184,8 +257,8 @@ export function GameDetail({
             <p className="text-xs uppercase tracking-[0.14em] text-gold">Coming in Phase 6E</p>
             <h2 className="mt-2 font-display text-2xl">Student analytics</h2>
             <p className="mt-2 max-w-xl text-sm text-ivory/60">
-              Weak-standard heatmaps, CFA band overlays, and cohort comparison will land here. Performance rows are already
-              written on session end.
+              Weak-standard heatmaps, CFA band overlays, and cohort comparison will land here. Coverage below is the same
+              resolved question set used at launch.
             </p>
             <div className="mt-6 grid h-40 grid-cols-4 gap-2">
               {["I(A)", "I(B)", "I(C)", "II"].map((label, index) => (
@@ -219,12 +292,39 @@ export function GameDetail({
                 onClick={() => {
                   start(async () => {
                     const result = await scheduleGameAction(template.id, when);
-                    if (!result.ok) setError(result.error);
-                    else setScheduleOpen(false);
+                    if (!result.ok) {
+                      if ("cannotStart" in result && result.cannotStart) {
+                        setScheduleOpen(false);
+                        setBlockMessage(result.error);
+                        setBlockOpen(true);
+                        return;
+                      }
+                      setError(result.error);
+                    } else setScheduleOpen(false);
                   });
                 }}
               >
                 Save
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {blockOpen ? (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-navy/80 p-4">
+          <div className="w-full max-w-md space-y-4 border border-red-400/40 bg-card p-5">
+            <p className="font-display text-2xl">Cannot start this game</p>
+            <p className="text-sm text-ivory/70">{blockMessage}</p>
+            <div className="flex flex-wrap gap-2">
+              <Button asChild variant="outline">
+                <Link href={`/games/${template.id}/edit`}>Edit filter</Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link href={`/class/${template.class_id}/questions/pools`}>Edit pool</Link>
+              </Button>
+              <Button asChild>
+                <Link href="/games">Back to games</Link>
               </Button>
             </div>
           </div>
