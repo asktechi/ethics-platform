@@ -76,6 +76,7 @@ export async function quizEndAction(sessionId: string) {
     const { supabase } = await requireUser();
     const { error } = await supabase.rpc("quiz_end_session", { p_session_id: sessionId });
     if (error) throw new Error(error.message);
+    await supabase.rpc("finalize_game_instance", { p_session_id: sessionId });
     return { ok: true as const };
   } catch (error) {
     return { ok: false as const, error: actionError(error) };

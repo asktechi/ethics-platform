@@ -14,13 +14,40 @@ export async function lookupQuizAction(code: string) {
   return { ok: true as const, session: row };
 }
 
-export async function joinQuizAction(code: string, displayName: string) {
+export async function joinQuizAction(code: string, displayName: string, studentCode?: string) {
   const supabase = createClient();
-  const { data, error } = await supabase.rpc("join_quiz", {
-    p_join_code: code.trim().toUpperCase(),
+  const trimmedCode = studentCode?.trim() || null;
+  const joinCode = code.trim().toUpperCase();
+  const game = await supabase.rpc("join_game_by_code", {
+    p_join_code: joinCode,
     p_display_name: displayName.trim(),
+    p_student_code: trimmedCode,
   });
-  if (error) return { ok: false as const, error: error.message };
+  if (!game.error) {
+    const row = Array.isArray(game.data) ? game.data[0] : game.data;
+    if (row?.participant_token) {
+      const me = await supabase.rpc("get_participant_by_token", { p_token: row.participant_token });
+      const participant = Array.isArray(me.data) ? me.data[0] : me.data;
+      return {
+        ok: true as const,
+        join: {
+          participant_id: row.participant_id,
+          session_id: row.session_id,
+          participant_token: row.participant_token,
+          avatar_color: row.avatar_color,
+          host_id: participant?.host_id,
+          host_token: participant?.host_token,
+          instance_id: row.instance_id,
+        },
+      };
+    }
+  }
+  const { data, error } = await supabase.rpc("join_quiz", {
+    p_join_code: joinCode,
+    p_display_name: displayName.trim(),
+    p_student_code: trimmedCode,
+  });
+  if (error) return { ok: false as const, error: game.error?.message ?? error.message };
   const row = Array.isArray(data) ? data[0] : data;
   if (!row) return { ok: false as const, error: "Could not join." };
   return { ok: true as const, join: row };

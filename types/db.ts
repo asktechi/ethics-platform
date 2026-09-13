@@ -792,7 +792,7 @@ export type Database = {
       quiz_sessions: {
         Row: {
           id: string;
-          pool_id: string;
+          pool_id: string | null;
           host_id: string;
           mode: "jeopardy" | "standard";
           time_per_q: number | null;
@@ -809,7 +809,7 @@ export type Database = {
         };
         Insert: {
           id?: string;
-          pool_id: string;
+          pool_id?: string | null;
           host_id: string;
           mode: "jeopardy" | "standard";
           time_per_q?: number | null;
@@ -854,6 +854,8 @@ export type Database = {
           last_correct_at: string | null;
           connected: boolean;
           avatar_color: string | null;
+          student_profile_id: string | null;
+          left_at: string | null;
           joined_at: string;
           created_at: string;
           updated_at: string;
@@ -869,6 +871,8 @@ export type Database = {
           last_correct_at?: string | null;
           connected?: boolean;
           avatar_color?: string | null;
+          student_profile_id?: string | null;
+          left_at?: string | null;
           joined_at?: string;
           created_at?: string;
           updated_at?: string;
@@ -884,6 +888,8 @@ export type Database = {
           last_correct_at?: string | null;
           connected?: boolean;
           avatar_color?: string | null;
+          student_profile_id?: string | null;
+          left_at?: string | null;
           joined_at?: string;
           created_at?: string;
           updated_at?: string;
@@ -901,6 +907,7 @@ export type Database = {
           choice_key: string | null;
           is_correct: boolean | null;
           ms_taken: number | null;
+          points_earned: number;
           submitted_at: string;
           revealed_at: string | null;
           created_at: string;
@@ -916,6 +923,7 @@ export type Database = {
           choice_key?: string | null;
           is_correct?: boolean | null;
           ms_taken?: number | null;
+          points_earned?: number;
           submitted_at?: string;
           revealed_at?: string | null;
           created_at?: string;
@@ -931,8 +939,255 @@ export type Database = {
           choice_key?: string | null;
           is_correct?: boolean | null;
           ms_taken?: number | null;
+          points_earned?: number;
           submitted_at?: string;
           revealed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Relationships: [];
+      };
+      game_templates: {
+        Row: {
+          id: string;
+          class_id: string;
+          owner_id: string;
+          name: string;
+          description: string | null;
+          tags: string[];
+          mode: "jeopardy" | "rapid_fire" | "case_study" | "team_battle" | "adaptive" | "boss_battle";
+          pool_id: string | null;
+          filter_json: Json;
+          settings_json: Json;
+          version: number;
+          play_count: number;
+          last_played_at: string | null;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          class_id: string;
+          owner_id: string;
+          name: string;
+          description?: string | null;
+          tags?: string[];
+          mode: "jeopardy" | "rapid_fire" | "case_study" | "team_battle" | "adaptive" | "boss_battle";
+          pool_id?: string | null;
+          filter_json?: Json;
+          settings_json?: Json;
+          version?: number;
+          play_count?: number;
+          last_played_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          class_id?: string;
+          owner_id?: string;
+          name?: string;
+          description?: string | null;
+          tags?: string[];
+          mode?: "jeopardy" | "rapid_fire" | "case_study" | "team_battle" | "adaptive" | "boss_battle";
+          pool_id?: string | null;
+          filter_json?: Json;
+          settings_json?: Json;
+          version?: number;
+          play_count?: number;
+          last_played_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Relationships: [];
+      };
+      game_instances: {
+        Row: {
+          id: string;
+          template_id: string;
+          template_version: number;
+          host_id: string;
+          quiz_session_id: string | null;
+          join_code: string;
+          host_token: string;
+          status: "scheduled" | "lobby" | "live" | "ended" | "abandoned";
+          scheduled_for: string | null;
+          started_at: string | null;
+          ended_at: string | null;
+          participant_count: number;
+          avg_score: number | null;
+          duration_seconds: number | null;
+          settings_snapshot: Json;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          template_id: string;
+          template_version?: number;
+          host_id: string;
+          quiz_session_id?: string | null;
+          join_code: string;
+          host_token?: string;
+          status: "scheduled" | "lobby" | "live" | "ended" | "abandoned";
+          scheduled_for?: string | null;
+          started_at?: string | null;
+          ended_at?: string | null;
+          participant_count?: number;
+          avg_score?: number | null;
+          duration_seconds?: number | null;
+          settings_snapshot?: Json;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          template_id?: string;
+          template_version?: number;
+          host_id?: string;
+          quiz_session_id?: string | null;
+          join_code?: string;
+          host_token?: string;
+          status?: "scheduled" | "lobby" | "live" | "ended" | "abandoned";
+          scheduled_for?: string | null;
+          started_at?: string | null;
+          ended_at?: string | null;
+          participant_count?: number;
+          avg_score?: number | null;
+          duration_seconds?: number | null;
+          settings_snapshot?: Json;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Relationships: [];
+      };
+      student_profiles: {
+        Row: {
+          id: string;
+          owner_id: string;
+          display_name: string;
+          student_code: string;
+          email: string | null;
+          org: string | null;
+          cohort_tag: string | null;
+          created_at: string;
+          last_seen_at: string | null;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          owner_id: string;
+          display_name: string;
+          student_code: string;
+          email?: string | null;
+          org?: string | null;
+          cohort_tag?: string | null;
+          created_at?: string;
+          last_seen_at?: string | null;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          owner_id?: string;
+          display_name?: string;
+          student_code?: string;
+          email?: string | null;
+          org?: string | null;
+          cohort_tag?: string | null;
+          created_at?: string;
+          last_seen_at?: string | null;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Relationships: [];
+      };
+      student_performance: {
+        Row: {
+          id: string;
+          student_profile_id: string;
+          class_id: string;
+          standard_id: string;
+          attempts: number;
+          correct: number;
+          accuracy: number;
+          avg_ms: number;
+          weakness_score: number;
+          last_practiced_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          student_profile_id: string;
+          class_id: string;
+          standard_id: string;
+          attempts?: number;
+          correct?: number;
+          accuracy?: number;
+          avg_ms?: number;
+          weakness_score?: number;
+          last_practiced_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          student_profile_id?: string;
+          class_id?: string;
+          standard_id?: string;
+          attempts?: number;
+          correct?: number;
+          accuracy?: number;
+          avg_ms?: number;
+          weakness_score?: number;
+          last_practiced_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      cfa_exam_results: {
+        Row: {
+          id: string;
+          student_profile_id: string;
+          exam_level: "I" | "II" | "III";
+          exam_date: string;
+          band_score: number | null;
+          passed: boolean | null;
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          student_profile_id: string;
+          exam_level: "I" | "II" | "III";
+          exam_date: string;
+          band_score?: number | null;
+          passed?: boolean | null;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          student_profile_id?: string;
+          exam_level?: "I" | "II" | "III";
+          exam_date?: string;
+          band_score?: number | null;
+          passed?: boolean | null;
+          notes?: string | null;
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
@@ -960,7 +1215,7 @@ export type Database = {
     };
     Functions: {
       join_quiz: {
-        Args: { p_join_code: string; p_display_name: string };
+        Args: { p_join_code: string; p_display_name: string; p_student_code?: string | null };
         Returns: {
           participant_id: string;
           session_id: string;
@@ -969,6 +1224,24 @@ export type Database = {
           host_id: string;
           host_token: string;
         }[];
+      };
+      join_game_by_code: {
+        Args: { p_join_code: string; p_display_name: string; p_student_code?: string | null };
+        Returns: {
+          instance_id: string;
+          session_id: string;
+          participant_id: string;
+          participant_token: string;
+          avatar_color: string;
+        }[];
+      };
+      finalize_game_instance: {
+        Args: { p_session_id: string };
+        Returns: undefined;
+      };
+      refresh_student_performance: {
+        Args: { p_session_id: string };
+        Returns: undefined;
       };
       lookup_quiz_by_code: {
         Args: { p_code: string };

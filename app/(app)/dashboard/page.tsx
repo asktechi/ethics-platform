@@ -1,4 +1,5 @@
 import { EmptyState } from "@/components/EmptyState";
+import { DashboardGames } from "@/components/games/DashboardGames";
 import { LevelCard } from "@/components/LevelCard";
 import { PageHeader } from "@/components/PageHeader";
 import { getInstructorProfile } from "@/lib/data/auth";
@@ -57,6 +58,8 @@ export default async function DashboardPage() {
           description={recent.map((item) => item.title).join(" · ")}
         />
       ) : null}
+
+      <DashboardGames />
     </div>
   );
 }

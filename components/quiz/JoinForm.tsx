@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { joinQuizAction, lookupQuizAction } from "@/app/quiz/_actions/player.actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { readStudentCode, writeStudentCode } from "@/lib/games/student-code";
 import { normalizeJoinCode } from "@/lib/quiz/codes";
 import { writePlayerIdentity } from "@/lib/quiz/storage";
 
@@ -13,6 +14,7 @@ export function JoinForm({ initialCode = "", skipLookup = false }: { initialCode
   const router = useRouter();
   const [code, setCode] = useState(normalizeJoinCode(initialCode));
   const [name, setName] = useState("");
+  const [studentCode, setStudentCode] = useState("");
   const [meta, setMeta] = useState<{ pool_name?: string; host_name?: string; participant_count?: number; status?: string } | null>(
     null,
   );
@@ -20,6 +22,10 @@ export function JoinForm({ initialCode = "", skipLookup = false }: { initialCode
   const [pending, start] = useTransition();
 
   const showName = skipLookup || Boolean(meta) || Boolean(initialCode);
+
+  useEffect(() => {
+    setStudentCode(readStudentCode());
+  }, []);
 
   return (
     <form
@@ -43,11 +49,13 @@ export function JoinForm({ initialCode = "", skipLookup = false }: { initialCode
             setCode(normalized);
             if (!name.trim()) return;
           }
-          const joined = await joinQuizAction(normalized, name);
+          if (!studentCode) setStudentCode(readStudentCode());
+          const joined = await joinQuizAction(normalized, name, studentCode || readStudentCode());
           if (!joined.ok) {
             setError(joined.error);
             return;
           }
+          if (studentCode.trim() || readStudentCode()) writeStudentCode(studentCode.trim() || readStudentCode());
           writePlayerIdentity({
             participant_id: joined.join.participant_id,
             session_id: joined.join.session_id,
@@ -56,6 +64,7 @@ export function JoinForm({ initialCode = "", skipLookup = false }: { initialCode
             avatar_color: joined.join.avatar_color,
             host_id: joined.join.host_id,
             host_token: joined.join.host_token,
+            student_code: studentCode.trim() || readStudentCode() || undefined,
           });
           router.push(`/quiz/play/${joined.join.session_id}`);
         });
@@ -78,10 +87,21 @@ export function JoinForm({ initialCode = "", skipLookup = false }: { initialCode
         </p>
       ) : null}
       {showName ? (
-        <div className="space-y-1.5">
-          <Label className="text-ivory/70">Display name</Label>
-          <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Your name" autoFocus={Boolean(initialCode)} />
-        </div>
+        <>
+          <div className="space-y-1.5">
+            <Label className="text-ivory/70">Display name</Label>
+            <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Your name" autoFocus={Boolean(initialCode)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-ivory/70">Student code (optional)</Label>
+            <Input
+              value={studentCode}
+              onChange={(event) => setStudentCode(event.target.value.toUpperCase())}
+              placeholder="AX7-9K2"
+              className="font-mono tracking-[0.16em]"
+            />
+          </div>
+        </>
       ) : null}
       {error ? <p className="text-sm text-red-300">{error}</p> : null}
       <Button type="submit" disabled={pending} className="w-full bg-gold text-navy hover:bg-gold/90">

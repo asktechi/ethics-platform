@@ -96,6 +96,58 @@ export async function launchQuizSession(input: LaunchInput) {
     lastError = error?.message ?? lastError;
   }
   if (!session) throw new Error(lastError);
+
+  const { data: pool } = await supabase
+    .from("question_pools")
+    .select("class_id, name")
+    .eq("id", input.poolId)
+    .maybeSingle();
+  if (pool?.class_id) {
+    const { data: template } = await supabase
+      .from("game_templates")
+      .insert({
+        class_id: pool.class_id,
+        owner_id: user.id,
+        name: `${pool.name} (auto)`,
+        description: "Created from the pool launcher.",
+        tags: ["auto"],
+        mode: "jeopardy",
+        pool_id: input.poolId,
+        settings_json: {
+          time_per_q: input.timePerQ,
+          base_points: 100,
+          time_bonus: true,
+          streak_bonus: true,
+          shuffle_questions: input.shuffle,
+          show_leaderboard_to_players: input.showLeaderboard,
+          show_correct_answer_after: input.showCorrectAnswer,
+          allow_late_join: input.allowLateJoin,
+          allow_audience_advance: false,
+        },
+      })
+      .select("id, version")
+      .single();
+    if (template) {
+      await supabase.from("game_instances").insert({
+        template_id: template.id,
+        template_version: template.version,
+        host_id: user.id,
+        quiz_session_id: session.id,
+        join_code: session.join_code,
+        host_token: settings.host_token,
+        status: "lobby",
+        started_at: session.started_at,
+        settings_snapshot: {
+          settings: settings,
+          time_per_q: input.timePerQ,
+          mode: "jeopardy",
+          question_ids: questionIds,
+          pool_id: input.poolId,
+          name: pool.name,
+        },
+      });
+    }
+  }
   return session;
 }
 

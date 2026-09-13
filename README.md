@@ -2,7 +2,7 @@
 
 Personal teaching platform for CFA Institute ethics instruction (Levels I–III). The owner is the sole instructor-author. Students join live quizzes with an open link and a display name.
 
-This repository is at **Phase 6 Session B**: host dashboard, Jeopardy scoring, live leaderboard, and session summary.
+This repository is at **Phase 6C**: game library (templates, instances, replay) on top of the live Jeopardy host/player flow.
 
 Never commit `.env.local`, `SUPABASE_SERVICE_ROLE_KEY`, or `SUPABASE_DB_URL`.
 
@@ -17,7 +17,7 @@ pnpm dev
 The default Next.js port is `3000`. In this environment the preview server uses a non-default port (see the preview card). Open `/` for the landing page, `/login` for the magic-link instructor sign-in, and `/dashboard` for the class builder.
 
 Health check: `GET /api/health` returns `{ "ok": true }`.  
-Database check: `GET /api/health/db` returns `{ "ok": true, "tables": 22 }`.
+Database check: `GET /api/health/db` returns `{ "ok": true, "tables": 27 }`.
 
 ## Present a class
 
@@ -101,7 +101,10 @@ Next.js 14 App Router, TypeScript, Tailwind, shadcn/ui, Framer Motion, dnd-kit, 
 4.6. **Audience mirror + typography** — one renderer, auto-scale, beat pagination
 5. **Questions** — bank, AI tagging/generation, instructor approval, pools
 5.6. **Universal importer** — parse any common file, review table, confirm before DB *(this slice)*
-6. **Live quiz** — join/play/broadcast, host dashboard, Jeopardy scoring, summary *(this slice)*
+6. **Live quiz** — join/play, host dashboard, Jeopardy scoring
+6C. **Game library** — templates, instances, replay, student profiles *(this slice)*
+6D. **Additional game modes** — Rapid Fire, Case Study, Team Battle, Adaptive, Boss Battle
+6E. **Student analytics + CFA linkage**
 7. **Polish** — shortcuts, offline cache, expand beyond CFA
 
 Work phase by phase. Do not start the next phase until the instructor confirms.

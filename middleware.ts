@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const APP_PATHS = ["/dashboard", "/level", "/class", "/quiz/host"];
+const APP_PATHS = ["/dashboard", "/level", "/class", "/quiz/host", "/games", "/sessions"];
 
 function isAppPath(pathname: string) {
   return APP_PATHS.some(
@@ -67,6 +67,9 @@ export const config = {
     "/level/:path*",
     "/class/:path*",
     "/quiz/host/:path*",
+    "/games",
+    "/games/:path*",
+    "/sessions/:path*",
     "/login",
   ],
 };

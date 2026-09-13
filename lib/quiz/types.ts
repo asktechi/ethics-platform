@@ -86,6 +86,7 @@ export type PlayerIdentity = {
   avatar_color: string;
   host_id?: string;
   host_token?: string;
+  student_code?: string;
 };
 
 export type LeaderboardRow = {

@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { BookOpen, GraduationCap, Layers3, Library } from "lucide-react";
+import { BookOpen, Gamepad2, GraduationCap, Layers3, Library } from "lucide-react";
 import type { SidebarNavData } from "@/components/shell/nav-types";
 import { cn } from "@/lib/utils";
 
@@ -74,17 +74,31 @@ export function SidebarNav({ collapsed, nav, onNavigate }: SidebarNavProps) {
       </NavGroup>
 
       <div className="mt-auto">
-        <NavGroup title="Bank" collapsed={collapsed}>
-          <span
-            title="Question Bank — Phase 5"
+        <NavGroup title="Studio" collapsed={collapsed}>
+          <Link
+            href="/games"
+            onClick={onNavigate}
+            title={collapsed ? "Games" : undefined}
             className={cn(
-              "flex cursor-not-allowed items-center rounded-sm px-2 py-2 text-sm text-ivory/35",
+              "flex items-center rounded-sm px-2 py-2 text-sm text-ivory/80 transition-colors hover:bg-sidebar-accent hover:text-ivory",
               collapsed ? "justify-center" : "gap-3",
             )}
           >
-            <Library className="h-4 w-4 shrink-0" />
-            {!collapsed ? <span className="font-medium">Question Bank</span> : null}
-          </span>
+            <Gamepad2 className="h-4 w-4 shrink-0 text-gold" />
+            {!collapsed ? <span className="font-medium">Games</span> : null}
+          </Link>
+          <Link
+            href={nav.recentClasses[0] ? `/class/${nav.recentClasses[0].id}/questions` : "/dashboard"}
+            onClick={onNavigate}
+            title={collapsed ? "Questions" : undefined}
+            className={cn(
+              "flex items-center rounded-sm px-2 py-2 text-sm text-ivory/80 transition-colors hover:bg-sidebar-accent hover:text-ivory",
+              collapsed ? "justify-center" : "gap-3",
+            )}
+          >
+            <Library className="h-4 w-4 shrink-0 text-gold" />
+            {!collapsed ? <span className="font-medium">Questions</span> : null}
+          </Link>
         </NavGroup>
       </div>
     </nav>

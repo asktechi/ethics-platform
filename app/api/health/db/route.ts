@@ -27,6 +27,11 @@ const PUBLIC_TABLES = [
   "quiz_sessions",
   "quiz_participants",
   "quiz_responses",
+  "game_templates",
+  "game_instances",
+  "student_profiles",
+  "student_performance",
+  "cfa_exam_results",
 ] as const;
 
 export async function GET() {
