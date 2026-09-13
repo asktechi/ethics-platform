@@ -175,26 +175,25 @@ export async function parsePptx(buffer: Buffer, filename: string): Promise<Strat
   const vignette = vignetteSpread(slides);
   const numbered = numberedOnSlides(slides);
 
-  const vignetteCanonical: CanonicalQuestion[] = vignette
-    .map((question, index) => {
-      const aligned = alignToGrammar(
-        {
-          stem: question.stem,
-          choices: question.choices,
-          answer_key: question.answer_key,
-          explanation: question.explanation,
-          standard_hint: question.standard_hint,
-        },
-        filename,
-      );
-      if (!aligned) return null;
-      return {
-        ...aligned,
-        source: { ...aligned.source, file: filename, slide_or_page: question.slide_or_page ?? index + 1 },
-        raw_text: question.raw_text || aligned.raw_text,
-      };
-    })
-    .filter((question): question is CanonicalQuestion => Boolean(question));
+  const vignetteCanonical: CanonicalQuestion[] = [];
+  vignette.forEach((question, index) => {
+    const aligned = alignToGrammar(
+      {
+        stem: question.stem,
+        choices: question.choices,
+        answer_key: question.answer_key,
+        explanation: question.explanation,
+        standard_hint: question.standard_hint,
+      },
+      filename,
+    );
+    if (!aligned) return;
+    vignetteCanonical.push({
+      ...aligned,
+      source: { ...aligned.source, file: filename, slide_or_page: question.slide_or_page ?? index + 1 },
+      raw_text: question.raw_text || aligned.raw_text,
+    });
+  });
 
   const vignetteRaw = vignetteCanonical.map(canonicalToRaw);
   const best = pickBestStrategy([

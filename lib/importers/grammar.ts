@@ -243,31 +243,28 @@ export function buildQuestions(
   const fileHasStrong = tokens.some(isStrongStart);
   const warnings: string[] = [];
   const drafts: Draft[] = [];
-  let current: Draft | null = null;
+  const state: { current: Draft | null } = { current: null };
   let seenStrong = false;
   let questionIndex = 0;
 
   const startQuestion = (rest: string, token: Token, rowHint?: number) => {
-    current = emptyDraft(rowHint ?? ++questionIndex);
-    current.rawLines.push(token.raw);
-    if (rest.trim()) current.stemLines.push(rest.trim());
+    state.current = emptyDraft(rowHint ?? ++questionIndex);
+    state.current.rawLines.push(token.raw);
+    if (rest.trim()) state.current.stemLines.push(rest.trim());
   };
 
   const flush = () => {
-    if (!current) return;
-    drafts.push(current);
-    current = null;
+    if (!state.current) return;
+    drafts.push(state.current);
+    state.current = null;
   };
 
   for (const token of tokens) {
     if (token.type === "decorative") {
-      if (current?.inExplanation) current.inExplanation = false;
+      if (state.current?.inExplanation) state.current.inExplanation = false;
       continue;
     }
     if (token.type === "blank") {
-      if (current?.inExplanation && current.explanationLines.length) {
-        // keep paragraph break out of joined stem; ignore for structure
-      }
       continue;
     }
 
@@ -283,20 +280,21 @@ export function buildQuestions(
       if (fileHasStrong && !seenStrong) {
         continue;
       }
-      if (!current || draftCompleteEnough(current)) {
+      if (!state.current || draftCompleteEnough(state.current)) {
         flush();
         startQuestion(rest, token);
         continue;
       }
-      current.rawLines.push(token.raw);
-      appendStem(current, `${token.payload?.marker ?? ""}. ${rest}`.replace(/^\d+\.\s+/, rest));
+      state.current.rawLines.push(token.raw);
+      appendStem(state.current, `${token.payload?.marker ?? ""}. ${rest}`.replace(/^\d+\.\s+/, rest));
       continue;
     }
 
-    if (!current) {
+    if (!state.current) {
       continue;
     }
 
+    const current = state.current;
     current.rawLines.push(token.raw);
 
     if (token.type === "choice") {
