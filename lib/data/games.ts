@@ -9,6 +9,7 @@ import {
   validateTemplateSource,
 } from "@/lib/games/resolve";
 import {
+  defaultGameFilter,
   defaultGameSettings,
   type GameFilter,
   type GameMode,
@@ -206,7 +207,7 @@ export async function createGameTemplate(input: WizardState) {
   await validateTemplateSource(supabase, {
     class_id: input.classId,
     pool_id: poolId,
-    filter_json: input.source === "filter" ? input.filter : {},
+    filter_json: input.source === "filter" ? input.filter : defaultGameFilter(),
     mode: input.mode,
   });
   const { data, error } = await supabase
@@ -219,7 +220,7 @@ export async function createGameTemplate(input: WizardState) {
       tags: input.tags,
       mode: "jeopardy",
       pool_id: poolId,
-      filter_json: input.source === "filter" ? input.filter : {},
+      filter_json: input.source === "filter" ? input.filter : defaultGameFilter(),
       settings_json: input.settings,
     })
     .select("*")
@@ -372,7 +373,7 @@ export async function previewGameSource(input: {
     {
       class_id: input.classId,
       pool_id: input.source === "pool" ? input.poolId || null : null,
-      filter_json: input.source === "filter" ? input.filter : {},
+      filter_json: input.source === "filter" ? input.filter : defaultGameFilter(),
     },
     { supabase, requireApproved: true },
   );

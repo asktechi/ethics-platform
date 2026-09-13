@@ -47,8 +47,19 @@ export type ResolveGameResult = {
   diagnostics: ResolveDiagnostics;
 };
 
+type QueryResult = { data: unknown; error: { message: string } | null };
+type QueryChain = {
+  select: (columns: string) => QueryChain;
+  eq: (column: string, value: unknown) => QueryChain;
+  in: (column: string, value: unknown[]) => QueryChain;
+  is: (column: string, value: unknown) => QueryChain;
+  ilike: (column: string, value: string) => QueryChain;
+  order: (column: string, options?: { ascending?: boolean }) => QueryChain;
+  maybeSingle: () => Promise<{ data: Record<string, unknown> | null; error: { message: string } | null }>;
+} & PromiseLike<QueryResult>;
+
 export type ResolveClient = {
-  from: (relation: string) => any;
+  from: (relation: string) => QueryChain;
 };
 
 export const PLAYABLE_GAME_MODES = ["jeopardy"] as const;
@@ -57,14 +68,14 @@ const QUESTION_COLUMNS =
   "id, stem, choices_json, answer_key, explanation, standard_id, concept_id, difficulty, source, approved";
 
 export function asFilterShape(value: FilterShape | GameFilter | null | undefined): FilterShape {
-  const raw = value ?? {};
+  const raw = (value ?? {}) as Partial<FilterShape>;
   return {
     standards: Array.isArray(raw.standards) ? raw.standards : [],
     concepts: Array.isArray(raw.concepts) ? raw.concepts : [],
     difficulty: Array.isArray(raw.difficulty) ? raw.difficulty : [],
     sources: Array.isArray(raw.sources) ? raw.sources : [],
     approved_only: raw.approved_only ?? true,
-    search: "search" in raw && typeof raw.search === "string" ? raw.search : undefined,
+    search: typeof raw.search === "string" ? raw.search : undefined,
   };
 }
 
@@ -94,7 +105,7 @@ function mapQuestion(row: Record<string, unknown>): ResolvedGameQuestion {
   };
 }
 
-function applyFilterColumns(query: any, filter: FilterShape) {
+function applyFilterColumns(query: QueryChain, filter: FilterShape) {
   let next = query.is("deleted_at", null);
   if (filter.standards.length) next = next.in("standard_id", filter.standards);
   if (filter.concepts.length) next = next.in("concept_id", filter.concepts);
@@ -138,13 +149,13 @@ export class GameLaunchBlockedError extends Error {
 
 export async function resolveGameQuestions(
   template: GameTemplate,
-  opts?: { requireApproved?: boolean; supabase?: ResolveClient },
+  opts?: { requireApproved?: boolean; supabase?: { from: (relation: string) => unknown } },
 ): Promise<ResolveGameResult> {
   const requireApproved = opts?.requireApproved ?? true;
-  const supabase = opts?.supabase;
-  if (!supabase) {
+  if (!opts?.supabase) {
     throw new Error("resolveGameQuestions requires opts.supabase");
   }
+  const supabase = opts.supabase as ResolveClient;
 
   const diagnostics = emptyDiagnostics();
   const poolId = template.pool_id ?? null;
@@ -177,12 +188,12 @@ export async function resolveGameQuestions(
       .order("order", { ascending: true });
     if (error) throw new Error(error.message);
 
-    const live = (items ?? [])
-      .map((item: { question?: Record<string, unknown> | Record<string, unknown>[] | null }) => {
+    const live = ((items ?? []) as Array<{ question?: Record<string, unknown> | Record<string, unknown>[] | null }>)
+      .map((item) => {
         const raw = item.question;
         return Array.isArray(raw) ? raw[0] : raw;
       })
-      .filter((row): row is Record<string, unknown> => Boolean(row) && row.deleted_at == null)
+      .filter((row): row is Record<string, unknown> => Boolean(row) && row?.deleted_at == null)
       .map(mapQuestion);
 
     diagnostics.poolItemCount = live.length;
@@ -201,14 +212,14 @@ export async function resolveGameQuestions(
   }
 
   const filterUsed = asFilterShape(template.filter_json);
-  let rawQuery = applyFilterColumns(
+  const rawQuery = applyFilterColumns(
     supabase.from("questions").select(QUESTION_COLUMNS).eq("class_id", template.class_id),
     filterUsed,
   );
   const { data: rawRows, error: rawError } = await rawQuery;
   if (rawError) throw new Error(rawError.message);
 
-  const raw = (rawRows ?? []).map((row: Record<string, unknown>) => mapQuestion(row));
+  const raw = ((rawRows ?? []) as Record<string, unknown>[]).map((row) => mapQuestion(row));
   diagnostics.filterMatchCount = raw.length;
   diagnostics.approvedCount = raw.filter((row) => row.approved).length;
   diagnostics.noMatchingQuestions = raw.length === 0;
@@ -227,7 +238,7 @@ export async function resolveGameQuestions(
 }
 
 export async function validateTemplateSource(
-  supabase: ResolveClient,
+  supabase: { from: (relation: string) => unknown },
   template: GameTemplate,
 ): Promise<ResolveGameResult> {
   assertPlayableMode(template.mode ?? "jeopardy");
