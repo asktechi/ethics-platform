@@ -10,7 +10,6 @@ import { listConceptsByClass } from "@/lib/data/concepts";
 import { actionError } from "@/lib/data/errors";
 import {
   applyTagApprovals,
-  importQuestionsFromFile,
   insertGeneratedQuestions,
   listQuestions,
   restoreQuestion,
@@ -32,32 +31,6 @@ function refresh(classId: string) {
 export async function listQuestionsAction(classId: string, filters: QuestionFilters) {
   try {
     return { ok: true as const, questions: await listQuestions(classId, filters) };
-  } catch (error) {
-    return { ok: false as const, error: actionError(error) };
-  }
-}
-
-export async function importQuestionsAction(formData: FormData) {
-  const classId = String(formData.get("classId") ?? "");
-  const hint = String(formData.get("hint") ?? "") || undefined;
-  const file = formData.get("file");
-  if (!classId || !(file instanceof File)) {
-    return { ok: false as const, error: "Choose a question file." };
-  }
-  try {
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const result = await importQuestionsFromFile({
-      classId,
-      filename: file.name,
-      buffer,
-      hint,
-    });
-    refresh(classId);
-    return {
-      ok: true as const,
-      count: result.questions.length,
-      warnings: result.warnings,
-    };
   } catch (error) {
     return { ok: false as const, error: actionError(error) };
   }

@@ -1,0 +1,20 @@
+Q1. A consultant uses a client's confidential IPS as a teaching example without consent. Which Standard is breached in this classroom use?
+A. III(E) Preservation of Confidentiality of client information
+B. I(A) Knowledge of the Law because teaching is unregulated
+C. V(A) Diligence and Reasonable Basis for the example
+Answer: A
+Explanation: Client information remains confidential unless the client consents, the activity is illegal, or the law requires disclosure.
+
+Q2. An analyst issues a buy rating after a ten-minute scan of a press release and no model. Diligence is lacking because of which failure?
+A. V(A) Diligence and Reasonable Basis for the recommendation
+B. II(A) Material Nonpublic Information in the press release
+C. III(B) Fair Dealing among accounts that will trade
+Answer: A
+Explanation: Recommendations must rest on thorough, independent investigation; a ten-minute skim is not a reasonable basis.
+
+Q3. A member omits a material risk from a client report to keep the narrative simple. Communication with clients is deficient for what reason?
+A. V(B) requires disclosing basic format and relevant risk factors
+B. I(D) Misconduct applies only when a crime is charged
+C. VII(B) Reference to CFA Institute is the only issue
+Answer: A
+Explanation: V(B) requires distinguishing fact from opinion and communicating relevant risk factors that affect the analysis.

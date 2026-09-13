@@ -9,8 +9,10 @@ import { listStandards } from "@/lib/data/standards";
 
 export default async function ClassQuestionsPage({
   params,
+  searchParams,
 }: {
   params: { id: string };
+  searchParams?: { imported?: string };
 }) {
   let detail;
   try {
@@ -45,6 +47,7 @@ export default async function ClassQuestionsPage({
           standards={standards}
           concepts={concepts}
           spend={spend}
+          importedCount={Number(searchParams?.imported ?? 0) || 0}
         />
       </div>
     </div>

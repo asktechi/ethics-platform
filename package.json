@@ -13,7 +13,8 @@
     "db:push": "supabase db push",
     "db:reset": "supabase db reset",
     "db:diff": "supabase db diff",
-    "gen:types": "supabase gen types typescript --linked > types/db.ts"
+    "gen:types": "supabase gen types typescript --linked > types/db.ts",
+    "test:import": "node --experimental-strip-types --import ./scripts/register-ts-alias.mjs scripts/verify-phase56.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -30,6 +31,7 @@
     "@radix-ui/react-tooltip": "^1.2.16",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.116.0",
+    "@tanstack/react-virtual": "^3.14.12",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
@@ -51,6 +53,7 @@
     "server-only": "^0.0.1",
     "tailwind-merge": "^3.6.0",
     "tailwindcss-animate": "^1.0.7",
+    "xlsx": "^0.18.5",
     "zod": "^4.6.2",
     "zustand": "^5.0.15"
   },

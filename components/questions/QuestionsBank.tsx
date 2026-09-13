@@ -1,12 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import {
   approveTagProposalsAction,
   autoTagUntaggedAction,
   bulkQuestionAction,
-  importQuestionsAction,
   updateQuestionAction,
 } from "@/app/(app)/_actions/question.actions";
 import { addToPoolAction, createPoolAction } from "@/app/(app)/_actions/question-pool.actions";
@@ -23,14 +22,15 @@ export function QuestionsBank({
   standards,
   concepts,
   spend,
+  importedCount = 0,
 }: {
   classId: string;
   initialQuestions: QuestionRow[];
   standards: Standard[];
   concepts: Concept[];
   spend: number;
+  importedCount?: number;
 }) {
-  const fileRef = useRef<HTMLInputElement>(null);
   const [questions, setQuestions] = useState(initialQuestions);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -51,7 +51,9 @@ export function QuestionsBank({
       reasoning: string;
     }>
   >([]);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(
+    importedCount > 0 ? `${importedCount} questions imported. Start auto-tagging?` : null,
+  );
   const [aiSpend, setAiSpend] = useState(spend);
   const [pending, start] = useTransition();
 
@@ -89,26 +91,8 @@ export function QuestionsBank({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <input
-          ref={fileRef}
-          type="file"
-          accept=".csv,.txt,.md,.docx,.pdf,.pptx"
-          className="hidden"
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            if (!file) return;
-            const data = new FormData();
-            data.set("classId", classId);
-            data.set("file", file);
-            start(async () => {
-              const result = await importQuestionsAction(data);
-              setMessage(result.ok ? `Imported ${result.count}. ${(result.warnings ?? []).slice(0, 2).join(" ")}` : result.error);
-              if (result.ok) window.location.reload();
-            });
-          }}
-        />
-        <Button type="button" onClick={() => fileRef.current?.click()}>
-          Upload questions
+        <Button asChild>
+          <Link href={`/class/${classId}/questions/import`}>Upload questions</Link>
         </Button>
         <Button
           type="button"

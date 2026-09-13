@@ -1,6 +1,5 @@
 import { requireUser } from "@/lib/data/auth";
-import { parseQuestions } from "@/lib/parsers/questions/parseQuestionsIndex";
-import type { QuestionHint } from "@/lib/parsers/questions/types";
+import type { CanonicalQuestion } from "@/lib/importers/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type QuestionFilters = {
@@ -61,36 +60,35 @@ export async function listQuestions(classId: string, filters: QuestionFilters = 
   return (data ?? []) as unknown as QuestionRow[];
 }
 
-export async function importQuestionsFromFile(input: {
+export async function commitReviewedQuestions(input: {
   classId: string;
-  filename: string;
-  buffer: Buffer;
-  hint?: QuestionHint;
+  questions: CanonicalQuestion[];
+  importBatchName: string;
 }) {
   const { supabase, user } = await requireUser();
-  const parsed = await parseQuestions(input.buffer, input.filename, input.hint);
+  const rowsInput = input.questions.filter((question) => question.stem.trim().length > 0);
   const { data: batch, error: batchError } = await supabase
     .from("import_batches")
     .insert({
       class_id: input.classId,
-      filename: input.filename,
-      question_count: parsed.questions.length,
+      filename: input.importBatchName,
+      question_count: rowsInput.length,
       imported_by: user.id,
     })
     .select("*")
     .single();
   if (batchError) throw new Error(batchError.message);
 
-  if (parsed.questions.length === 0) {
-    return { batch, questions: [], warnings: parsed.warnings };
+  if (rowsInput.length === 0) {
+    return { batchId: batch.id, importedCount: 0, questionIds: [] as string[] };
   }
 
-  const rows = parsed.questions.map((question) => ({
+  const rows = rowsInput.map((question) => ({
     class_id: input.classId,
     stem: question.stem,
     choices_json: question.choices,
-    answer_key: question.answer_key || null,
-    explanation: question.explanation ?? null,
+    answer_key: question.answer_key,
+    explanation: question.explanation,
     source: "imported" as const,
     approved: false,
     rejected: false,
@@ -99,9 +97,16 @@ export async function importQuestionsFromFile(input: {
     import_batch_id: batch.id,
   }));
 
-  const { data, error } = await supabase.from("questions").insert(rows).select("*");
-  if (error) throw new Error(error.message);
-  return { batch, questions: data ?? [], warnings: parsed.warnings };
+  const { data, error } = await supabase.from("questions").insert(rows).select("id");
+  if (error) {
+    await supabase.from("import_batches").delete().eq("id", batch.id);
+    throw new Error(error.message);
+  }
+  return {
+    batchId: batch.id,
+    importedCount: data?.length ?? 0,
+    questionIds: (data ?? []).map((row) => row.id),
+  };
 }
 
 export async function updateQuestion(

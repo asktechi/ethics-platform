@@ -49,7 +49,7 @@ Sample files for regression live in [`fixtures/samples`](fixtures/samples).
 
 Open a class and use the **Questions** tab, or go to `/class/{id}/questions`.
 
-- **Upload questions** — CSV, DOCX, PDF, PPTX, TXT. CSV headers: `stem`, `choice_a`–`d`, `answer`, `explanation` (also `question`, `correct_answer`, `rationale`)
+- **Upload questions** — `/class/{id}/questions/import`. Drop PPTX, DOCX, DOC, XLSX, XLS, CSV, TSV, TXT, MD, or PDF. The importer auto-detects the pattern, you review and edit every row, then **Confirm and import**. Nothing is written before confirm.
 - Imports land as `approved=false`, untagged. Auto-tag proposes a Standard, optional Concept, and difficulty. Nothing goes live until you approve.
 - **Generate new** — `/class/{id}/questions/generate` uses gpt-4o. Paste source text or pick approved slides. Drafts stay pending.
 - **Pools** — `/class/{id}/questions/pools` groups questions, shuffle-on-play, seconds per question, and a dry-run preview
@@ -95,7 +95,8 @@ Next.js 14 App Router, TypeScript, Tailwind, shadcn/ui, Framer Motion, dnd-kit, 
 4.5. **Teleprompter sync** — line-by-line audience reveal + background polish
 4.6. **Audience mirror + typography** — one renderer, auto-scale, beat pagination
 5. **Questions** — bank, AI tagging/generation, instructor approval, pools
-6. **Live quiz** — Session A join/play/broadcast *(this phase)*; Session B host dashboard later
+5.6. **Universal importer** — parse any common file, review table, confirm before DB *(this slice)*
+6. **Live quiz** — Session A join/play/broadcast; Session B host dashboard later
 7. **Polish** — shortcuts, offline cache, PDF export, expand beyond CFA
 
 Work phase by phase. Do not start the next phase until the instructor confirms.
