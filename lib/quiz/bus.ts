@@ -55,6 +55,10 @@ function reduce(state: QuizBusState, event: QuizEvent): QuizBusState {
       return { ...state, isPaused: true };
     case "RESUME":
       return { ...state, isPaused: false };
+    case "SKIP":
+      return { ...state, revealOpen: false, currentQuestionId: event.question_id ?? state.currentQuestionId };
+    case "HIGHLIGHT":
+      return state;
     case "END":
       return { ...state, ended: true, isPaused: true, revealOpen: false };
     case "HYDRATE":

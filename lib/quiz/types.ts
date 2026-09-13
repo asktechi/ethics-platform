@@ -14,8 +14,13 @@ export type QuizHostQuestion = QuizPlayQuestion & {
   explanation: string | null;
 };
 
+export type QuizEventEnvelope = {
+  sender?: string;
+  host_token?: string;
+};
+
 export type QuizEvent =
-  | {
+  | ({
       type: "QUESTION";
       questionIndex: number;
       question_id: string;
@@ -23,19 +28,27 @@ export type QuizEvent =
       choices: QuizChoice[];
       time_limit_seconds: number;
       started_at: string;
-    }
-  | {
+    } & QuizEventEnvelope)
+  | ({
       type: "REVEAL";
       question_id: string;
       correct_key: string;
       explanation: string;
-    }
-  | { type: "NEXT" }
-  | { type: "PREV" }
-  | { type: "PAUSE" }
-  | { type: "RESUME" }
-  | { type: "END" }
-  | { type: "HYDRATE"; state: Partial<QuizBusState> };
+    } & QuizEventEnvelope)
+  | ({ type: "NEXT" } & QuizEventEnvelope)
+  | ({ type: "PREV" } & QuizEventEnvelope)
+  | ({ type: "PAUSE"; remaining_ms?: number } & QuizEventEnvelope)
+  | ({ type: "RESUME"; started_at?: string; remaining_ms?: number } & QuizEventEnvelope)
+  | ({ type: "SKIP"; question_id?: string } & QuizEventEnvelope)
+  | ({ type: "END"; early?: boolean } & QuizEventEnvelope)
+  | ({
+      type: "HIGHLIGHT";
+      display_name: string;
+      avatar_color?: string | null;
+      ms_taken: number;
+      points: number;
+    } & QuizEventEnvelope)
+  | ({ type: "HYDRATE"; state: Partial<QuizBusState> } & QuizEventEnvelope);
 
 export type QuizEventType = QuizEvent["type"];
 
@@ -57,6 +70,12 @@ export type QuizSettings = {
   show_correct_answer: boolean;
   shuffle: boolean;
   question_ids: string[];
+  host_token?: string;
+  paused_at?: string | null;
+  remaining_ms?: number | null;
+  question_started_at?: string | null;
+  last_revealed_question_id?: string | null;
+  scored_question_ids?: string[];
 };
 
 export type PlayerIdentity = {
@@ -65,6 +84,8 @@ export type PlayerIdentity = {
   participant_token: string;
   display_name: string;
   avatar_color: string;
+  host_id?: string;
+  host_token?: string;
 };
 
 export type LeaderboardRow = {

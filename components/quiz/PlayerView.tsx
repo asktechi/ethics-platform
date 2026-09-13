@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { finalLeaderboardAction, myParticipantAction, submitAnswerAction } from "@/app/quiz/_actions/player.actions";
 import { playerConnect } from "@/lib/quiz/realtime";
-import { readPlayerIdentity } from "@/lib/quiz/storage";
+import { readPlayerIdentity, writePlayerIdentity } from "@/lib/quiz/storage";
 import type { LeaderboardRow, QuizEvent, QuizPlayQuestion } from "@/lib/quiz/types";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -15,14 +15,18 @@ export function PlayerView({
   sessionId,
   joinCode,
   questionCount,
+  hostId,
+  initialStatus,
 }: {
   sessionId: string;
   joinCode: string;
   questionCount: number;
+  hostId?: string | null;
+  initialStatus?: string;
 }) {
   const router = useRouter();
   const identity = useMemo(() => readPlayerIdentity(sessionId), [sessionId]);
-  const [phase, setPhase] = useState<Phase>("waiting");
+  const [phase, setPhase] = useState<Phase>(initialStatus === "ended" ? "ended" : "waiting");
   const [question, setQuestion] = useState<QuizPlayQuestion | null>(null);
   const [questionIndex, setQuestionIndex] = useState(0);
   const [startedAt, setStartedAt] = useState<number | null>(null);
@@ -36,9 +40,19 @@ export function PlayerView({
   const [lastDelta, setLastDelta] = useState<number | "missed" | null>(null);
   const [board, setBoard] = useState<LeaderboardRow[]>([]);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [paused, setPaused] = useState(false);
+  const [frozenRemaining, setFrozenRemaining] = useState<number | null>(null);
+  const [endedEarly, setEndedEarly] = useState(false);
+  const [highlight, setHighlight] = useState<{
+    display_name: string;
+    avatar_color?: string | null;
+    ms_taken: number;
+    points: number;
+  } | null>(null);
   const submitted = useRef(false);
   const choiceRef = useRef<string | null>(null);
   const questionIdRef = useRef<string | null>(null);
+  const scoreRef = useRef(0);
 
   useEffect(() => {
     if (!identity) router.replace(`/quiz/join/${joinCode}`);
@@ -51,23 +65,44 @@ export function PlayerView({
 
   useEffect(() => {
     if (!identity) return;
+    void myParticipantAction(identity.participant_token).then((result) => {
+      if (!result.ok) return;
+      setScore(result.participant.score ?? 0);
+      setStreak(result.participant.streak ?? 0);
+      scoreRef.current = result.participant.score ?? 0;
+      writePlayerIdentity({
+        ...identity,
+        host_id: result.participant.host_id ?? identity.host_id ?? hostId ?? undefined,
+        host_token: result.participant.host_token || identity.host_token,
+      });
+    });
+  }, [hostId, identity]);
+
+  useEffect(() => {
+    if (!identity) return;
     const client = createClient();
     const connection = playerConnect(client, sessionId, (event) => {
       handleEvent(event);
+    }, {
+      hostId: identity.host_id ?? hostId,
+      hostToken: identity.host_token,
+      participantId: identity.participant_id,
     });
     return () => connection.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [identity, sessionId]);
+  }, [identity, sessionId, hostId]);
 
-  const remaining = startedAt
-    ? Math.max(0, timeLimit - Math.floor((now - startedAt) / 1000))
-    : timeLimit;
+  const remaining = paused && frozenRemaining != null
+    ? Math.max(0, Math.ceil(frozenRemaining / 1000))
+    : startedAt
+      ? Math.max(0, timeLimit - Math.floor((now - startedAt) / 1000))
+      : timeLimit;
 
   useEffect(() => {
-    if (phase !== "question" || !question || remaining > 0 || submitted.current) return;
+    if (phase !== "question" || paused || !question || remaining > 0 || submitted.current) return;
     void lockIn(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, remaining, question]);
+  }, [phase, remaining, question, paused]);
 
   async function lockIn(key: string | null) {
     if (!identity || !question || submitted.current) return;
@@ -110,6 +145,9 @@ export function PlayerView({
       setCorrectKey(null);
       setExplanation("");
       setLastDelta(null);
+      setPaused(false);
+      setFrozenRemaining(null);
+      setHighlight(null);
       setPhase("question");
       return;
     }
@@ -118,29 +156,56 @@ export function PlayerView({
       const correct = event.correct_key.toUpperCase();
       setCorrectKey(correct);
       setExplanation(event.explanation);
-      if (!picked) {
-        setLastDelta("missed");
-        setStreak(0);
-      } else if (picked.toUpperCase() === correct) {
-        setLastDelta(100);
-        setScore((value) => value + 100);
-        setStreak((value) => value + 1);
-      } else {
-        setLastDelta(0);
-        setStreak(0);
-      }
+      if (!picked) setLastDelta("missed");
+      else setLastDelta(0);
       setPhase("reveal");
       if (identity) {
         void myParticipantAction(identity.participant_token).then((result) => {
-          if (result.ok) {
-            setScore(result.participant.score ?? 0);
-            setStreak(result.participant.streak ?? 0);
-          }
+          if (!result.ok) return;
+          const nextScore = result.participant.score ?? 0;
+          const earned = nextScore - scoreRef.current;
+          setScore(nextScore);
+          setStreak(result.participant.streak ?? 0);
+          scoreRef.current = nextScore;
+          if (!picked) setLastDelta("missed");
+          else setLastDelta(Math.max(0, earned));
         });
       }
       return;
     }
+    if (event.type === "PAUSE") {
+      setPaused(true);
+      setFrozenRemaining(event.remaining_ms ?? remaining * 1000);
+      return;
+    }
+    if (event.type === "RESUME") {
+      const left = event.remaining_ms ?? frozenRemaining ?? timeLimit * 1000;
+      setPaused(false);
+      setFrozenRemaining(null);
+      setStartedAt(Date.now() - (timeLimit * 1000 - left));
+      return;
+    }
+    if (event.type === "SKIP") {
+      submitted.current = false;
+      questionIdRef.current = null;
+      setQuestion(null);
+      setChoice(null);
+      setCorrectKey(null);
+      setPaused(false);
+      setPhase("waiting");
+      return;
+    }
+    if (event.type === "HIGHLIGHT") {
+      setHighlight({
+        display_name: event.display_name,
+        avatar_color: event.avatar_color,
+        ms_taken: event.ms_taken,
+        points: event.points,
+      });
+      return;
+    }
     if (event.type === "END") {
+      setEndedEarly(Boolean(event.early));
       setPhase("ended");
       void finalLeaderboardAction(sessionId).then((result) => {
         if (result.ok) setBoard(result.rows as LeaderboardRow[]);
@@ -167,7 +232,9 @@ export function PlayerView({
     const mine = board.find((row) => row.participant_id === identity.participant_id);
     return (
       <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-navy px-6 text-center text-ivory">
-        <p className="text-xs uppercase tracking-[0.18em] text-gold">Thanks for playing</p>
+        <p className="text-xs uppercase tracking-[0.18em] text-gold">
+          {endedEarly ? "Session ended early" : "Thanks for playing"}
+        </p>
         <h1 className="mt-3 font-display text-4xl">{score} pts</h1>
         <p className="mt-2 text-ivory/70">
           {mine ? `Rank ${mine.rank}` : "Final score"} · streak {streak}
@@ -190,7 +257,17 @@ export function PlayerView({
   }
 
   return (
-    <div className="flex h-[100dvh] flex-col overflow-hidden bg-navy px-4 py-4 text-ivory">
+    <div className="relative flex h-[100dvh] flex-col overflow-hidden bg-navy px-4 py-4 text-ivory">
+      {paused ? (
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-navy/85">
+          <p className="font-display text-3xl text-gold">Paused by host</p>
+        </div>
+      ) : null}
+      {highlight ? (
+        <div className="mb-3 border border-gold/50 bg-gold/10 px-3 py-2 text-sm">
+          Fastest: {highlight.display_name} · {(highlight.ms_taken / 1000).toFixed(1)}s · {highlight.points} pts
+        </div>
+      ) : null}
       <div className="flex shrink-0 items-center justify-between text-xs uppercase tracking-[0.14em] text-ivory/45">
         <span>
           Question {questionIndex + 1} of {questionCount || "—"}
@@ -209,7 +286,7 @@ export function PlayerView({
             <button
               key={item.key}
               type="button"
-              disabled={phase !== "question"}
+              disabled={phase !== "question" || paused}
               onClick={() => void lockIn(item.key)}
               className={cn(
                 "min-h-14 rounded-md border px-3 py-3 text-left text-base font-medium",
@@ -234,7 +311,7 @@ export function PlayerView({
         {phase === "reveal" ? (
           <div className="text-left">
             <p className="font-display text-2xl text-gold">
-              {lastDelta === "missed" ? "Missed" : lastDelta === 100 ? "+100" : "+0"}
+              {lastDelta === "missed" ? "Missed" : lastDelta === 0 ? "+0" : `+${lastDelta}`}
             </p>
             <p className="text-sm text-ivory/70">
               Score {score} · streak {streak}

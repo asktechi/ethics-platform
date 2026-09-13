@@ -21,24 +21,50 @@ function isQuizEvent(value: unknown): value is QuizEvent {
     type === "PREV" ||
     type === "PAUSE" ||
     type === "RESUME" ||
-    type === "END"
+    type === "SKIP" ||
+    type === "END" ||
+    type === "HIGHLIGHT"
   );
+}
+
+export function wrapHostEvent(event: QuizEvent, hostId: string, hostToken: string): QuizEvent {
+  return { ...event, sender: hostId, host_token: hostToken };
+}
+
+export function isTrustedHostEvent(
+  event: QuizEvent,
+  expectedHostId?: string | null,
+  expectedToken?: string | null,
+) {
+  if (expectedHostId && event.sender && event.sender !== expectedHostId) return false;
+  if (expectedToken && event.host_token && event.host_token !== expectedToken) return false;
+  if (expectedHostId && !event.sender) return false;
+  if (expectedToken && !event.host_token) return false;
+  return true;
 }
 
 export function hostConnect(
   client: SupabaseClient,
   sessionId: string,
-  snapshot?: () => QuizEvent | null,
+  opts: {
+    snapshot?: () => QuizEvent | null;
+    hostId: string;
+    hostToken: string;
+  },
 ) {
   const channel = client.channel(quizChannelName(sessionId), {
-    config: { broadcast: { ack: true, self: false } },
+    config: { broadcast: { ack: true, self: false }, presence: { key: `host:${opts.hostId}` } },
   });
   let lastEvent: QuizEvent | null = null;
 
   channel.on("broadcast", { event: REQUEST_SNAPSHOT }, () => {
-    const event = snapshot?.() ?? lastEvent;
+    const event = opts.snapshot?.() ?? lastEvent;
     if (event) {
-      void channel.send({ type: "broadcast", event: CHANNEL_EVENT, payload: event });
+      void channel.send({
+        type: "broadcast",
+        event: CHANNEL_EVENT,
+        payload: wrapHostEvent(event, opts.hostId, opts.hostToken),
+      });
     }
   });
 
@@ -46,12 +72,19 @@ export function hostConnect(
     if (origin !== "local") return;
     if (event.type === "HYDRATE") return;
     lastEvent = event;
-    void channel.send({ type: "broadcast", event: CHANNEL_EVENT, payload: event });
+    void channel.send({
+      type: "broadcast",
+      event: CHANNEL_EVENT,
+      payload: wrapHostEvent(event, opts.hostId, opts.hostToken),
+    });
   });
 
   const ready = new Promise<RealtimeChannel>((resolve) => {
     void channel.subscribe((status) => {
-      if (status === "SUBSCRIBED") resolve(channel);
+      if (status === "SUBSCRIBED") {
+        void channel.track({ role: "host", host_id: opts.hostId, at: Date.now() });
+        resolve(channel);
+      }
     });
   });
 
@@ -59,7 +92,12 @@ export function hostConnect(
     channel,
     ready,
     publish(event: QuizEvent) {
-      return channel.send({ type: "broadcast", event: CHANNEL_EVENT, payload: event });
+      lastEvent = event;
+      return channel.send({
+        type: "broadcast",
+        event: CHANNEL_EVENT,
+        payload: wrapHostEvent(event, opts.hostId, opts.hostToken),
+      });
     },
     disconnect() {
       unsubscribe();
@@ -72,13 +110,18 @@ export function playerConnect(
   client: SupabaseClient,
   sessionId: string,
   onEvent: (event: QuizEvent) => void,
+  auth?: { hostId?: string | null; hostToken?: string | null; participantId?: string },
 ) {
   const channel = client.channel(quizChannelName(sessionId), {
-    config: { broadcast: { ack: true, self: true } },
+    config: {
+      broadcast: { ack: true, self: true },
+      presence: { key: auth?.participantId ?? "player" },
+    },
   });
 
   channel.on("broadcast", { event: CHANNEL_EVENT }, ({ payload }) => {
     if (!isQuizEvent(payload)) return;
+    if (!isTrustedHostEvent(payload, auth?.hostId, auth?.hostToken)) return;
     applyRemoteEvent(payload);
     onEvent(payload);
   });
@@ -86,6 +129,9 @@ export function playerConnect(
   const ready = new Promise<RealtimeChannel>((resolve) => {
     void channel.subscribe((status) => {
       if (status === "SUBSCRIBED") {
+        if (auth?.participantId) {
+          void channel.track({ role: "player", participant_id: auth.participantId, at: Date.now() });
+        }
         void channel.send({
           type: "broadcast",
           event: REQUEST_SNAPSHOT,

@@ -54,6 +54,8 @@ export function JoinForm({ initialCode = "", skipLookup = false }: { initialCode
             participant_token: joined.join.participant_token,
             display_name: name.trim(),
             avatar_color: joined.join.avatar_color,
+            host_id: joined.join.host_id,
+            host_token: joined.join.host_token,
           });
           router.push(`/quiz/play/${joined.join.session_id}`);
         });

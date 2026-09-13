@@ -15,6 +15,8 @@ export default async function QuizPlayPage({ params }: { params: { sessionId: st
       sessionId={context.session.id}
       joinCode={context.session.join_code}
       questionCount={context.questionCount}
+      hostId={context.hostId}
+      initialStatus={context.session.status}
     />
   );
 }

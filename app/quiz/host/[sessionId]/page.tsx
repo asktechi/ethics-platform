@@ -1,6 +1,12 @@
 import { notFound, redirect } from "next/navigation";
-import { HostStub } from "@/components/quiz/HostStub";
-import { getHostSession, loadHostQuestions } from "@/lib/data/quiz";
+import { HostDashboard } from "@/components/quiz/HostDashboard";
+import {
+  getHostSession,
+  listSessionParticipants,
+  listSessionResponses,
+  loadHostQuestions,
+} from "@/lib/data/quiz";
+import type { QuizSettings } from "@/lib/quiz/types";
 import { headers } from "next/headers";
 
 export default async function QuizHostPage({ params }: { params: { sessionId: string } }) {
@@ -11,10 +17,18 @@ export default async function QuizHostPage({ params }: { params: { sessionId: st
     redirect("/login");
   }
 
+  if (session.status === "ended") {
+    redirect(`/quiz/host/${params.sessionId}/summary`);
+  }
+
   const pool = session.pool as { id?: string; name?: string } | null;
   if (!pool?.id) notFound();
-  const questions = await loadHostQuestions(pool.id);
-  const settings = (session.settings_json ?? {}) as { question_ids?: string[] };
+  const [questions, participants, responses] = await Promise.all([
+    loadHostQuestions(pool.id),
+    listSessionParticipants(session.id),
+    listSessionResponses(session.id),
+  ]);
+  const settings = (session.settings_json ?? {}) as QuizSettings;
   const ordered = (settings.question_ids ?? questions.map((item) => item.question_id))
     .map((id) => questions.find((item) => item.question_id === id))
     .filter(Boolean);
@@ -24,12 +38,23 @@ export default async function QuizHostPage({ params }: { params: { sessionId: st
   const joinUrl = `${proto}://${host}/quiz/join/${session.join_code}`;
 
   return (
-    <HostStub
+    <HostDashboard
       sessionId={session.id}
+      hostId={session.host_id}
+      hostToken={settings.host_token ?? ""}
       joinCode={session.join_code}
       joinUrl={joinUrl}
       questions={ordered as typeof questions}
       timePerQ={session.time_per_q ?? 30}
+      initialIndex={session.current_question_index ?? 0}
+      initialReveal={Boolean(session.reveal_answer)}
+      initialEnded={session.status === "ended"}
+      initialPaused={Boolean(settings.paused_at)}
+      initialRemainingMs={settings.remaining_ms ?? null}
+      initialQuestionStartedAt={settings.question_started_at ?? null}
+      initialParticipants={participants}
+      initialResponses={responses}
+      poolName={pool.name ?? "Quiz"}
     />
   );
 }

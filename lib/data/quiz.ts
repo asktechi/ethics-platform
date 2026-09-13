@@ -66,6 +66,7 @@ export async function launchQuizSession(input: LaunchInput) {
     show_correct_answer: input.showCorrectAnswer,
     shuffle: input.shuffle,
     question_ids: questionIds,
+    host_token: crypto.randomUUID(),
   };
 
   let session = null;
@@ -107,6 +108,17 @@ export async function getHostSession(sessionId: string) {
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!data || data.host_id !== user.id) throw new Error("Session not found.");
+  const settings = (data.settings_json ?? {}) as QuizSettings;
+  if (!settings.host_token) {
+    const host_token = crypto.randomUUID();
+    const next = { ...settings, host_token };
+    const { error: tokenError } = await supabase
+      .from("quiz_sessions")
+      .update({ settings_json: next as unknown as Json })
+      .eq("id", sessionId);
+    if (tokenError) throw new Error(tokenError.message);
+    return { ...data, settings_json: next as unknown as Json };
+  }
   return data;
 }
 
@@ -114,7 +126,7 @@ export async function getPublicSession(sessionId: string) {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("quiz_sessions")
-    .select("id, pool_id, status, join_code, time_per_q, current_question_index, settings_json, mode")
+    .select("id, pool_id, host_id, status, join_code, time_per_q, current_question_index, reveal_answer, settings_json, mode, ended_at")
     .eq("id", sessionId)
     .is("deleted_at", null)
     .maybeSingle();
@@ -138,6 +150,7 @@ export async function getPublicPlayContext(sessionId: string) {
   return {
     session,
     questionCount: orderedIds.length,
+    hostId: session.host_id,
     currentQuestion: currentRow
       ? {
           question_id: currentRow.question_id,
@@ -147,4 +160,44 @@ export async function getPublicPlayContext(sessionId: string) {
         }
       : null,
   };
+}
+
+export async function listSessionParticipants(sessionId: string) {
+  const { supabase } = await requireUser();
+  const { data, error } = await supabase
+    .from("quiz_participants")
+    .select("id, display_name, score, streak, avatar_color, connected, last_correct_at, joined_at")
+    .eq("session_id", sessionId)
+    .is("deleted_at", null)
+    .order("score", { ascending: false });
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+export async function listSessionResponses(sessionId: string, questionId?: string) {
+  const { supabase } = await requireUser();
+  let query = supabase
+    .from("quiz_responses")
+    .select("id, participant_id, question_id, choice_key, answer, ms_taken, is_correct, submitted_at")
+    .eq("session_id", sessionId)
+    .is("deleted_at", null);
+  if (questionId) query = query.eq("question_id", questionId);
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+export async function getSessionReport(sessionId: string) {
+  const session = await getHostSession(sessionId);
+  const [participants, responses] = await Promise.all([
+    listSessionParticipants(sessionId),
+    listSessionResponses(sessionId),
+  ]);
+  const questions = await loadHostQuestions(session.pool_id);
+  const settings = (session.settings_json ?? {}) as QuizSettings;
+  const ordered = (settings.question_ids ?? questions.map((item) => item.question_id))
+    .map((id) => questions.find((item) => item.question_id === id))
+    .filter(Boolean) as QuizHostQuestion[];
+  const pool = session.pool as { id?: string; name?: string; class_id?: string } | null;
+  return { session, participants, responses, questions: ordered, pool };
 }

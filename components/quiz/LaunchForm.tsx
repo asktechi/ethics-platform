@@ -6,6 +6,7 @@ import { launchQuizAction } from "@/app/(app)/_actions/quiz.actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { writeHostToken } from "@/lib/quiz/host-token";
 import type { QuizHostQuestion } from "@/lib/quiz/types";
 
 export function LaunchForm({
@@ -59,6 +60,7 @@ export function LaunchForm({
             setError(result.error);
             return;
           }
+          if (result.hostToken) writeHostToken(result.sessionId, result.hostToken);
           router.push(`/quiz/host/${result.sessionId}`);
         });
       }}

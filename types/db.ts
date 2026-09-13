@@ -966,6 +966,8 @@ export type Database = {
           session_id: string;
           participant_token: string;
           avatar_color: string;
+          host_id: string;
+          host_token: string;
         }[];
       };
       lookup_quiz_by_code: {
@@ -991,6 +993,8 @@ export type Database = {
           avatar_color: string | null;
           join_code: string;
           status: string;
+          host_id: string;
+          host_token: string;
         }[];
       };
       submit_answer: {
@@ -1012,6 +1016,18 @@ export type Database = {
       };
       quiz_end_session: {
         Args: { p_session_id: string };
+        Returns: undefined;
+      };
+      quiz_set_pause: {
+        Args: { p_session_id: string; p_paused: boolean; p_remaining_ms: number };
+        Returns: undefined;
+      };
+      quiz_skip_question: {
+        Args: { p_session_id: string };
+        Returns: undefined;
+      };
+      quiz_set_connected: {
+        Args: { p_session_id: string; p_online_ids: string[] };
         Returns: undefined;
       };
       get_final_leaderboard: {
