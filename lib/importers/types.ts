@@ -48,6 +48,8 @@ export type StrategyResult = {
   pattern: string;
   questions: RawQuestion[];
   warnings: string[];
+  /** When set, importFile uses these as-is (already grammar-normalized). */
+  canonicalQuestions?: CanonicalQuestion[];
 };
 
 export type ImportFileType =

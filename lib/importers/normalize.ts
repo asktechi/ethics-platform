@@ -6,22 +6,34 @@ const CURLY: Record<string, string> = {
   "\u2019": "'",
   "\u201C": '"',
   "\u201D": '"',
-  "\u2013": "-",
-  "\u2014": "-",
 };
+
+const STEM_ARTIFACTS = [
+  /^(?:slide\s+\d+\s*:\s*)/i,
+  /^(?:page\s+\d+\s*:\s*)/i,
+  /^(?:question from the cfa institute curriculum:\s*)/i,
+  /^(?:answer:\s+)/i,
+];
 
 export function cleanText(value: string) {
   return value
     .replace(/\r/g, "")
-    .replace(/[\u2018\u2019\u201C\u201D\u2013\u2014]/g, (char) => CURLY[char] ?? char)
+    .replace(/\u2014/g, " - ")
+    .replace(/\u2013/g, " - ")
+    .replace(/[\u2018\u2019\u201C\u201D]/g, (char) => CURLY[char] ?? char)
     .replace(/\u00a0/g, " ")
     .replace(/[ \t]+/g, " ")
     .replace(/ *\n */g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
 export function stripStemPrefix(stem: string) {
-  return cleanText(stem)
+  let next = cleanText(stem);
+  for (const artifact of STEM_ARTIFACTS) {
+    next = next.replace(artifact, "");
+  }
+  return next
     .replace(/^(?:question\s+\d+\s*[:.)-]\s*|q\s*\d+\s*[:.)-]\s*|\d+\s*[.)]\s+)/i, "")
     .replace(/^(?:page\s+\d+|\d+|-\s*\d+\s*-)\s*$/i, "")
     .trim();
@@ -36,20 +48,20 @@ export function stripPageArtifacts(stem: string) {
 
 export function normalizeChoiceKey(raw: string, index: number) {
   const value = cleanText(raw);
-  const option = value.match(/(?:option|choice|answer|opt)?\s*([A-Da-d])\b/);
+  const option = value.match(/(?:option|choice|answer|opt)?\s*([A-Fa-f])\b/);
   if (option) return option[1].toUpperCase();
-  const numbered = value.match(/^([1-4])\b/);
+  const numbered = value.match(/^([1-6])\b/);
   if (numbered) return String.fromCharCode(64 + Number(numbered[1]));
-  if (/^[A-D]$/i.test(value)) return value.toUpperCase();
+  if (/^[A-F]$/i.test(value)) return value.toUpperCase();
   return String.fromCharCode(65 + index);
 }
 
 export function extractAnswerFromText(text: string, choices: CanonicalChoice[]) {
   const cleaned = cleanText(text);
-  const letter = cleaned.match(/\b([A-Da-d])\s+is\s+correct\b/i)
-    ?? cleaned.match(/^(?:answer|correct(?:_answer)?|key)\s*[:\-]\s*([A-Da-d])\b/i)
-    ?? cleaned.match(/\bcorrect\s+(?:choice|option|answer)\s+is\s+([A-Da-d])\b/i)
-    ?? cleaned.match(/^([A-Da-d])\b/);
+  const letter = cleaned.match(/\b([A-Fa-f])\s+is\s+correct\b/i)
+    ?? cleaned.match(/^(?:answer|correct(?:_answer)?|key)\s*[:\-]\s*([A-Fa-f])\b/i)
+    ?? cleaned.match(/\bcorrect\s+(?:choice|option|answer)\s+is\s+([A-Fa-f])\b/i)
+    ?? cleaned.match(/^([A-Fa-f])\b/);
   if (letter) return letter[1].toUpperCase();
   const marked = choices.find((choice) => /\*(?:\s|$)|\(correct\)/i.test(choice.text));
   if (marked) return marked.key;
@@ -83,7 +95,7 @@ export function normalizeQuestion(raw: RawQuestion, file: string): CanonicalQues
   const choices = raw.choices
     .map((choice, index) => ({
       key: normalizeChoiceKey(choice.key || String(index + 1), index),
-      text: stripChoiceMarks(choice.text.replace(/^[A-Da-d1-4][.):]\s*/, "")),
+      text: stripChoiceMarks(choice.text.replace(/^[A-Fa-f1-6][.):]\s*/, "")),
     }))
     .filter((choice) => choice.text);
 
@@ -91,7 +103,7 @@ export function normalizeQuestion(raw: RawQuestion, file: string): CanonicalQues
   if (new Set(keys).size !== keys.length) warnings.push("duplicate choice keys");
 
   let answer = raw.answer_key ? normalizeChoiceKey(raw.answer_key, 0) : null;
-  if (!answer || !/^[A-D]$/.test(answer)) {
+  if (!answer || !/^[A-F]$/.test(answer)) {
     answer = extractAnswerFromText(raw.answer_key ?? "", choices);
   }
   if (!answer) {

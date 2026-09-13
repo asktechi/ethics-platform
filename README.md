@@ -50,6 +50,7 @@ Sample files for regression live in [`fixtures/samples`](fixtures/samples).
 Open a class and use the **Questions** tab, or go to `/class/{id}/questions`.
 
 - **Upload questions** — `/class/{id}/questions/import`. Drop PPTX, DOCX, DOC, XLSX, XLS, CSV, TSV, TXT, MD, or PDF. The importer auto-detects the pattern, you review and edit every row, then **Confirm and import**. Nothing is written before confirm.
+- **Prose grammar (DOCX / TXT / MD)** — start each item with `Q1.` (or `Question 1:` / `1.`), then the stem, then `A) B) C)` choices, then optional `Standard:`, `Answer:`, and `Explanation:` lines. Decorative separators (`===START===`, `=====`, `---`, page numbers) are ignored. AI-generated items are serialized through the same grammar before they are saved.
 - Imports land as `approved=false`, untagged. Auto-tag proposes a Standard, optional Concept, and difficulty. Nothing goes live until you approve.
 - **Generate new** — `/class/{id}/questions/generate` uses gpt-4o. Paste source text or pick approved slides. Drafts stay pending.
 - **Pools** — `/class/{id}/questions/pools` groups questions, shuffle-on-play, seconds per question, and a dry-run preview

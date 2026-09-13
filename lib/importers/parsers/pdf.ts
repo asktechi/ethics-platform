@@ -1,31 +1,36 @@
 import { PDFParse } from "pdf-parse";
-import { parseOneProseBlock, parseProseBlocks } from "@/lib/importers/prose";
+import { canonicalToRaw, parseGrammarText } from "@/lib/importers/grammar";
 import { pickBestStrategy } from "@/lib/importers/normalize";
-import type { StrategyResult } from "@/lib/importers/types";
+import type { CanonicalQuestion, RawQuestion, StrategyResult } from "@/lib/importers/types";
 
 export async function parsePdf(buffer: Buffer, filename: string): Promise<StrategyResult> {
   const parser = new PDFParse({ data: buffer });
   try {
     const result = await parser.getText();
     const pages = result.pages ?? [];
-    const perPage = pages.flatMap((page, index) => {
-      const text = page.text ?? "";
-      const one = parseOneProseBlock(text, undefined, index + 1);
-      if (one && (one.choices.length >= 2 || parseProseBlocks(text).length === 1)) {
-        return [{ ...one, slide_or_page: index + 1 }];
-      }
-      return parseProseBlocks(text).map((question) => ({ ...question, slide_or_page: index + 1 }));
-    });
     const joined = pages.map((page) => page.text ?? "").join("\n\n");
-    const whole = parseProseBlocks(joined);
-    const best = pickBestStrategy([
-      { questions: perPage },
-      { questions: whole },
-    ]);
+    const whole = parseGrammarText(joined, filename);
+    const perPage: RawQuestion[] = [];
+    const perPageCanonical: CanonicalQuestion[] = [];
+    pages.forEach((page, index) => {
+      const parsed = parseGrammarText(page.text ?? "", filename);
+      parsed.questions.forEach((question) => {
+        const next = {
+          ...question,
+          source: { ...question.source, slide_or_page: index + 1 },
+        };
+        perPageCanonical.push(next);
+        perPage.push({ ...canonicalToRaw(next), slide_or_page: index + 1 });
+      });
+    });
+    const best = pickBestStrategy([{ questions: whole.questions.map(canonicalToRaw) }, { questions: perPage }]);
+    const usePages = best.questions === perPage;
+    const canonical = usePages ? perPageCanonical : whole.questions;
     return {
-      pattern: best.questions === perPage ? "page-chunks" : "numbered-prose",
-      questions: best.questions,
-      warnings: best.questions.length === 0 ? [`${filename}: PDF text extracted but no question pattern matched`] : [],
+      pattern: canonical.length ? "grammar-v1" : "page-chunks",
+      questions: canonical.map(canonicalToRaw),
+      canonicalQuestions: canonical,
+      warnings: canonical.length === 0 ? [`${filename}: PDF text extracted but no grammar-v1 questions matched`] : [],
     };
   } finally {
     await parser.destroy?.();

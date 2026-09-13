@@ -58,7 +58,9 @@ export async function importFile(buffer: Buffer, filename: string, hint?: string
   return {
     file: filename,
     fileType,
-    questions: strategy.questions.map((question) => normalizeQuestion(question, filename)),
+    questions:
+      strategy.canonicalQuestions ??
+      strategy.questions.map((question) => normalizeQuestion(question, filename)),
     globalWarnings: warnings,
     detectedPattern: strategy.pattern,
   };

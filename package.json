@@ -14,7 +14,8 @@
     "db:reset": "supabase db reset",
     "db:diff": "supabase db diff",
     "gen:types": "supabase gen types typescript --linked > types/db.ts",
-    "test:import": "node --experimental-strip-types --import ./scripts/register-ts-alias.mjs scripts/verify-phase56.mjs"
+    "test:import": "node --experimental-strip-types --import ./scripts/register-ts-alias.mjs scripts/verify-phase56.mjs",
+    "test:grammar": "node --experimental-strip-types --import ./scripts/register-ts-alias.mjs scripts/verify-phase58.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

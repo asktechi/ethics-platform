@@ -37,7 +37,12 @@ export function ImportReview({ classId }: Props) {
   const [editing, setEditing] = useState<{ id: string; field: string } | null>(null);
   const [splitId, setSplitId] = useState<string | null>(null);
   const [splitAt, setSplitAt] = useState(0);
+  const [rawOpen, setRawOpen] = useState<Set<string>>(new Set());
   const parentRef = useRef<HTMLDivElement>(null);
+
+  const maxChoiceCols = Math.min(6, Math.max(3, ...rows.map((row) => row.choices.length), 3));
+  const choiceKeys = Array.from({ length: maxChoiceCols }, (_, index) => String.fromCharCode(65 + index));
+  const gridTemplate = `40px minmax(220px,2fr) repeat(${maxChoiceCols}, minmax(110px,1fr)) 70px minmax(180px,1.4fr) 120px 140px 220px`;
 
   const warningCount = rows.reduce((sum, row) => sum + row.warnings.length, 0);
   const visible = useMemo(
@@ -49,9 +54,31 @@ export function ImportReview({ classId }: Props) {
   const virtualizer = useVirtualizer({
     count: visible.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 88,
+    estimateSize: () => (rawOpen.size ? 160 : 96),
     overscan: 12,
+    measureElement: (element) => element.getBoundingClientRect().height,
   });
+
+  function addChoice(id: string) {
+    setRows((current) =>
+      current.map((row) => {
+        if (row.id !== id || row.choices.length >= 6) return row;
+        const used = new Set(row.choices.map((choice) => choice.key));
+        const key = ["A", "B", "C", "D", "E", "F"].find((letter) => !used.has(letter));
+        if (!key) return row;
+        return { ...row, choices: [...row.choices, { key, text: "" }] };
+      }),
+    );
+  }
+
+  function toggleRaw(id: string) {
+    setRawOpen((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   async function parseFiles(files: File[]) {
     setError(null);
@@ -203,13 +230,15 @@ export function ImportReview({ classId }: Props) {
 
       <div className="overflow-x-auto border border-border">
         <div className="min-w-[1400px] bg-card text-sm">
-          <div className="grid grid-cols-[40px_minmax(220px,2fr)_repeat(4,minmax(120px,1fr))_70px_minmax(180px,1.4fr)_120px_140px_160px] gap-2 border-b border-border px-3 py-2 text-xs uppercase tracking-[0.12em] text-ivory/45">
+          <div
+            className="grid gap-2 border-b border-border px-3 py-2 text-xs uppercase tracking-[0.12em] text-ivory/45"
+            style={{ gridTemplateColumns: gridTemplate }}
+          >
             <span>#</span>
             <span>Stem</span>
-            <span>A</span>
-            <span>B</span>
-            <span>C</span>
-            <span>D</span>
+            {choiceKeys.map((key) => (
+              <span key={key}>{key}</span>
+            ))}
             <span>Answer</span>
             <span>Explanation</span>
             <span>Standard</span>
@@ -221,15 +250,19 @@ export function ImportReview({ classId }: Props) {
               {virtualizer.getVirtualItems().map((item) => {
                 const row = visible[item.index];
                 const isOpen = expanded.has(row.id);
+                const showRaw = rawOpen.has(row.id);
                 return (
                   <div
                     key={row.id}
+                    data-index={item.index}
+                    ref={virtualizer.measureElement}
                     className={cn(
-                      "absolute left-0 grid w-full grid-cols-[40px_minmax(220px,2fr)_repeat(4,minmax(120px,1fr))_70px_minmax(180px,1.4fr)_120px_140px_160px] gap-2 border-b border-white/5 px-3 py-2",
+                      "absolute left-0 w-full border-b border-white/5 px-3 py-2",
                       row.warnings.length ? "bg-gold/5" : "",
                     )}
                     style={{ transform: `translateY(${item.start}px)` }}
                   >
+                    <div className="grid gap-2" style={{ gridTemplateColumns: gridTemplate }}>
                     <span className="text-ivory/40">{item.index + 1}</span>
                     <Cell
                       value={row.stem}
@@ -247,7 +280,7 @@ export function ImportReview({ classId }: Props) {
                       onChange={(value) => updateRow(row.id, { stem: value })}
                       onBlur={() => setEditing(null)}
                     />
-                    {(["A", "B", "C", "D"] as const).map((key) => (
+                    {choiceKeys.map((key) => (
                       <Cell
                         key={key}
                         value={choiceText(row, key)}
@@ -310,7 +343,28 @@ export function ImportReview({ classId }: Props) {
                       >
                         Split
                       </button>
+                      <button
+                        type="button"
+                        className="text-xs text-gold underline"
+                        disabled={row.choices.length >= 6}
+                        onClick={() => addChoice(row.id)}
+                      >
+                        + Add choice
+                      </button>
+                      <button
+                        type="button"
+                        className={cn("text-xs underline", showRaw ? "text-gold" : "text-ivory/60")}
+                        onClick={() => toggleRaw(row.id)}
+                      >
+                        Raw
+                      </button>
                     </div>
+                    </div>
+                    {showRaw ? (
+                      <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap border border-border bg-navy p-2 text-[11px] text-ivory/70">
+                        {row.raw_text || "—"}
+                      </pre>
+                    ) : null}
                   </div>
                 );
               })}

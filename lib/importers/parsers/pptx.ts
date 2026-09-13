@@ -1,9 +1,10 @@
 import JSZip from "jszip";
+import { alignToGrammar, canonicalToRaw, serializeToGrammar } from "@/lib/importers/grammar";
 import { extractAnswerFromText, extractStandardHint, pickBestStrategy } from "@/lib/importers/normalize";
 import { hasChoicePrefixes, hasCorrectBlock, parseChoiceLines, parseProseBlocks } from "@/lib/importers/prose";
 import { rowsToQuestions } from "@/lib/importers/tabular";
 import { extractDrawingText } from "@/lib/importers/xml";
-import type { RawQuestion, StrategyResult } from "@/lib/importers/types";
+import type { CanonicalQuestion, RawQuestion, StrategyResult } from "@/lib/importers/types";
 
 type Slide = {
   index: number;
@@ -131,14 +132,24 @@ function vignetteSpread(slides: Slide[]): RawQuestion[] {
     const followText = follow.map((item) => item.text).join("\n");
     const choices = parseChoiceLines(choiceText);
     if (choices.length >= 2) {
+      const answer_key = extractAnswerFromText(followText, choices);
       questions.push({
         stem,
         choices,
-        answer_key: extractAnswerFromText(followText, choices),
+        answer_key,
         explanation: followText || null,
         standard_hint: extractStandardHint(followText),
         slide_or_page: slide.index,
-        raw_text: [stem, choiceText, followText].join("\n\n"),
+        raw_text: serializeToGrammar(
+          {
+            stem,
+            choices,
+            answer_key,
+            explanation: followText || null,
+            standard_hint: extractStandardHint(followText),
+          },
+          questions.length + 1,
+        ),
       });
       index = cursor;
       continue;
@@ -164,21 +175,44 @@ export async function parsePptx(buffer: Buffer, filename: string): Promise<Strat
   const vignette = vignetteSpread(slides);
   const numbered = numberedOnSlides(slides);
 
+  const vignetteCanonical: CanonicalQuestion[] = vignette
+    .map((question, index) => {
+      const aligned = alignToGrammar(
+        {
+          stem: question.stem,
+          choices: question.choices,
+          answer_key: question.answer_key,
+          explanation: question.explanation,
+          standard_hint: question.standard_hint,
+        },
+        filename,
+      );
+      if (!aligned) return null;
+      return {
+        ...aligned,
+        source: { ...aligned.source, file: filename, slide_or_page: question.slide_or_page ?? index + 1 },
+        raw_text: question.raw_text || aligned.raw_text,
+      };
+    })
+    .filter((question): question is CanonicalQuestion => Boolean(question));
+
+  const vignetteRaw = vignetteCanonical.map(canonicalToRaw);
   const best = pickBestStrategy([
     { questions: tableQuestions },
     { questions: one },
-    { questions: vignette },
+    { questions: vignetteRaw },
     { questions: numbered },
   ]);
 
   let pattern = "one-per-slide";
   if (best.questions === tableQuestions && tableQuestions.length) pattern = "table";
-  else if (best.questions === vignette && vignette.length) pattern = "vignette";
+  else if (best.questions === vignetteRaw && vignetteRaw.length) pattern = "vignette";
   else if (best.questions === numbered && numbered.length) pattern = "numbered-prose";
 
   return {
     pattern,
     questions: best.questions,
+    canonicalQuestions: pattern === "vignette" ? vignetteCanonical : undefined,
     warnings: best.questions.length === 0 ? [`${filename}: no PPTX strategy produced questions`] : [],
   };
 }

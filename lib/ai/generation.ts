@@ -1,6 +1,7 @@
 import "server-only";
 import OpenAI from "openai";
 import { getOpenAiKey, logAiUsage } from "@/lib/ai/usage";
+import { alignToGrammar } from "@/lib/importers/grammar";
 
 export type GeneratedQuestion = {
   stem: string;
@@ -53,7 +54,7 @@ async function generateOne(
     messages: [
       {
         role: "system",
-        content: `You write original CFA Institute ethics teaching questions. Ethics reasoning only — no investment advice, no security recommendations, no portfolio construction. Use only the Standard and source text provided. Return JSON: stem, choices (array of {key, text} with keys A-D), answer_key, explanation, reasoning. ${style}`,
+        content: `You write original CFA Institute ethics teaching questions. Ethics reasoning only — no investment advice, no security recommendations, no portfolio construction. Use only the Standard and source text provided. Always return the question as a JSON object with exactly these keys: stem (string), choices (array of {key, text} with keys A/B/C), answer_key (one of A/B/C), explanation (string that begins with 'X is correct because...'). Do not include decorative characters, page numbers, or formatting artifacts. You may include a fourth choice (D) when the item needs it; never truncate extra valid choices. Also include reasoning (string). ${style}`,
       },
       {
         role: "user",
@@ -87,13 +88,30 @@ async function generateOne(
           key: String(choice.key ?? String.fromCharCode(65 + index)).toUpperCase().slice(0, 1),
           text: String(choice.text ?? "").trim(),
         }))
-        .filter((choice) => choice.text)
+        .filter((choice) => choice.text && /^[A-F]$/.test(choice.key))
     : [];
-  return {
+  const draft = {
     stem: String(raw.stem ?? "").trim() || "Untitled generated question",
     choices,
     answer_key: String(raw.answer_key ?? "A").trim().toUpperCase().slice(0, 1),
     explanation: String(raw.explanation ?? "").trim(),
     reasoning: String(raw.reasoning ?? "").trim(),
+  };
+  const aligned = alignToGrammar(
+    {
+      stem: draft.stem,
+      choices: draft.choices,
+      answer_key: draft.answer_key,
+      explanation: draft.explanation,
+    },
+    "ai-generated",
+  );
+  if (!aligned) return draft;
+  return {
+    stem: aligned.stem,
+    choices: aligned.choices,
+    answer_key: aligned.answer_key ?? draft.answer_key,
+    explanation: aligned.explanation ?? draft.explanation,
+    reasoning: draft.reasoning,
   };
 }
