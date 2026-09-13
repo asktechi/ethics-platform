@@ -64,19 +64,37 @@ export async function tagQuestion(
   }
 
   const raw = JSON.parse(response.choices[0]?.message?.content ?? "{}") as Partial<TagProposal>;
-  const standardIds = new Set(context.standards.map((item) => item.id));
-  const conceptIds = new Set(context.concepts.map((item) => item.id));
   const difficulty =
     raw.difficulty === "easy" || raw.difficulty === "hard" || raw.difficulty === "medium"
       ? raw.difficulty
       : "medium";
   return {
-    standard_id: raw.standard_id && standardIds.has(raw.standard_id) ? raw.standard_id : null,
-    concept_id: raw.concept_id && conceptIds.has(raw.concept_id) ? raw.concept_id : null,
+    standard_id: resolveListId(raw.standard_id, context.standards),
+    concept_id: resolveListId(raw.concept_id, context.concepts),
     difficulty,
     confidence: Math.max(0, Math.min(1, Number(raw.confidence ?? 0))),
     reasoning: String(raw.reasoning ?? "").slice(0, 400),
   };
+}
+
+function resolveListId(raw: unknown, items: TagContextItem[]) {
+  const value = String(raw ?? "").trim();
+  if (!value || value === "null" || value === "undefined") return null;
+  const exactId = items.find((item) => item.id === value);
+  if (exactId) return exactId.id;
+  const lower = value.toLowerCase();
+  const byCode = items.find((item) => (item.code ?? "").toLowerCase() === lower);
+  if (byCode) return byCode.id;
+  const byTitle = items.find(
+    (item) => item.title.toLowerCase() === lower || (item.name ?? "").toLowerCase() === lower,
+  );
+  if (byTitle) return byTitle.id;
+  const matches = items.filter((item) => {
+    const code = (item.code ?? "").toLowerCase();
+    return Boolean(code) && (lower.includes(code) || code.includes(lower));
+  });
+  matches.sort((a, b) => (b.code?.length ?? 0) - (a.code?.length ?? 0));
+  return matches[0]?.id ?? null;
 }
 
 async function mapLimit<T, R>(items: T[], limit: number, worker: (item: T) => Promise<R>) {

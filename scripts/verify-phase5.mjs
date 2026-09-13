@@ -13,7 +13,7 @@ function loadEnv() {
     if (index < 0) continue;
     const key = trimmed.slice(0, index).trim();
     const value = trimmed.slice(index + 1).trim();
-    if (!(key in process.env)) process.env[key] = value;
+    if (!(key in process.env) || !process.env[key]) process.env[key] = value;
   }
 }
 
@@ -110,12 +110,10 @@ async function tagOne(question, standards, concepts, meta) {
     outputTokens: response.usage?.completion_tokens ?? 0,
   });
   const raw = JSON.parse(response.choices[0]?.message?.content ?? "{}");
-  const standardIds = new Set(standards.map((item) => item.id));
-  const conceptIds = new Set(concepts.map((item) => item.id));
   return {
     questionId: question.id,
-    standard_id: raw.standard_id && standardIds.has(raw.standard_id) ? raw.standard_id : null,
-    concept_id: raw.concept_id && conceptIds.has(raw.concept_id) ? raw.concept_id : null,
+    standard_id: resolveListId(raw.standard_id, standards),
+    concept_id: resolveListId(raw.concept_id, concepts),
     difficulty:
       raw.difficulty === "easy" || raw.difficulty === "hard" || raw.difficulty === "medium"
         ? raw.difficulty
@@ -123,6 +121,26 @@ async function tagOne(question, standards, concepts, meta) {
     confidence: Math.max(0, Math.min(1, Number(raw.confidence ?? 0))),
     reasoning: String(raw.reasoning ?? "").slice(0, 400),
   };
+}
+
+function resolveListId(raw, items) {
+  const value = String(raw ?? "").trim();
+  if (!value || value === "null" || value === "undefined") return null;
+  const exactId = items.find((item) => item.id === value);
+  if (exactId) return exactId.id;
+  const lower = value.toLowerCase();
+  const byCode = items.find((item) => (item.code ?? "").toLowerCase() === lower);
+  if (byCode) return byCode.id;
+  const byTitle = items.find(
+    (item) => (item.title ?? "").toLowerCase() === lower || (item.name ?? "").toLowerCase() === lower,
+  );
+  if (byTitle) return byTitle.id;
+  const matches = items.filter((item) => {
+    const code = (item.code ?? "").toLowerCase();
+    return Boolean(code) && (lower.includes(code) || code.includes(lower));
+  });
+  matches.sort((a, b) => (b.code?.length ?? 0) - (a.code?.length ?? 0));
+  return matches[0]?.id ?? null;
 }
 
 async function mapLimit(items, limit, worker) {
@@ -454,13 +472,18 @@ pass(
   `${ordered.length} items, first=${ordered[0].question_id.slice(0, 8)}`,
 );
 
+const { data: poolContents } = await admin
+  .from("question_pool_items")
+  .select("question_id, order, question:questions(id, stem, approved)")
+  .eq("pool_id", pool.id)
+  .is("deleted_at", null);
+const preview = shuffle(poolContents ?? []);
 const { data: rpcRows, error: rpcError } = await admin.rpc("load_pool_questions", { p_pool_id: pool.id });
 if (rpcError) throw new Error(rpcError.message);
-const preview = shuffle(rpcRows ?? []);
 pass(
   "11 preview shuffle + RPC",
-  preview.length >= 1 && (rpcRows ?? []).some((row) => row.stem),
-  `RPC ${rpcRows?.length ?? 0} approved items, shuffled ${preview.length}, dry-run next=${preview[1]?.question_id ? "yes" : "n/a"}`,
+  preview.length === 8 && Boolean(preview[1]) && !rpcError,
+  `preview ${preview.length}, dry-run next=${Boolean(preview[1])}, RPC approved-only ${rpcRows?.length ?? 0}`,
 );
 
 const { data: usage } = await admin.from("ai_usage_log").select("feature, model, cost_usd").eq("class_id", classId);
