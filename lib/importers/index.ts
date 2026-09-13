@@ -10,11 +10,7 @@ import type { ParseResult, StrategyResult } from "@/lib/importers/types";
 
 export type { CanonicalQuestion, ParseResult } from "@/lib/importers/types";
 
-export async function importFile(
-  buffer: Buffer,
-  filename: string,
-  _hint?: string,
-): Promise<ParseResult> {
+export async function importFile(buffer: Buffer, filename: string, hint?: string): Promise<ParseResult> {
   const fileType = await detectFileType(buffer, filename);
   let strategy: StrategyResult;
 
@@ -49,16 +45,21 @@ export async function importFile(
         file: filename,
         fileType,
         questions: [],
-        globalWarnings: [`Unsupported or unrecognized file: ${filename}. Use csv, tsv, xlsx, xls, docx, doc, pdf, pptx, txt, or md.`],
+        globalWarnings: [
+          `Unsupported or unrecognized file: ${filename}. Use csv, tsv, xlsx, xls, docx, doc, pdf, pptx, txt, or md.`,
+        ],
         detectedPattern: "unknown",
       };
   }
+
+  const warnings = [...strategy.warnings];
+  if (hint) warnings.push(`Hint recorded: ${hint}`);
 
   return {
     file: filename,
     fileType,
     questions: strategy.questions.map((question) => normalizeQuestion(question, filename)),
-    globalWarnings: strategy.warnings,
+    globalWarnings: warnings,
     detectedPattern: strategy.pattern,
   };
 }

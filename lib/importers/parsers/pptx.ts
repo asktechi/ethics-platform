@@ -1,6 +1,6 @@
 import JSZip from "jszip";
 import { extractAnswerFromText, extractStandardHint, pickBestStrategy } from "@/lib/importers/normalize";
-import { hasChoicePrefixes, hasCorrectBlock, parseChoiceLines, parseOneProseBlock, parseProseBlocks } from "@/lib/importers/prose";
+import { hasChoicePrefixes, hasCorrectBlock, parseChoiceLines, parseProseBlocks } from "@/lib/importers/prose";
 import { rowsToQuestions } from "@/lib/importers/tabular";
 import { extractDrawingText } from "@/lib/importers/xml";
 import type { RawQuestion, StrategyResult } from "@/lib/importers/types";
@@ -106,7 +106,7 @@ function vignetteSpread(slides: Slide[]): RawQuestion[] {
       index += 1;
       continue;
     }
-    let stem = slide.text;
+    const stem = slide.text;
     let cursor = index + 1;
     const choiceSlides: Slide[] = [];
     while (cursor < slides.length && hasChoicePrefixes(slides[cursor].text)) {
