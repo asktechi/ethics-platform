@@ -1,24 +1,5 @@
-import { createRequire } from "node:module";
-import { mkdtempSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
-import { pathToFileURL } from "node:url";
+import { PHASE46_SLIDES, paginateFixture } from "@/lib/presentation/phase46-fixtures.ts";
 
-const require = createRequire(import.meta.url);
-const esbuild = require("esbuild");
-
-const outfile = join(mkdtempSync(join(tmpdir(), "phase46-")), "fixtures.mjs");
-await esbuild.build({
-  entryPoints: ["lib/presentation/phase46-fixtures.ts"],
-  outfile,
-  bundle: true,
-  platform: "node",
-  format: "esm",
-  packages: "external",
-  alias: { "@": process.cwd() },
-});
-
-const { PHASE46_SLIDES, paginateFixture } = await import(pathToFileURL(outfile).href);
 const CANONICAL = { width: 1920, height: 1080 };
 const CORNER = { width: 800, height: 600 };
 
@@ -52,5 +33,4 @@ if (c.fontSize > 48) failures.push(`C expected a reduced size, got ${c.fontSize}
 if (cCorner.beats.length < 2) failures.push(`C at 800x600 should paginate, got ${cCorner.beats.length} beats`);
 
 console.log(JSON.stringify({ ok: failures.length === 0, report, failures }, null, 2));
-writeFileSync("/tmp/phase46-pagination.json", JSON.stringify({ ok: failures.length === 0, report, failures }, null, 2));
 if (failures.length) process.exit(1);

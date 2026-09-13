@@ -33,7 +33,7 @@ export function useViewport(): Viewport {
   const [viewport, setViewport] = useState<Viewport>(readViewport);
 
   useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | null = null;
+    let timer: number | null = null;
     const publish = () => setViewport(readViewport());
     const onChange = () => {
       if (timer) window.clearTimeout(timer);

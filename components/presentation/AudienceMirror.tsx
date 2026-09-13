@@ -52,16 +52,16 @@ export function AudienceMirror({
   const lastBeatCount = useRef(0);
 
   const revealLines = useMemo(() => deriveSpeakerNotes(slide).revealLines, [slide]);
-  const pagination = useMemo(
-    () =>
-      paginateSlide({
-        slide: { id: slide.slideId, title: slide.title, body: slide.body },
-        lines: revealLines,
-        viewport: STAGE,
-        layout: slide.layout,
-      }),
-    [slide, revealLines, viewport.width, viewport.height],
-  );
+  const pagination = useMemo(() => {
+    void viewport.width;
+    void viewport.height;
+    return paginateSlide({
+      slide: { id: slide.slideId, title: slide.title, body: slide.body },
+      lines: revealLines,
+      viewport: STAGE,
+      layout: slide.layout,
+    });
+  }, [slide, revealLines, viewport.width, viewport.height]);
 
   const beatCount = pagination.beats.length;
   const beatIndex = Math.min(Math.max(0, beat), Math.max(0, beatCount - 1));
