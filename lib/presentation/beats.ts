@@ -47,12 +47,34 @@ export type SafeArea = {
 
 const cache = new Map<string, PaginationResult>();
 
+let liveViewport: ViewportSize = { width: CANONICAL_VIEWPORT.width, height: CANONICAL_VIEWPORT.height };
+export const lastFontSteps: Array<{
+  size: number;
+  fits: boolean;
+  fill: number;
+  height: number;
+  width: number;
+}> = [];
+
+export function getPaginationViewport(): ViewportSize {
+  return liveViewport;
+}
+
+/** Keep host + audience on the same pagination numbers; drop cache if the window moved >10px. */
+export function setPaginationViewport(next: ViewportSize) {
+  if (next.width <= 0 || next.height <= 0) return;
+  const changed =
+    Math.abs(next.width - liveViewport.width) > 10 || Math.abs(next.height - liveViewport.height) > 10;
+  liveViewport = { width: next.width, height: next.height };
+  if (changed) clearPaginationCache();
+}
+
 export function horizontalMargin(width: number) {
-  return clamp(width * 0.1, 60, 160);
+  return Math.max(60, width * 0.1);
 }
 
 export function verticalMargin(height: number) {
-  return clamp(height * 0.12, 80, 200);
+  return Math.max(80, height * 0.12);
 }
 
 export function computeSafeArea(viewport: ViewportSize): SafeArea {
@@ -91,7 +113,7 @@ export function beatIndexForLine(beats: Beat[], lineIndex: number) {
 
 export function paginateAssignment(
   slide: Pick<SlideAssignment, "slideId" | "title" | "body" | "cue" | "speakerNote" | "layout">,
-  viewport: ViewportSize = CANONICAL_VIEWPORT,
+  viewport: ViewportSize = getPaginationViewport(),
 ) {
   const lines = deriveSpeakerNotes(slide).revealLines;
   return paginateSlide({
@@ -104,6 +126,15 @@ export function paginateAssignment(
 
 export function paginateSlide(input: PaginateSlideInput): PaginationResult {
   const { slide, lines, viewport, layout } = input;
+  if (viewport.width <= 0 || viewport.height <= 0) {
+    return {
+      beats: [makeBeat(0, Math.max(0, lines.length - 1), lines)],
+      fontSize: HEADLINE_FONT_SIZE,
+      lineHeight: recommendedLineHeight(layout),
+      maxLineChars: 80,
+      safeArea: { horizontal: 0, vertical: 0, width: 0, height: 0 },
+    };
+  }
   const key = `${slide.id}:${Math.round(viewport.width)}x${Math.round(viewport.height)}`;
   const hit = cache.get(key);
   if (hit) return hit;
@@ -187,15 +218,36 @@ function pickFontSize(options: {
   const { title, lines, layout, safe, steps } = options;
   if (!title && lines.length === 0) return HEADLINE_FONT_SIZE;
 
+  lastFontSteps.length = 0;
   const start = steps[0] ?? HEADLINE_FONT_SIZE;
-  const startHeight = measureBlock({ title, lines, layout, fontSize: start }).height;
-  const fill = startHeight / safe.height;
-  if (fill <= 0.7 && contentFits({ title, lines, layout, fontSize: start, safe })) {
+  const startMeasured = measureBlock({ title, lines, layout, fontSize: start });
+  const fill = safe.height > 0 ? startMeasured.height / safe.height : 1;
+  const startFits = contentFits({ title, lines, layout, fontSize: start, safe });
+  lastFontSteps.push({
+    size: start,
+    fits: startFits,
+    fill,
+    height: startMeasured.height,
+    width: startMeasured.width,
+  });
+  if (fill <= 0.7 && startFits) {
+    console.log("[phase46g] font-loop stop at start", { start, fill, startFits });
     return start;
   }
 
   for (const fontSize of steps) {
-    if (contentFits({ title, lines, layout, fontSize, safe })) return fontSize;
+    const measured = measureBlock({ title, lines, layout, fontSize });
+    const stepFill = safe.height > 0 ? measured.height / safe.height : 1;
+    const fits = contentFits({ title, lines, layout, fontSize, safe });
+    lastFontSteps.push({
+      size: fontSize,
+      fits,
+      fill: stepFill,
+      height: measured.height,
+      width: measured.width,
+    });
+    console.log("[phase46g] font-loop step", { fontSize, fits, fill: stepFill });
+    if (fits) return fontSize;
   }
   return steps[steps.length - 1] ?? MIN_FONT_SIZE;
 }
@@ -368,8 +420,4 @@ function makeBeat(startLineIndex: number, endLineIndex: number, lines: string[])
 
 function recommendedWrapChars(safeWidth: number, fontSize: number) {
   return Math.max(24, Math.min(80, Math.floor(safeWidth / (fontSize * 0.52))));
-}
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value));
 }

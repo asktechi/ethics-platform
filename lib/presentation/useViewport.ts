@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CANONICAL_VIEWPORT } from "@/lib/presentation/beats";
+import { setPaginationViewport } from "@/lib/presentation/beats";
 
 export type Viewport = {
   width: number;
@@ -10,31 +10,31 @@ export type Viewport = {
 };
 
 const DEBOUNCE_MS = 150;
+const EMPTY: Viewport = { width: 0, height: 0, aspect: 0 };
 
 function readViewport(): Viewport {
-  if (typeof window === "undefined") {
-    return {
-      width: CANONICAL_VIEWPORT.width,
-      height: CANONICAL_VIEWPORT.height,
-      aspect: CANONICAL_VIEWPORT.width / CANONICAL_VIEWPORT.height,
-    };
-  }
+  if (typeof window === "undefined") return EMPTY;
   const width = window.innerWidth;
   const height = window.innerHeight;
   return {
     width,
     height,
-    aspect: height > 0 ? width / height : 16 / 9,
+    aspect: height > 0 ? width / height : 0,
   };
 }
 
 /** Window size for audience layout. Debounced 150ms; teleprompter does not use this. */
 export function useViewport(): Viewport {
-  const [viewport, setViewport] = useState<Viewport>(readViewport);
+  const [viewport, setViewport] = useState<Viewport>(EMPTY);
 
   useEffect(() => {
     let timer: number | null = null;
-    const publish = () => setViewport(readViewport());
+    const publish = () => {
+      const next = readViewport();
+      setPaginationViewport(next);
+      setViewport(next);
+      console.log("[phase46g] useViewport", next);
+    };
     const onChange = () => {
       if (timer) window.clearTimeout(timer);
       timer = window.setTimeout(publish, DEBOUNCE_MS);
@@ -42,8 +42,10 @@ export function useViewport(): Viewport {
     window.addEventListener("resize", onChange);
     window.addEventListener("orientationchange", onChange);
     publish();
+    const later = window.setTimeout(publish, 1000);
     return () => {
       if (timer) window.clearTimeout(timer);
+      window.clearTimeout(later);
       window.removeEventListener("resize", onChange);
       window.removeEventListener("orientationchange", onChange);
     };

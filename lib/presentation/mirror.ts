@@ -1,6 +1,6 @@
 import {
   beatIndexForLine,
-  CANONICAL_VIEWPORT,
+  getPaginationViewport,
   paginateSlide,
   type PaginationResult,
 } from "@/lib/presentation/beats";
@@ -35,7 +35,7 @@ export function audienceMirrorModel(options: {
       body: options.slide.body,
     },
     lines: revealLines,
-    viewport: CANONICAL_VIEWPORT,
+    viewport: getPaginationViewport(),
     layout: options.slide.layout,
   });
   const beatIndex = Math.min(

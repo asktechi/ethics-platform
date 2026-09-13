@@ -8,6 +8,7 @@ const b = paginateFixture(PHASE46_SLIDES.B, CANONICAL);
 const c = paginateFixture(PHASE46_SLIDES.C, CANONICAL);
 const d = paginateFixture(PHASE46_SLIDES.D, CANONICAL);
 const blank = paginateFixture(PHASE46_SLIDES.blank, CANONICAL);
+const long = paginateFixture(PHASE46_SLIDES.long, CANONICAL);
 const cCorner = paginateFixture(PHASE46_SLIDES.C, CORNER);
 const aCorner = paginateFixture(PHASE46_SLIDES.A, CORNER);
 
@@ -17,6 +18,7 @@ const report = {
   C: { fontSize: c.fontSize, beats: c.beats.length, lines: c.beats.reduce((n, beat) => n + beat.lines.length, 0) },
   D: { fontSize: d.fontSize, beats: d.beats.length, title: PHASE46_SLIDES.D.title },
   blank: { fontSize: blank.fontSize, beats: blank.beats.length },
+  long: { fontSize: long.fontSize, beats: long.beats.length },
   C_800x600: { fontSize: cCorner.fontSize, beats: cCorner.beats.length },
   A_800x600: { fontSize: aCorner.fontSize, beats: aCorner.beats.length },
 };
@@ -31,6 +33,9 @@ if (b.fontSize > 96 || b.fontSize < 34) failures.push(`B font out of range: ${b.
 if (c.fontSize > b.fontSize) failures.push(`C should not be larger than B (${c.fontSize} > ${b.fontSize})`);
 if (c.fontSize > 48) failures.push(`C expected a reduced size, got ${c.fontSize}`);
 if (cCorner.beats.length < 2) failures.push(`C at 800x600 should paginate, got ${cCorner.beats.length} beats`);
+if (a.fontSize < 72) failures.push(`A at 1920x1080 should be ≥72px, got ${a.fontSize}`);
+if (long.fontSize > a.fontSize) failures.push(`long slide should not be larger than A`);
+if (long.beats.length < 1) failures.push("long slide missing beats");
 
 console.log(JSON.stringify({ ok: failures.length === 0, report, failures }, null, 2));
 if (failures.length) process.exit(1);

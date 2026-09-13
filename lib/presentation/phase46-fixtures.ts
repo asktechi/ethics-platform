@@ -33,6 +33,19 @@ export const PHASE46_SLIDE_C_BODY = [
 
 export const PHASE46_SLIDE_D_TITLE = "PROFESSIONALISM";
 
+export const PHASE46_SLIDE_LONG_BODY = [
+  "A research note is not a product brochure, and the difference is the duty you owe the person who will live with the recommendation.",
+  "Independence means the conclusion can survive a room that wants a different answer, including the room that pays your bonus.",
+  "If a gift, a trip, or a quiet introduction would look like a price of admission, it is already a conflict, whether or not anyone wrote a check.",
+  "Disclosure is the work of putting the conflict on the table before the advice, in language a client can actually use.",
+  "Fair dealing is the same story in every room: the same risks, the same alternatives, the same reasons you would still hold the line if the client were your own family.",
+  "Competence is not a certificate on the wall. It is the habit of knowing when you do not know enough, and of refusing to fill the gap with confidence.",
+  "Records exist because memory is a poor witness, and because a file that cannot reconstruct the advice cannot defend the client.",
+  "When the facts change, the recommendation must change with them. Silence is also a recommendation, and the market will price it.",
+  "Professionalism is the repeated choice to do the harder honest thing when the easier sentence would close the meeting.",
+  "The standard is not a slogan. It is a working rule, and it is the only thing that still belongs to the client after you leave the room.",
+].join(" ");
+
 function assignment(
   id: string,
   title: string,
@@ -58,6 +71,7 @@ export const PHASE46_SLIDES = {
   C: assignment("phase46-c", "A longer argument", PHASE46_SLIDE_C_BODY, "point"),
   D: assignment("phase46-d", PHASE46_SLIDE_D_TITLE, "", "hook"),
   blank: assignment("phase46-blank", "Integrity first", "", "hook"),
+  long: assignment("phase46-long", "", PHASE46_SLIDE_LONG_BODY, "point"),
 };
 
 export function paginateFixture(

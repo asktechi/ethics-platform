@@ -6,15 +6,10 @@
  */
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { usePresentationBus } from "@/lib/presentation/bus";
+import { useEffect, useMemo, useRef, type CSSProperties } from "react";
 import { ThemeBackground } from "@/components/presentation/ThemeBackground";
-import {
-  beatIndexForLine,
-  CANONICAL_VIEWPORT,
-  paginateSlide,
-} from "@/lib/presentation/beats";
-import { dispatch } from "@/lib/presentation/bus";
+import { beatIndexForLine, paginateSlide } from "@/lib/presentation/beats";
+import { dispatch, usePresentationBus } from "@/lib/presentation/bus";
 import { ensureAaText } from "@/lib/presentation/contrast";
 import { deriveSpeakerNotes } from "@/lib/presentation/speaker-notes";
 import type { SlideAssignment } from "@/lib/presentation/types";
@@ -32,8 +27,6 @@ export type AudienceMirrorProps = {
   showChrome: boolean;
 };
 
-const STAGE = CANONICAL_VIEWPORT;
-
 export function AudienceMirror({
   slide,
   beat,
@@ -46,40 +39,72 @@ export function AudienceMirror({
   const viewport = useViewport();
   const slideIndex = usePresentationBus((s) => s.currentSlideIndex);
   const lineIndex = usePresentationBus((s) => s.teleprompterLineIndex);
-  const rootRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
-  const lockedSlide = useRef<string | null>(null);
   const lastBeatCount = useRef(0);
+  const logged = useRef<string>("");
 
   const revealLines = useMemo(() => deriveSpeakerNotes(slide).revealLines, [slide]);
+  const ready = viewport.width > 0 && viewport.height > 0;
   const pagination = useMemo(() => {
-    void viewport.width;
-    void viewport.height;
+    if (!ready) return null;
     return paginateSlide({
       slide: { id: slide.slideId, title: slide.title, body: slide.body },
       lines: revealLines,
-      viewport: STAGE,
+      viewport,
       layout: slide.layout,
     });
-  }, [slide, revealLines, viewport.width, viewport.height]);
+  }, [ready, revealLines, slide, viewport]);
 
-  const beatCount = pagination.beats.length;
+  const beatCount = pagination?.beats.length ?? 1;
   const beatIndex = Math.min(Math.max(0, beat), Math.max(0, beatCount - 1));
-  const currentBeat = pagination.beats[beatIndex] ?? pagination.beats[0];
-
-  useLayoutEffect(() => {
-    if (lockedSlide.current === slide.slideId) return;
-    const node = rootRef.current;
-    const width = node?.clientWidth ?? viewport.width;
-    const height = node?.clientHeight ?? viewport.height;
-    if (width < 8 || height < 8) return;
-    const next = Math.min(width / STAGE.width, height / STAGE.height);
-    if (!Number.isFinite(next) || next <= 0) return;
-    setScale(next);
-    lockedSlide.current = slide.slideId;
-  }, [slide.slideId, viewport.height, viewport.width]);
+  const currentBeat = pagination?.beats[beatIndex] ?? pagination?.beats[0];
+  const headlineSize = pagination?.fontSize ?? 96;
+  const bodySize = headlineSize * 0.72;
+  const safe = useMemo(
+    () =>
+      pagination?.safeArea ?? {
+        horizontal: 0,
+        vertical: 0,
+        width: 0,
+        height: 0,
+      },
+    [pagination],
+  );
 
   useEffect(() => {
+    if (!pagination || !ready) return;
+    const key = `${slide.slideId}:${viewport.width}x${viewport.height}:${headlineSize}`;
+    if (logged.current === key) return;
+    logged.current = key;
+    const applied = {
+      fontSize: `${headlineSize}px`,
+      lineHeight: 1.2,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      maxWidth: safe.width,
+      maxHeight: safe.height,
+      padding: 0,
+    };
+    console.log("[phase46g] diagnostic", {
+      a_useViewport: viewport,
+      b_safeArea: {
+        horizontalMargin: safe.horizontal,
+        verticalMargin: safe.vertical,
+        safeWidth: safe.width,
+        safeHeight: safe.height,
+      },
+      c_paginateSlide: {
+        beats: pagination.beats.length,
+        fontSize: pagination.fontSize,
+        lineHeight: pagination.lineHeight,
+        maxLineChars: pagination.maxLineChars,
+      },
+      d_headlineContainer: applied,
+    });
+  }, [headlineSize, pagination, ready, safe, slide.slideId, viewport]);
+
+  useEffect(() => {
+    if (!pagination) return;
     if (lastBeatCount.current > 0 && lastBeatCount.current !== beatCount) {
       const snapped = beatIndexForLine(pagination.beats, lineIndex);
       if (snapped !== beatIndex) {
@@ -87,20 +112,16 @@ export function AudienceMirror({
       }
     }
     lastBeatCount.current = beatCount;
-  }, [beatCount, beatIndex, lineIndex, pagination.beats, slideIndex]);
+  }, [beatCount, beatIndex, lineIndex, pagination, slideIndex]);
 
   const text = ensureAaText(theme.text ?? "#F5F1E8", theme.bg ?? "#0B1B2B");
   const align =
     slide.layout === "hook" || slide.layout === "question" || slide.layout === "cue"
       ? "center"
       : "left";
-  const headlineSize = pagination.fontSize;
-  const bodySize = pagination.fontSize * 0.72;
-  const safe = pagination.safeArea;
 
   return (
     <article
-      ref={rootRef}
       data-audience-mirror="true"
       data-slide-id={slide.slideId}
       data-beat-index={beatIndex}
@@ -108,57 +129,56 @@ export function AudienceMirror({
       data-font-size={headlineSize}
       data-reveal-count={revealLineCount}
       data-show-chrome={showChrome ? "true" : "false"}
+      data-viewport={`${viewport.width}x${viewport.height}`}
       className="relative isolate h-full w-full overflow-hidden"
       style={{ color: text }}
     >
       <ThemeBackground slideId={slide.slideId} theme={theme} imageUrl={imageUrl} />
-      <div className="absolute inset-0 z-10 flex items-center justify-center overflow-hidden">
-        <div
-          className="relative overflow-hidden"
-          style={{
-            width: STAGE.width,
-            height: STAGE.height,
-            transform: `scale(${scale})`,
-            transformOrigin: "center center",
-          }}
-        >
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div
-              className="relative flex items-center justify-center"
-              style={{
-                width: safe.width,
-                maxWidth: safe.width,
-                maxHeight: safe.height,
-                height: "auto",
-              }}
-            >
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={`${slide.slideId}:${beatIndex}`}
-                  className="w-full"
-                  style={{ textAlign: align }}
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0, transition: { duration: 0.3, ease: "easeOut" } }}
-                  exit={{ opacity: 0, y: 0, transition: { duration: 0.2 } }}
-                >
-                  {slide.layout === "cue" ? (
-                    <CueCard accent={theme.accent} text={text} fontSize={headlineSize} />
-                  ) : (
-                    <BeatBody
-                      slide={slide}
-                      beat={currentBeat}
-                      revealLineCount={revealLineCount}
-                      headlineSize={headlineSize}
-                      bodySize={bodySize}
-                      accent={theme.accent}
-                      text={text}
-                    />
-                  )}
-                </motion.div>
-              </AnimatePresence>
-            </div>
+      <div
+        className="absolute inset-0 z-10"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {ready && pagination && currentBeat ? (
+          <div
+            style={{
+              maxWidth: safe.width,
+              maxHeight: safe.height,
+              width: "100%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={`${slide.slideId}:${beatIndex}`}
+                className="w-full"
+                style={{ textAlign: align }}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0, transition: { duration: 0.3, ease: "easeOut" } }}
+                exit={{ opacity: 0, y: 0, transition: { duration: 0.2 } }}
+              >
+                {slide.layout === "cue" ? (
+                  <CueCard accent={theme.accent} text={text} fontSize={headlineSize} />
+                ) : (
+                  <BeatBody
+                    slide={slide}
+                    beat={currentBeat}
+                    revealLineCount={revealLineCount}
+                    headlineSize={headlineSize}
+                    bodySize={bodySize}
+                    accent={theme.accent}
+                    text={text}
+                  />
+                )}
+              </motion.div>
+            </AnimatePresence>
           </div>
-        </div>
+        ) : null}
       </div>
       {showChrome ? (
         <p className="pointer-events-none absolute left-1/2 top-3 z-20 -translate-x-1/2 text-[10px] font-semibold uppercase tracking-[0.22em] text-ivory/55">
@@ -195,19 +215,20 @@ function BeatBody({
   const showAll = revealLineCount === -1;
   const visibleThrough = showAll ? beat.lines.length - 1 : revealLineCount;
   const visible = visibleThrough < 0 ? [] : beat.lines.filter((_, index) => index <= visibleThrough);
-  const headlineStyle = {
+  const headlineStyle: CSSProperties = {
     fontFamily: "var(--font-playfair), Georgia, serif",
     fontWeight: 600,
-    fontSize: `clamp(34px, ${headlineSize}px, ${headlineSize}px)`,
+    fontSize: `${headlineSize}px`,
     letterSpacing: "-0.02em",
     lineHeight: 1.2,
-  } as const;
-  const bodyStyle = {
+    margin: 0,
+  };
+  const bodyStyle: CSSProperties = {
     fontFamily: "var(--font-inter), system-ui, sans-serif",
     fontWeight: 400,
-    fontSize: `clamp(24px, ${bodySize}px, ${bodySize}px)`,
+    fontSize: `${bodySize}px`,
     lineHeight: 1.5,
-  } as const;
+  };
 
   if (slide.layout === "contrast") {
     const left = beat.leftLines ?? visible;
@@ -235,7 +256,8 @@ function BeatBody({
   }
 
   return (
-    <div className={slide.layout === "scenario" ? "px-10 py-8" : undefined}
+    <div
+      className={slide.layout === "scenario" ? "px-10 py-8" : undefined}
       style={
         slide.layout === "scenario"
           ? { border: `1px solid ${accent}80`, backgroundColor: "rgba(0,0,0,0.28)" }
@@ -254,7 +276,7 @@ function BeatBody({
       {slide.layout === "question" ? (
         <p
           className="mt-6 font-display leading-none opacity-80"
-          style={{ color: accent, fontSize: headlineSize * 1.15 }}
+          style={{ color: accent, fontSize: `${headlineSize * 1.15}px` }}
         >
           ?
         </p>
@@ -326,7 +348,7 @@ function CueCard({
         style={{
           fontFamily: "var(--font-playfair), Georgia, serif",
           fontWeight: 600,
-          fontSize: `clamp(34px, ${Math.min(fontSize, 72)}px, 72px)`,
+          fontSize: `${Math.min(fontSize, 72)}px`,
           letterSpacing: "-0.02em",
           lineHeight: 1.2,
         }}
