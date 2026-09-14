@@ -21,6 +21,7 @@ const empty: WizardState = {
   mode: "jeopardy",
   settings: defaultGameSettings(),
   modeConfig: schemaDefaults(getMode("jeopardy").configSchema),
+  caseStudyIds: [],
 };
 
 type WizardStore = WizardState & {
@@ -45,5 +46,6 @@ export const useGameWizard = create<WizardStore>((set) => ({
       settings: defaultGameSettings(),
       filter: defaultGameFilter(),
       modeConfig: schemaDefaults(getMode("jeopardy").configSchema),
+      caseStudyIds: [],
     }),
 }));

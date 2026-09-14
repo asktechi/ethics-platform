@@ -37,6 +37,7 @@ const wizardSchema = z.object({
   filter: filterSchema,
   mode: z.enum(["jeopardy", "rapid_fire", "team_battle", "case_study", "adaptive", "boss_battle"]),
   modeConfig: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
+  caseStudyIds: z.array(z.string().uuid()).optional(),
   settings: z.object({
     time_per_q: z.number().int().min(5).max(300),
     base_points: z.number().int().min(0).max(1000),
@@ -59,6 +60,7 @@ function asWizard(input: unknown): WizardState {
     settings: { ...defaultGameSettings(), ...parsed.settings },
     mode: parsed.mode,
     modeConfig: { ...defaults, ...(parsed.modeConfig ?? {}) },
+    caseStudyIds: parsed.caseStudyIds ?? [],
   };
 }
 
@@ -172,9 +174,11 @@ export async function previewFilterQuestions(filter: unknown, classId: string) {
 
 export async function previewGameSourceAction(input: {
   classId: string;
-  source: "pool" | "filter";
+  source: "pool" | "filter" | "cases";
   poolId?: string;
   filter?: unknown;
+  mode?: WizardState["mode"];
+  caseStudyIds?: string[];
 }) {
   try {
     const filter = input.filter ? filterSchema.parse(input.filter) : undefined;
@@ -183,6 +187,8 @@ export async function previewGameSourceAction(input: {
       source: input.source,
       poolId: input.poolId,
       filter,
+      mode: input.mode,
+      caseStudyIds: input.caseStudyIds,
     });
     return { ok: true as const, ...preview };
   } catch (error) {

@@ -16,19 +16,21 @@ import { cn } from "@/lib/utils";
 
 type PoolOption = { id: string; name: string; count: number; stems: string[] };
 type ClassOption = { id: string; title: string };
+type CaseOption = { id: string; title: string; questionCount: number; preview: string };
 type PreviewState = {
   count: number;
   sample: string[];
   diagnostics: ResolveDiagnostics;
 };
 
-const COMING_SOON = "This mode is coming soon. Save a Jeopardy, Rapid Fire, or Team Battle game for now.";
+const COMING_SOON = "This mode is coming soon. Save a playable mode for now.";
 
 export function GameWizard({
   classes,
   poolsByClass,
   standards,
   conceptsByClass,
+  casesByClass = {},
   existingTags,
   editId,
 }: {
@@ -36,6 +38,7 @@ export function GameWizard({
   poolsByClass: Record<string, PoolOption[]>;
   standards: Array<{ id: string; code: string; title: string }>;
   conceptsByClass: Record<string, Array<{ id: string; title: string }>>;
+  casesByClass?: Record<string, CaseOption[]>;
   existingTags: string[];
   editId?: string;
 }) {
@@ -53,22 +56,26 @@ export function GameWizard({
 
   const pools = poolsByClass[store.classId] ?? [];
   const concepts = conceptsByClass[store.classId] ?? [];
+  const cases = casesByClass[store.classId] ?? [];
   const selectedPool = pools.find((item) => item.id === store.poolId);
+  const caseStudyIds = store.caseStudyIds ?? [];
   const modeDef = getMode(store.mode);
   const config = store.modeConfig ?? schemaDefaults(modeDef.configSchema);
 
   useEffect(() => {
     if (!store.classId) return;
-    if (store.source === "pool" && !store.poolId) {
+    if (store.source === "pool" && !store.poolId && store.mode !== "case_study") {
       setPreview(null);
       return;
     }
     const timer = window.setTimeout(() => {
       void previewGameSourceAction({
         classId: store.classId,
-        source: store.source,
+        source: store.mode === "case_study" ? "cases" : store.source,
         poolId: store.poolId,
         filter: store.filter,
+        mode: store.mode,
+        caseStudyIds: store.caseStudyIds,
       }).then((result) => {
         if (result.ok) {
           setPreview({
@@ -80,17 +87,25 @@ export function GameWizard({
       });
     }, 300);
     return () => window.clearTimeout(timer);
-  }, [store.classId, store.filter, store.poolId, store.source]);
+  }, [store.classId, store.filter, store.poolId, store.source, store.mode, store.caseStudyIds]);
 
   const canNext = useMemo(() => {
     if (store.step === 1) return Boolean(store.name.trim() && store.classId);
-    if (store.step === 2) return store.source === "filter" || Boolean(store.poolId);
+    if (store.step === 2) {
+      if (store.mode === "case_study") return caseStudyIds.length >= 1;
+      return store.source === "filter" || Boolean(store.poolId);
+    }
+    if (store.step === 3 && store.mode === "case_study") return caseStudyIds.length >= 1;
     return true;
-  }, [store]);
+  }, [store, caseStudyIds.length]);
 
   function goNext() {
-    if (store.step === 2 && (preview?.count ?? 0) === 0) {
+    if (store.step === 2 && store.mode !== "case_study" && (preview?.count ?? 0) === 0) {
       setStepToast("Add questions before continuing.");
+      return;
+    }
+    if (store.step === 2 && store.mode === "case_study" && caseStudyIds.length === 0) {
+      setStepToast("Pick at least one case.");
       return;
     }
     setStepToast(null);
@@ -114,6 +129,7 @@ export function GameWizard({
         filter: store.filter,
         mode: store.mode,
         modeConfig: store.modeConfig,
+        caseStudyIds: store.caseStudyIds ?? [],
         settings: store.settings,
       };
       const result = editId ? await updateGameAction(editId, payload) : await saveGameAction(payload);
@@ -183,6 +199,14 @@ export function GameWizard({
       {store.step === 2 ? (
         <section className="mt-8 space-y-4">
           <h1 className="font-display text-3xl">Question source</h1>
+          {store.mode === "case_study" ? (
+            <CasePicker
+              cases={cases}
+              selected={caseStudyIds}
+              onChange={(ids) => store.patch({ caseStudyIds: ids })}
+            />
+          ) : (
+            <>
           <div className="flex gap-3">
             {(["pool", "filter"] as const).map((source) => (
               <button
@@ -308,7 +332,9 @@ export function GameWizard({
               </label>
             </div>
           )}
-          <SourcePreview source={store.source} preview={preview} />
+            </>
+          )}
+          <SourcePreview source={store.mode === "case_study" ? "cases" : store.source} preview={preview} />
         </section>
       ) : null}
 
@@ -358,6 +384,15 @@ export function GameWizard({
               );
             })}
           </div>
+          {store.mode === "case_study" ? (
+            <div className="mt-6">
+              <CasePicker
+                cases={cases}
+                selected={caseStudyIds}
+                onChange={(ids) => store.patch({ caseStudyIds: ids })}
+              />
+            </div>
+          ) : null}
         </section>
       ) : null}
 
@@ -491,7 +526,57 @@ export function GameWizard({
   );
 }
 
-function SourcePreview({ source, preview }: { source: "pool" | "filter"; preview: PreviewState | null }) {
+function CasePicker({
+  cases,
+  selected,
+  onChange,
+}: {
+  cases: CaseOption[];
+  selected: string[];
+  onChange: (ids: string[]) => void;
+}) {
+  const total = cases.filter((item) => selected.includes(item.id)).reduce((sum, item) => sum + item.questionCount, 0);
+  return (
+    <div className="space-y-3">
+      <h2 className="font-display text-xl">Pick cases</h2>
+      {cases.length === 0 ? (
+        <p className="text-sm text-ivory/60">
+          This class has no case studies yet. Open the class Cases page, attach questions, then come back.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {cases.map((item) => {
+            const checked = selected.includes(item.id);
+            return (
+              <label key={item.id} className="flex items-start gap-3 border border-white/10 p-3 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={checked}
+                  onChange={(event) => {
+                    onChange(
+                      event.target.checked ? [...selected, item.id] : selected.filter((id) => id !== item.id),
+                    );
+                  }}
+                />
+                <span>
+                  <span className="block font-medium text-ivory">{item.title}</span>
+                  <span className="block text-ivory/55">{item.questionCount} questions · {item.preview}</span>
+                </span>
+              </label>
+            );
+          })}
+        </div>
+      )}
+      <p className="text-sm text-gold">
+        {selected.length} case{selected.length === 1 ? "" : "s"} · {total} questions
+      </p>
+      {selected.length === 0 ? <p className="text-sm text-red-300">Pick at least one case.</p> : null}
+    </div>
+  );
+}
+
+function SourcePreview({ source, preview }: { source: "pool" | "filter" | "cases"; preview: PreviewState | null }) {
   if (!preview) {
     return (
       <div className="border border-white/10 bg-card/40 p-3 text-sm text-ivory/50">
@@ -507,6 +592,8 @@ function SourcePreview({ source, preview }: { source: "pool" | "filter"; preview
         <p className="mt-2 text-sm text-ivory/70">
           {diagnostics.approvedCount} of {diagnostics.poolItemCount} approved
         </p>
+      ) : source === "cases" ? (
+        <p className="mt-2 text-sm text-ivory/70">Selected cases have {count} playable questions.</p>
       ) : (
         <p className="mt-2 text-sm text-ivory/70">This filter matches {diagnostics.filterMatchCount} questions.</p>
       )}

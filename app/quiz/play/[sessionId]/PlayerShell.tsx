@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { AdaptivePlayer } from "@/app/quiz/play/[sessionId]/modes/AdaptivePlayer";
+import { CaseStudyPlayer } from "@/app/quiz/play/[sessionId]/modes/CaseStudyPlayer";
 import { JeopardyPlayer } from "@/app/quiz/play/[sessionId]/modes/JeopardyPlayer";
 import { RapidFirePlayer } from "@/app/quiz/play/[sessionId]/modes/RapidFirePlayer";
 import { TeamBattlePlayer } from "@/app/quiz/play/[sessionId]/modes/TeamBattlePlayer";
@@ -43,6 +45,8 @@ export function PlayerShell({
   const router = useRouter();
   const mode = getMode(modeId);
   const isRapid = mode.id === "rapid_fire";
+  const isCase = mode.id === "case_study";
+  const isAdaptive = mode.id === "adaptive";
   const identity = useMemo(() => readPlayerIdentity(sessionId), [sessionId]);
   const team = teams.find((item) => item.team_key === identity?.team_id) ?? null;
   const [phase, setPhase] = useState<Phase>(initialStatus === "ended" ? "ended" : "waiting");
@@ -72,6 +76,11 @@ export function PlayerShell({
     ms_taken: number;
     points: number;
   } | null>(null);
+  const [caseIntro, setCaseIntro] = useState<{ title: string; scenario: string } | null>(null);
+  const [caseReady, setCaseReady] = useState(false);
+  const [caseComplete, setCaseComplete] = useState(false);
+  const [caseTitle, setCaseTitle] = useState<string | null>(null);
+  const [adaptiveStarted, setAdaptiveStarted] = useState(Boolean(gameStartedAt));
   const submitted = useRef(false);
   const choiceRef = useRef<string | null>(null);
   const questionIdRef = useRef<string | null>(null);
@@ -175,12 +184,34 @@ export function PlayerShell({
   }
 
   function handleEvent(event: QuizEvent) {
+    if (event.type === "CASE_INTRO") {
+      setCaseIntro({ title: event.title, scenario: event.scenario });
+      setCaseTitle(event.title);
+      setCaseReady(false);
+      setCaseComplete(false);
+      setPhase("waiting");
+      return;
+    }
+    if (event.type === "CASE_COMPLETE") {
+      setCaseComplete(true);
+      setCaseIntro(null);
+      setCaseReady(false);
+      setPhase("waiting");
+      return;
+    }
+    if (event.type === "ADAPTIVE_START") {
+      setAdaptiveStarted(true);
+      setPhase("question");
+      return;
+    }
     if (event.type === "QUESTION") {
       if (submitted.current && questionIdRef.current === event.question_id) {
         return;
       }
       submitted.current = false;
       questionIdRef.current = event.question_id;
+      setCaseReady(true);
+      setCaseComplete(false);
       setQuestion({
         question_id: event.question_id,
         stem: event.stem,
@@ -278,7 +309,7 @@ export function PlayerShell({
     return <p className="p-6 text-ivory/60">Redirecting to join…</p>;
   }
 
-  if (phase === "waiting") {
+  if (phase === "waiting" && !isAdaptive && !(isCase && (caseIntro || caseComplete))) {
     return (
       <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-navy px-6 text-center text-ivory">
         <p className="text-xs uppercase tracking-[0.18em] text-gold">{mode.name}</p>
@@ -340,6 +371,43 @@ export function PlayerShell({
               return next;
             });
           }}
+        />
+      ) : isAdaptive ? (
+        <AdaptivePlayer
+          identity={identity}
+          sessionId={sessionId}
+          started={adaptiveStarted}
+          allowHint={modeConfig.allow_hint !== false}
+          onDelta={(delta) => {
+            setScore((value) => {
+              const next = value + delta;
+              scoreRef.current = next;
+              return next;
+            });
+          }}
+        />
+      ) : isCase || caseIntro || caseComplete ? (
+        <CaseStudyPlayer
+          intro={caseIntro}
+          complete={caseComplete}
+          ready={caseReady}
+          onReady={() => setCaseReady(true)}
+          caseTitle={caseTitle}
+          question={question}
+          questionIndex={questionIndex}
+          questionCount={questionCount}
+          remaining={remaining}
+          phase={phase === "waiting" ? "question" : phase}
+          paused={paused}
+          choice={choice}
+          correctKey={correctKey}
+          explanation={explanation}
+          lastDelta={lastDelta}
+          score={score}
+          streak={streak}
+          submitError={submitError}
+          highlight={highlight}
+          onLock={(key) => void lockIn(key)}
         />
       ) : mode.id === "team_battle" ? (
         <TeamBattlePlayer

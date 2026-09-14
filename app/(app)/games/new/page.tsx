@@ -21,6 +21,7 @@ export default async function NewGamePage() {
           poolsByClass={context.poolsByClass}
           standards={context.standards}
           conceptsByClass={context.conceptsByClass}
+          casesByClass={context.casesByClass}
           existingTags={tags}
         />
       </div>

@@ -58,6 +58,10 @@ function reduce(state: QuizBusState, event: QuizEvent): QuizBusState {
     case "SKIP":
       return { ...state, revealOpen: false, currentQuestionId: event.question_id ?? state.currentQuestionId };
     case "HIGHLIGHT":
+    case "CASE_INTRO":
+    case "CASE_COMPLETE":
+    case "ADAPTIVE_START":
+    case "ADAPTIVE_PROGRESS":
       return state;
     case "END":
       return { ...state, ended: true, isPaused: true, revealOpen: false };

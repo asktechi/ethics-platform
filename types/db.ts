@@ -606,6 +606,8 @@ export type Database = {
           ai_tag_confidence: number | null;
           ai_tag_reasoning: string | null;
           import_batch_id: string | null;
+          case_study_id: string | null;
+          case_study_order: number | null;
           created_by: string;
           created_at: string;
           updated_at: string;
@@ -628,6 +630,8 @@ export type Database = {
           ai_tag_confidence?: number | null;
           ai_tag_reasoning?: string | null;
           import_batch_id?: string | null;
+          case_study_id?: string | null;
+          case_study_order?: number | null;
           created_by: string;
           created_at?: string;
           updated_at?: string;
@@ -650,6 +654,8 @@ export type Database = {
           ai_tag_confidence?: number | null;
           ai_tag_reasoning?: string | null;
           import_batch_id?: string | null;
+          case_study_id?: string | null;
+          case_study_order?: number | null;
           created_by?: string;
           created_at?: string;
           updated_at?: string;
@@ -695,7 +701,7 @@ export type Database = {
           id: string;
           user_id: string;
           class_id: string | null;
-          feature: "tagging" | "generation";
+          feature: "tagging" | "generation" | "hint";
           model: string;
           input_tokens: number;
           output_tokens: number;
@@ -706,7 +712,7 @@ export type Database = {
           id?: string;
           user_id: string;
           class_id?: string | null;
-          feature: "tagging" | "generation";
+          feature: "tagging" | "generation" | "hint";
           model: string;
           input_tokens?: number;
           output_tokens?: number;
@@ -717,7 +723,7 @@ export type Database = {
           id?: string;
           user_id?: string;
           class_id?: string | null;
-          feature?: "tagging" | "generation";
+          feature?: "tagging" | "generation" | "hint";
           model?: string;
           input_tokens?: number;
           output_tokens?: number;
@@ -967,6 +973,8 @@ export type Database = {
           filter_json: Json;
           settings_json: Json;
           mode_config: Json;
+          case_study_ids: string[];
+          adaptive_config: Json;
           version: number;
           play_count: number;
           last_played_at: string | null;
@@ -986,6 +994,8 @@ export type Database = {
           filter_json?: Json;
           settings_json?: Json;
           mode_config?: Json;
+          case_study_ids?: string[];
+          adaptive_config?: Json;
           version?: number;
           play_count?: number;
           last_played_at?: string | null;
@@ -1005,6 +1015,8 @@ export type Database = {
           filter_json?: Json;
           settings_json?: Json;
           mode_config?: Json;
+          case_study_ids?: string[];
+          adaptive_config?: Json;
           version?: number;
           play_count?: number;
           last_played_at?: string | null;
@@ -1032,6 +1044,7 @@ export type Database = {
           duration_seconds: number | null;
           settings_snapshot: Json;
           team_assignment_mode: "auto" | "manual" | "self_select";
+          adaptive_state: Json;
           created_at: string;
           updated_at: string;
           deleted_at: string | null;
@@ -1053,6 +1066,7 @@ export type Database = {
           duration_seconds?: number | null;
           settings_snapshot?: Json;
           team_assignment_mode?: "auto" | "manual" | "self_select";
+          adaptive_state?: Json;
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
@@ -1074,6 +1088,7 @@ export type Database = {
           duration_seconds?: number | null;
           settings_snapshot?: Json;
           team_assignment_mode?: "auto" | "manual" | "self_select";
+          adaptive_state?: Json;
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
@@ -1104,6 +1119,42 @@ export type Database = {
           name?: string;
           color?: string;
           created_at?: string;
+        };
+        Relationships: [];
+      };
+      case_studies: {
+        Row: {
+          id: string;
+          class_id: string;
+          title: string;
+          scenario_text: string;
+          scenario_media_url: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          class_id: string;
+          title: string;
+          scenario_text: string;
+          scenario_media_url?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          class_id?: string;
+          title?: string;
+          scenario_text?: string;
+          scenario_media_url?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
         };
         Relationships: [];
       };
@@ -1324,6 +1375,26 @@ export type Database = {
           p_ms_taken: number;
         };
         Returns: { ok: boolean; already_answered: boolean; is_correct: boolean | null; points: number }[];
+      };
+      pick_next_adaptive_question: {
+        Args: { p_session_id: string; p_participant_id: string };
+        Returns: string | null;
+      };
+      get_adaptive_play_question: {
+        Args: { p_question_id: string };
+        Returns: {
+          question_id: string;
+          stem: string;
+          choices_json: Json;
+          time_limit_seconds: number;
+          standard_id: string | null;
+          standard_code: string | null;
+          standard_title: string | null;
+        }[];
+      };
+      apply_adaptive_hint: {
+        Args: { p_participant_token: string; p_question_id: string };
+        Returns: { ok: boolean; already_hinted: boolean; points_cost: number; new_score: number }[];
       };
       quiz_set_question: {
         Args: { p_session_id: string; p_index: number };

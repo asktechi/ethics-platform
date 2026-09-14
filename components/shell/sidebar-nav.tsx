@@ -50,25 +50,38 @@ export function SidebarNav({ collapsed, nav, onNavigate }: SidebarNavProps) {
           </p>
         ) : (
           nav.recentClasses.map((item) => (
-            <Link
+            <div
               key={item.id}
-              href={`/class/${item.id}`}
-              onClick={onNavigate}
-              title={collapsed ? item.title : undefined}
               className={cn(
-                "rounded-sm px-2 py-2 text-sm text-ivory/80 transition-colors hover:bg-sidebar-accent hover:text-ivory",
+                "rounded-sm px-2 py-2 text-sm text-ivory/80",
                 collapsed && "flex justify-center",
               )}
             >
-              {collapsed ? (
-                <span className="h-1.5 w-1.5 rounded-full bg-gold/80" aria-hidden />
-              ) : (
-                <>
-                  <span className="block truncate font-medium">{item.title}</span>
-                  <span className="block truncate text-xs text-ivory/45">{item.meta}</span>
-                </>
-              )}
-            </Link>
+              <Link
+                href={`/class/${item.id}`}
+                onClick={onNavigate}
+                title={collapsed ? item.title : undefined}
+                className="block transition-colors hover:text-ivory"
+              >
+                {collapsed ? (
+                  <span className="h-1.5 w-1.5 rounded-full bg-gold/80" aria-hidden />
+                ) : (
+                  <>
+                    <span className="block truncate font-medium">{item.title}</span>
+                    <span className="block truncate text-xs text-ivory/45">{item.meta}</span>
+                  </>
+                )}
+              </Link>
+              {!collapsed && item.questionCount > 0 ? (
+                <Link
+                  href={`/class/${item.id}/cases`}
+                  onClick={onNavigate}
+                  className="mt-1 block text-xs text-gold/80 hover:text-gold"
+                >
+                  Cases
+                </Link>
+              ) : null}
+            </div>
           ))
         )}
       </NavGroup>

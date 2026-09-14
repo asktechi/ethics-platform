@@ -40,6 +40,7 @@ export type WizardState = {
   mode: GameMode;
   settings: GameSettings;
   modeConfig: Record<string, string | number | boolean>;
+  caseStudyIds: string[];
 };
 
 export const defaultGameSettings = (): GameSettings => ({
@@ -82,7 +83,7 @@ export const MODE_META: Record<
     label: "Case Study",
     blurb: "Multi-question vignette on one scenario.",
     accent: "#2A9D8F",
-    playable: false,
+    playable: true,
   },
   team_battle: {
     label: "Team Battle",
@@ -94,7 +95,7 @@ export const MODE_META: Record<
     label: "Adaptive Drill",
     blurb: "Next question follows weak areas.",
     accent: "#4C8BF5",
-    playable: false,
+    playable: true,
   },
   boss_battle: {
     label: "Boss Battle",
@@ -123,4 +124,5 @@ export type SettingsSnapshot = {
   filter?: GameFilter | null;
   name?: string;
   mode_config?: Record<string, string | number | boolean>;
+  case_study_ids?: string[];
 };

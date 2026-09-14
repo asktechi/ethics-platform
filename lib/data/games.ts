@@ -68,6 +68,8 @@ export type GameTemplateRow = {
   filter_json: GameFilter;
   settings_json: GameSettings;
   mode_config: Record<string, string | number | boolean>;
+  case_study_ids: string[];
+  adaptive_config: Record<string, unknown>;
   version: number;
   play_count: number;
   last_played_at: string | null;
@@ -118,6 +120,8 @@ function mapTemplate(row: Record<string, unknown>): GameTemplateRow {
     filter_json: asFilter(row.filter_json as Json),
     settings_json: asSettings(row.settings_json as Json),
     mode_config: (row.mode_config as Record<string, string | number | boolean> | null) ?? {},
+    case_study_ids: Array.isArray(row.case_study_ids) ? (row.case_study_ids as string[]) : [],
+    adaptive_config: (row.adaptive_config as Record<string, unknown> | null) ?? {},
     version: Number(row.version ?? 1),
     play_count: Number(row.play_count ?? 0),
     last_played_at: (row.last_played_at as string | null) ?? null,
@@ -208,12 +212,13 @@ export async function createGameTemplate(input: WizardState) {
   const { supabase, user } = await requireUser();
   if (!input.name.trim()) throw new Error("Name is required.");
   if (!input.classId) throw new Error("Pick a class.");
-  const poolId = input.source === "pool" ? input.poolId || null : null;
+  const poolId = input.mode === "case_study" ? null : input.source === "pool" ? input.poolId || null : null;
   await validateTemplateSource(supabase, {
     class_id: input.classId,
     pool_id: poolId,
     filter_json: input.source === "filter" ? input.filter : defaultGameFilter(),
     mode: input.mode,
+    case_study_ids: input.caseStudyIds ?? [],
   });
   const { data, error } = await supabase
     .from("game_templates")
@@ -228,6 +233,15 @@ export async function createGameTemplate(input: WizardState) {
       pool_id: poolId,
       filter_json: input.source === "filter" ? input.filter : defaultGameFilter(),
       settings_json: input.settings,
+      case_study_ids: input.caseStudyIds ?? [],
+      adaptive_config:
+        input.mode === "adaptive"
+          ? {
+              prefer_weak: input.modeConfig.prefer_weak ?? true,
+              avoid_recent_days: input.modeConfig.avoid_recent_days ?? 14,
+              min_questions_per_standard: input.modeConfig.min_questions_per_standard ?? 2,
+            }
+          : {},
     })
     .select("*")
     .single();
@@ -238,16 +252,19 @@ export async function createGameTemplate(input: WizardState) {
 export async function updateGameTemplate(id: string, input: Partial<WizardState> & { bumpVersion?: boolean }) {
   const current = await getGameTemplate(id);
   const { supabase } = await requireUser();
-  const nextPoolId = input.source === "filter" ? null : input.poolId ?? current.pool_id;
+  const nextMode = input.mode ?? current.mode;
+  const nextPoolId =
+    nextMode === "case_study" ? null : input.source === "filter" ? null : input.poolId ?? current.pool_id;
   const nextClassId = input.classId ?? current.class_id;
   const nextFilter = input.filter ?? current.filter_json;
-  const nextMode = input.mode ?? current.mode;
   const nextConfig = input.modeConfig ?? current.mode_config;
+  const nextCases = input.caseStudyIds ?? current.case_study_ids;
   await validateTemplateSource(supabase, {
     class_id: nextClassId,
     pool_id: nextPoolId,
     filter_json: nextFilter,
     mode: nextMode,
+    case_study_ids: nextCases,
   });
   const { data, error } = await supabase
     .from("game_templates")
@@ -261,6 +278,15 @@ export async function updateGameTemplate(id: string, input: Partial<WizardState>
       filter_json: nextFilter,
       settings_json: input.settings ?? current.settings_json,
       class_id: nextClassId,
+      case_study_ids: nextCases,
+      adaptive_config:
+        nextMode === "adaptive"
+          ? {
+              prefer_weak: nextConfig.prefer_weak ?? true,
+              avoid_recent_days: nextConfig.avoid_recent_days ?? 14,
+              min_questions_per_standard: nextConfig.min_questions_per_standard ?? 2,
+            }
+          : current.adaptive_config,
       version: (input.bumpVersion ?? true) ? current.version + 1 : current.version,
     })
     .eq("id", id)
@@ -309,6 +335,8 @@ export async function cloneGameTemplate(id: string) {
       pool_id: current.pool_id,
       filter_json: current.filter_json,
       settings_json: current.settings_json,
+      case_study_ids: current.case_study_ids,
+      adaptive_config: current.adaptive_config,
     })
     .select("*")
     .single();
@@ -330,7 +358,17 @@ export async function resolveTemplateQuestions(template: GameTemplateRow): Promi
   );
 }
 
-function questionToHost(row: Pick<QuestionRow, "id" | "stem" | "choices_json" | "answer_key" | "explanation">): QuizHostQuestion {
+function questionToHost(
+  row: Pick<QuestionRow, "id" | "stem" | "choices_json" | "answer_key" | "explanation"> & {
+    case_study_id?: string | null;
+    case_title?: string | null;
+    case_scenario?: string | null;
+    case_study_order?: number | null;
+    standard_id?: string | null;
+    standard_code?: string | null;
+    standard_title?: string | null;
+  },
+): QuizHostQuestion {
   return {
     question_id: row.id,
     stem: row.stem,
@@ -338,6 +376,13 @@ function questionToHost(row: Pick<QuestionRow, "id" | "stem" | "choices_json" | 
     answer_key: row.answer_key ?? "",
     explanation: row.explanation ?? "",
     time_limit_seconds: 30,
+    case_study_id: row.case_study_id ?? null,
+    case_title: row.case_title ?? null,
+    case_scenario: row.case_scenario ?? null,
+    case_study_order: row.case_study_order ?? null,
+    standard_id: row.standard_id ?? null,
+    standard_code: row.standard_code ?? null,
+    standard_title: row.standard_title ?? null,
   };
 }
 
@@ -346,21 +391,33 @@ export async function loadQuestionsByIds(ids: string[]): Promise<QuizHostQuestio
   const { supabase } = await requireUser();
   const { data, error } = await supabase
     .from("questions")
-    .select("id, stem, choices_json, answer_key, explanation")
+    .select(
+      "id, stem, choices_json, answer_key, explanation, case_study_id, case_study_order, standard_id, case_study:case_studies(title, scenario_text), standard:standards(code, title)",
+    )
     .in("id", ids);
   if (error) throw new Error(error.message);
   const byId = new Map((data ?? []).map((row) => [row.id, row]));
   return ids
     .map((id) => byId.get(id))
     .filter(Boolean)
-    .map((row) => ({
-      question_id: row!.id,
-      stem: row!.stem,
-      choices: (Array.isArray(row!.choices_json) ? row!.choices_json : []) as QuizHostQuestion["choices"],
-      answer_key: row!.answer_key ?? "",
-      explanation: row!.explanation ?? "",
-      time_limit_seconds: 30,
-    }));
+    .map((row) => {
+      const caseStudy = row!.case_study as { title?: string; scenario_text?: string } | null;
+      const standard = row!.standard as { code?: string; title?: string } | null;
+      return questionToHost({
+        id: row!.id,
+        stem: row!.stem,
+        choices_json: (Array.isArray(row!.choices_json) ? row!.choices_json : []) as QuestionRow["choices_json"],
+        answer_key: row!.answer_key,
+        explanation: row!.explanation,
+        case_study_id: row!.case_study_id,
+        case_study_order: row!.case_study_order,
+        case_title: caseStudy?.title ?? null,
+        case_scenario: caseStudy?.scenario_text ?? null,
+        standard_id: row!.standard_id,
+        standard_code: standard?.code ?? null,
+        standard_title: standard?.title ?? null,
+      });
+    });
 }
 
 export async function countFilterMatches(classId: string, filter: GameFilter) {
@@ -374,9 +431,11 @@ export async function countFilterMatches(classId: string, filter: GameFilter) {
 
 export async function previewGameSource(input: {
   classId: string;
-  source: "pool" | "filter";
+  source: "pool" | "filter" | "cases";
   poolId?: string;
   filter?: GameFilter;
+  mode?: GameMode;
+  caseStudyIds?: string[];
 }) {
   const { supabase } = await requireUser();
   const resolved = await resolveGameQuestions(
@@ -384,6 +443,8 @@ export async function previewGameSource(input: {
       class_id: input.classId,
       pool_id: input.source === "pool" ? input.poolId || null : null,
       filter_json: input.source === "filter" ? input.filter : defaultGameFilter(),
+      mode: input.mode,
+      case_study_ids: input.caseStudyIds ?? [],
     },
     { supabase, requireApproved: true },
   );
@@ -511,6 +572,7 @@ export async function scheduleGameInstance(templateId: string, when: string) {
           filter: template.filter_json,
           name: template.name,
           mode_config: template.mode_config,
+          case_study_ids: template.case_study_ids,
         } satisfies SettingsSnapshot,
       })
       .select("*")
@@ -539,7 +601,10 @@ export async function launchGameFromTemplate(templateId: string) {
     ...schemaDefaults(getMode(template.mode).configSchema),
     ...(template.mode_config ?? {}),
   };
-  let questionIds = settings.shuffle_questions ? shuffleIds(resolved.questionIds) : resolved.questionIds;
+  let questionIds = resolved.questionIds;
+  if (settings.shuffle_questions && template.mode !== "case_study") {
+    questionIds = shuffleIds(questionIds);
+  }
   if (template.mode === "rapid_fire" && modeConfig.questions_unlimited === false) {
     questionIds = questionIds.slice(0, Number(modeConfig.questions_max ?? 30));
   }
@@ -559,6 +624,7 @@ export async function launchGameFromTemplate(templateId: string) {
     filter: template.filter_json,
     name: template.name,
     mode_config: modeConfig,
+    case_study_ids: template.case_study_ids,
   };
 
   const quizSettings: QuizSettings = {
@@ -650,8 +716,14 @@ export async function loadWizardContext() {
   const standards = await listStandards();
   const poolsByClass: Record<string, Array<{ id: string; name: string; count: number; stems: string[] }>> = {};
   const conceptsByClass: Record<string, Array<{ id: string; title: string }>> = {};
+  const casesByClass: Record<string, Array<{ id: string; title: string; questionCount: number; preview: string }>> = {};
+  const { listCaseStudies } = await import("@/lib/data/case-studies");
   for (const klass of classes) {
-    const [pools, concepts] = await Promise.all([listPools(klass.id), listConceptsByClass(klass.id)]);
+    const [pools, concepts, cases] = await Promise.all([
+      listPools(klass.id),
+      listConceptsByClass(klass.id),
+      listCaseStudies(klass.id).catch(() => []),
+    ]);
     const ids = pools.map((pool) => pool.id);
     const { data: items } = ids.length
       ? await supabase
@@ -675,12 +747,19 @@ export async function loadWizardContext() {
       stems: (grouped.get(pool.id) ?? []).slice(0, 3),
     }));
     conceptsByClass[klass.id] = concepts.map((item) => ({ id: item.id, title: item.title }));
+    casesByClass[klass.id] = cases.map((item) => ({
+      id: item.id,
+      title: item.title,
+      questionCount: item.question_count ?? item.questions?.length ?? 0,
+      preview: item.scenario_text.slice(0, 140),
+    }));
   }
   return {
     classes: classes.map((item) => ({ id: item.id, title: item.title })),
     poolsByClass,
     standards: standards.map((item) => ({ id: item.id, code: item.code, title: item.title })),
     conceptsByClass,
+    casesByClass,
   };
 }
 

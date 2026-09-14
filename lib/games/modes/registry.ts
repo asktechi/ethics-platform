@@ -1,4 +1,6 @@
-import { adaptiveMode, bossBattleMode, caseStudyMode } from "@/lib/games/modes/coming-soon";
+import { adaptiveMode } from "@/lib/games/modes/adaptive";
+import { caseStudyMode } from "@/lib/games/modes/case_study";
+import { bossBattleMode } from "@/lib/games/modes/coming-soon";
 import { jeopardyMode } from "@/lib/games/modes/jeopardy";
 import { rapidFireMode } from "@/lib/games/modes/rapid_fire";
 import { teamBattleMode } from "@/lib/games/modes/team_battle";

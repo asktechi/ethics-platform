@@ -236,7 +236,21 @@ try {
 } catch {
   caseBlocked = true;
 }
-pass("T5 case_study still blocked", caseBlocked, "");
+pass("T5 case_study save allowed", !caseBlocked, "");
+let adaptiveBlocked = false;
+try {
+  assertPlayableMode("adaptive");
+} catch {
+  adaptiveBlocked = true;
+}
+pass("T5 adaptive save allowed", !adaptiveBlocked, "");
+let bossBlocked = false;
+try {
+  assertPlayableMode("boss_battle");
+} catch {
+  bossBlocked = true;
+}
+pass("T5 boss_battle still blocked", bossBlocked, "");
 
 const unused = tagged;
 void unused;

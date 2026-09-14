@@ -14,6 +14,7 @@ export type GameTemplate = {
   pool_id?: string | null;
   filter_json?: FilterShape | GameFilter | null;
   mode?: GameMode | string | null;
+  case_study_ids?: string[] | null;
 };
 
 export type ResolvedGameQuestion = {
@@ -62,7 +63,7 @@ export type ResolveClient = {
   from: (relation: string) => QueryChain;
 };
 
-export const PLAYABLE_GAME_MODES = ["jeopardy", "rapid_fire", "team_battle"] as const;
+export const PLAYABLE_GAME_MODES = ["jeopardy", "rapid_fire", "team_battle", "case_study", "adaptive"] as const;
 
 const QUESTION_COLUMNS =
   "id, stem, choices_json, answer_key, explanation, standard_id, concept_id, difficulty, source, approved";
@@ -135,7 +136,7 @@ export function launchBlockMessage(result: ResolveGameResult): string {
 export function assertPlayableMode(mode: string | null | undefined) {
   const id = mode || "jeopardy";
   if (!(PLAYABLE_GAME_MODES as readonly string[]).includes(id)) {
-    throw new Error("This mode is coming in a later 6D session. Save Jeopardy, Rapid Fire, or Team Battle for now.");
+    throw new Error("This mode is coming in a later 6D session. Save a playable mode for now.");
   }
 }
 
@@ -157,9 +158,60 @@ export async function resolveGameQuestions(
     throw new Error("resolveGameQuestions requires opts.supabase");
   }
   const supabase = opts.supabase as ResolveClient;
-
   const diagnostics = emptyDiagnostics();
   const poolId = template.pool_id ?? null;
+  const caseIds = (template.case_study_ids ?? []).filter(Boolean);
+
+  if (template.mode === "case_study" || (caseIds.length > 0 && !poolId)) {
+    if (caseIds.length === 0) {
+      diagnostics.noMatchingQuestions = true;
+      return {
+        questionIds: [],
+        questions: [],
+        source: "filter",
+        poolId: null,
+        filterUsed: null,
+        diagnostics,
+      };
+    }
+
+    const { data: caseRows, error: caseError } = await supabase
+      .from("questions")
+      .select(`${QUESTION_COLUMNS}, case_study_id, case_study_order, deleted_at`)
+      .eq("class_id", template.class_id)
+      .in("case_study_id", caseIds)
+      .is("deleted_at", null);
+    if (caseError) throw new Error(caseError.message);
+
+    const byCase = new Map<string, Array<ResolvedGameQuestion & { order: number }>>();
+    for (const raw of (caseRows ?? []) as Record<string, unknown>[]) {
+      if (raw?.deleted_at != null) continue;
+      const question = mapQuestion(raw);
+      const caseId = String(raw.case_study_id ?? "");
+      const list = byCase.get(caseId) ?? [];
+      list.push({ ...question, order: Number(raw.case_study_order ?? 0) });
+      byCase.set(caseId, list);
+    }
+
+    const ordered: ResolvedGameQuestion[] = [];
+    for (const caseId of caseIds) {
+      const list = (byCase.get(caseId) ?? []).sort((a, b) => a.order - b.order);
+      ordered.push(...list);
+    }
+
+    diagnostics.filterMatchCount = ordered.length;
+    diagnostics.approvedCount = ordered.filter((row) => row.approved).length;
+    diagnostics.noMatchingQuestions = ordered.length === 0;
+    const playable = requireApproved ? ordered.filter((row) => row.approved) : ordered;
+    return {
+      questionIds: playable.map((row) => row.id),
+      questions: playable,
+      source: "filter",
+      poolId: null,
+      filterUsed: null,
+      diagnostics,
+    };
+  }
 
   if (poolId) {
     const { data: pool } = await supabase
@@ -243,6 +295,9 @@ export async function validateTemplateSource(
   template: GameTemplate,
 ): Promise<ResolveGameResult> {
   assertPlayableMode(template.mode ?? "jeopardy");
+  if (template.mode === "case_study" && !(template.case_study_ids ?? []).length) {
+    throw new Error("Pick at least one case study.");
+  }
   const resolved = await resolveGameQuestions(template, { supabase, requireApproved: true });
   if (resolved.questions.length === 0) {
     throw new Error("This game has 0 playable questions. Go back to Step 2 and fix the source.");

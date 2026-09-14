@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Leaderboard, type LivePlayer } from "@/components/quiz/Leaderboard";
 import { Button } from "@/components/ui/button";
+import { groupQuestionsByCase } from "@/lib/games/case-groups";
 import { mvpPlayer, teamStandings } from "@/lib/games/modes/team-score";
 import type { GameTeamRecord } from "@/lib/games/modes/types";
 import { sortLeaderboard } from "@/lib/quiz/scoring";
@@ -123,6 +124,38 @@ export function SessionSummary({
     <div className="mx-auto max-w-5xl space-y-8 px-4 py-8 text-ivory">
       <p className="text-xs uppercase tracking-[0.18em] text-gold">{poolName}</p>
       <h1 className="font-display text-4xl">Session summary</h1>
+
+      {modeId === "case_study" ? (
+        <section className="space-y-3">
+          <p className="text-xs uppercase tracking-[0.14em] text-[#2A9D8F]">Per-case results</p>
+          {groupQuestionsByCase(questions).map((group, groupIndex) => {
+            const rows = responses.filter((row) => group.questionIds.includes(row.question_id));
+            const correct = rows.filter((row) => row.is_correct).length;
+            return (
+              <div key={group.caseId} className="border border-white/10 bg-card p-4">
+                <p className="font-display text-xl">
+                  Case {groupIndex + 1}: {group.title}
+                </p>
+                <p className="mt-1 text-sm text-ivory/65">
+                  {correct} correct of {rows.length || group.questionIds.length * Math.max(participants.length, 1)} answers ·{" "}
+                  {group.questionIds.length} questions
+                </p>
+                <ul className="mt-2 space-y-1 text-xs text-ivory/50">
+                  {participants.map((player) => {
+                    const mine = rows.filter((row) => row.participant_id === player.id);
+                    const ok = mine.filter((row) => row.is_correct).length;
+                    return (
+                      <li key={player.id}>
+                        {player.display_name}: {ok}/{group.questionIds.length}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            );
+          })}
+        </section>
+      ) : null}
 
       {modeId === "team_battle" && teams.length > 0 ? (
         <section className="space-y-3">

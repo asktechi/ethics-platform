@@ -62,7 +62,7 @@ pass("plugin rapid fire penalty", rfWrong.points === -25, String(rfWrong.points)
 pass(
   "registry playable",
   listModes().filter((mode) => mode.status === "playable").map((mode) => mode.id).join() ===
-    "jeopardy,rapid_fire,team_battle",
+    "jeopardy,rapid_fire,team_battle,case_study,adaptive",
   "",
 );
 

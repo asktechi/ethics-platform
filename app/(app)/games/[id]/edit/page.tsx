@@ -36,6 +36,7 @@ export default async function EditGamePage({ params }: { params: { id: string } 
           mode: template.mode,
           settings: template.settings_json,
           modeConfig: template.mode_config ?? {},
+          caseStudyIds: template.case_study_ids ?? [],
         }}
       />
       <div className="mt-8">
@@ -44,6 +45,7 @@ export default async function EditGamePage({ params }: { params: { id: string } 
           poolsByClass={context.poolsByClass}
           standards={context.standards}
           conceptsByClass={context.conceptsByClass}
+          casesByClass={context.casesByClass}
           existingTags={tags}
           editId={template.id}
         />

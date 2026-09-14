@@ -23,7 +23,11 @@ function isQuizEvent(value: unknown): value is QuizEvent {
     type === "RESUME" ||
     type === "SKIP" ||
     type === "END" ||
-    type === "HIGHLIGHT"
+    type === "HIGHLIGHT" ||
+    type === "CASE_INTRO" ||
+    type === "CASE_COMPLETE" ||
+    type === "ADAPTIVE_START" ||
+    type === "ADAPTIVE_PROGRESS"
   );
 }
 

@@ -13,6 +13,8 @@ import {
 } from "@/app/(app)/_actions/quiz.actions";
 import { HostQuestionView } from "@/app/quiz/host/[sessionId]/HostQuestionView";
 import { HostSidePanel } from "@/app/quiz/host/[sessionId]/HostSidePanel";
+import { AdaptiveHost } from "@/app/quiz/host/[sessionId]/modes/AdaptiveHost";
+import { CaseStudyHost } from "@/app/quiz/host/[sessionId]/modes/CaseStudyHost";
 import { JeopardyHost } from "@/app/quiz/host/[sessionId]/modes/JeopardyHost";
 import { RapidFireHost } from "@/app/quiz/host/[sessionId]/modes/RapidFireHost";
 import { TeamBattleHost } from "@/app/quiz/host/[sessionId]/modes/TeamBattleHost";
@@ -22,6 +24,7 @@ import { Leaderboard, type LivePlayer } from "@/components/quiz/Leaderboard";
 import { Button } from "@/components/ui/button";
 import { getMode } from "@/lib/games/modes/registry";
 import type { GameTeamRecord, HostExtraPanelProps } from "@/lib/games/modes/types";
+import { caseProgressAt, groupQuestionsByCase } from "@/lib/games/case-groups";
 import { dispatch, resetQuizBus, subscribe } from "@/lib/quiz/bus";
 import { writeHostToken } from "@/lib/quiz/host-token";
 import { hostConnect } from "@/lib/quiz/realtime";
@@ -63,6 +66,8 @@ const HOST_PANELS = {
   jeopardy: JeopardyHost,
   rapid_fire: RapidFireHost,
   team_battle: TeamBattleHost,
+  case_study: CaseStudyHost,
+  adaptive: AdaptiveHost,
 } as const;
 
 export function HostShell({
@@ -91,11 +96,14 @@ export function HostShell({
   const mode = getMode(modeId);
   const isRapid = mode.id === "rapid_fire";
   const isTeam = mode.id === "team_battle";
+  const isCase = mode.id === "case_study";
+  const isAdaptive = mode.id === "adaptive";
+  const caseGroups = useMemo(() => groupQuestionsByCase(questions), [questions]);
   const totalTime = Number(modeConfig.total_time_seconds ?? (isRapid ? timePerQ : timePerQ));
   const startedFromSettings = initialQuestionStartedAt ? Date.parse(initialQuestionStartedAt) : NaN;
   const gameStartMs = gameStartedAt ? Date.parse(gameStartedAt) : startedFromSettings;
   const [index, setIndex] = useState(initialIndex);
-  const [phase, setPhase] = useState<"ready" | "countdown" | "question" | "reveal" | "ended">(
+  const [phase, setPhase] = useState<"ready" | "countdown" | "intro" | "question" | "reveal" | "case_complete" | "ended">(
     initialEnded
       ? "ended"
       : initialReveal
@@ -130,6 +138,7 @@ export function HostShell({
   indexRef.current = index;
 
   const question = questions[index];
+  const caseProgress = caseProgressAt(caseGroups, index);
   const questionResponses = responses.filter((row) => row.question_id === question?.question_id);
   const counts = useMemo(() => {
     const next: Record<string, number> = {};
@@ -177,6 +186,9 @@ export function HostShell({
   }, [mode, modeConfig, phase, players, question, questionResponses, timePerQ]);
 
   const currentQuestionEvent = useCallback((): QuizEvent | null => {
+    if (isAdaptive && phaseRef.current !== "ready" && phaseRef.current !== "ended") {
+      return { type: "ADAPTIVE_START" };
+    }
     const current = questions[indexRef.current];
     if (!current) return null;
     if (phaseRef.current === "reveal") {
@@ -187,7 +199,17 @@ export function HostShell({
         explanation: current.explanation ?? "",
       };
     }
+    if (phaseRef.current === "intro" && caseProgress.group) {
+      return {
+        type: "CASE_INTRO",
+        case_id: caseProgress.group.caseId,
+        title: caseProgress.group.title,
+        scenario: caseProgress.group.scenario,
+        current_question_index: indexRef.current,
+      };
+    }
     if (phaseRef.current === "ended") return { type: "END" };
+    if (isAdaptive) return { type: "ADAPTIVE_START" };
     if (phaseRef.current === "question") {
       return {
         type: "QUESTION",
@@ -200,7 +222,7 @@ export function HostShell({
       };
     }
     return lastEventRef.current;
-  }, [clockStart, isRapid, questions, startedAt, timePerQ, totalTime]);
+  }, [caseProgress.group, clockStart, isAdaptive, isRapid, questions, startedAt, timePerQ, totalTime]);
 
   useEffect(() => {
     writeHostToken(sessionId, hostToken);
@@ -351,7 +373,7 @@ export function HostShell({
   );
 
   const publishReveal = useCallback(async () => {
-    if (isRapid || !question || revealingRef.current || phaseRef.current === "reveal") return;
+    if (isRapid || isAdaptive || !question || revealingRef.current || phaseRef.current === "reveal") return;
     revealingRef.current = true;
     const before = new Map(players.map((player) => [player.id, player.score]));
     const result = await quizRevealAction(sessionId, question.question_id, question.answer_key);
@@ -383,6 +405,46 @@ export function HostShell({
     }
   }, [ctx, index, isRapid, mode, players, question, sessionId]);
 
+  const publishIntro = useCallback(
+    async (nextIndex: number) => {
+      const next = questions[nextIndex];
+      const group = caseProgressAt(caseGroups, nextIndex).group;
+      if (!next || !group) {
+        await publishQuestion(nextIndex);
+        return;
+      }
+      const result = await quizSetQuestionAction(sessionId, nextIndex);
+      if (!result.ok) {
+        setMessage(result.error);
+        return;
+      }
+      const event: QuizEvent = {
+        type: "CASE_INTRO",
+        case_id: group.caseId,
+        title: group.title,
+        scenario: group.scenario,
+        current_question_index: nextIndex,
+      };
+      lastEventRef.current = event;
+      dispatch(event);
+      setIndex(nextIndex);
+      setPhase("intro");
+    },
+    [caseGroups, publishQuestion, questions, sessionId],
+  );
+
+  const startAdaptive = useCallback(async () => {
+    const result = await quizSetQuestionAction(sessionId, 0);
+    if (!result.ok) {
+      setMessage(result.error);
+      return;
+    }
+    const event: QuizEvent = { type: "ADAPTIVE_START" };
+    lastEventRef.current = event;
+    dispatch(event);
+    setPhase("question");
+  }, [sessionId]);
+
   const publishEnd = useCallback(
     async (early = false) => {
       if (endedRef.current) return;
@@ -404,10 +466,66 @@ export function HostShell({
   );
 
   const goNext = useCallback(() => {
+    if (isAdaptive) return;
+    if (phaseRef.current === "intro") {
+      void publishQuestion(indexRef.current);
+      return;
+    }
+    if (phaseRef.current === "case_complete") {
+      const nextIndex = indexRef.current + 1;
+      if (nextIndex >= questions.length) {
+        void publishEnd(false);
+        return;
+      }
+      void publishIntro(nextIndex);
+      return;
+    }
+    if (isCase && phaseRef.current === "reveal" && caseProgress.isLastInCase && caseProgress.group) {
+      const ids = caseProgress.group.questionIds;
+      const event: QuizEvent = {
+        type: "CASE_COMPLETE",
+        case_id: caseProgress.group.caseId,
+        participant_results: players.map((player) => {
+          const rows = responses.filter((row) => row.participant_id === player.id && ids.includes(row.question_id));
+          return {
+            participant_id: player.id,
+            correct: rows.filter((row) => row.is_correct).length,
+            total: ids.length,
+          };
+        }),
+      };
+      lastEventRef.current = event;
+      dispatch(event);
+      setPhase("case_complete");
+      return;
+    }
     dispatch({ type: "NEXT" });
-    if (index >= questions.length - 1) void publishEnd(false);
-    else void publishQuestion(index + 1);
-  }, [index, publishEnd, publishQuestion, questions.length]);
+    if (index >= questions.length - 1) {
+      void publishEnd(false);
+      return;
+    }
+    const nextIndex = index + 1;
+    const nextProgress = caseProgressAt(caseGroups, nextIndex);
+    if (isCase && (nextProgress.isFirstInCase || modeConfig.show_scenario_before_each_question === true)) {
+      void publishIntro(nextIndex);
+      return;
+    }
+    void publishQuestion(nextIndex);
+  }, [
+    caseGroups,
+    caseProgress.group,
+    caseProgress.isLastInCase,
+    index,
+    isAdaptive,
+    isCase,
+    modeConfig.show_scenario_before_each_question,
+    players,
+    publishEnd,
+    publishIntro,
+    publishQuestion,
+    questions.length,
+    responses,
+  ]);
 
   const goPrev = useCallback(() => {
     if (index === 0) return;
@@ -456,13 +574,13 @@ export function HostShell({
   }
 
   useEffect(() => {
-    if (isRapid) return;
+    if (isRapid || isAdaptive) return;
     if (phase !== "question" || paused) return;
     const timeUp =
       remaining === 0 && startedAt != null && Date.now() >= startedAt + timePerQ * 1000 - 50;
     const allIn = players.length > 0 && questionResponses.length >= players.length;
     if (timeUp || allIn) void publishReveal();
-  }, [isRapid, phase, paused, remaining, startedAt, timePerQ, questionResponses.length, players.length, publishReveal]);
+  }, [isAdaptive, isRapid, phase, paused, remaining, startedAt, timePerQ, questionResponses.length, players.length, publishReveal]);
 
   useEffect(() => {
     if (!isRapid || phase !== "question" || clockStart == null) return;
@@ -473,12 +591,14 @@ export function HostShell({
     if (phase !== "countdown") return;
     if (countdown <= 0) {
       void mode.onSessionStart?.(ctx);
-      void publishQuestion(0);
+      if (isAdaptive) void startAdaptive();
+      else if (isCase) void publishIntro(0);
+      else void publishQuestion(0);
       return;
     }
     const timer = window.setTimeout(() => setCountdown((value) => value - 1), 1000);
     return () => window.clearTimeout(timer);
-  }, [phase, countdown, publishQuestion, mode, ctx]);
+  }, [phase, countdown, publishQuestion, publishIntro, startAdaptive, isAdaptive, isCase, mode, ctx]);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -487,14 +607,14 @@ export function HostShell({
       if (event.code === "Space" || event.key === "ArrowRight" || event.key === "PageDown") {
         event.preventDefault();
         if (phase === "ready") setPhase("countdown");
-        else if (phase === "reveal") goNext();
+        else if (phase === "reveal" || phase === "intro" || phase === "case_complete") goNext();
       }
       if (event.key === "ArrowLeft" || event.key === "PageUp") {
         event.preventDefault();
         goPrev();
       }
-      if (!isRapid && event.key.toLowerCase() === "r") void publishReveal();
-      if (!isRapid && event.key.toLowerCase() === "p") void togglePause();
+      if (!isRapid && !isAdaptive && event.key.toLowerCase() === "r") void publishReveal();
+      if (!isRapid && !isAdaptive && event.key.toLowerCase() === "p") void togglePause();
       if (event.key.toLowerCase() === "e") setConfirmEnd(true);
       if (event.key.toLowerCase() === "f") void document.documentElement.requestFullscreen?.();
       if (event.key.toLowerCase() === "g") setBoardOpen((value) => !value);
@@ -552,6 +672,14 @@ export function HostShell({
         <p className="text-sm text-ivory/70">{players.length} players</p>
         {isRapid ? (
           <p className="font-mono text-2xl tabular-nums text-gold">{remaining}s</p>
+        ) : isAdaptive ? (
+          <p className="text-sm text-ivory/70">Independent drills · {players.length} live</p>
+        ) : isCase ? (
+          <p className="text-sm text-ivory/70">
+            Case {caseProgress.caseOrdinal} of {caseProgress.caseCount} · Question {caseProgress.questionInCase} of{" "}
+            {caseProgress.questionsInCase}
+            {phase === "question" || phase === "reveal" ? ` · ${remaining}s remaining` : ""}
+          </p>
         ) : (
           <p className="text-sm text-ivory/70">
             Question {index + 1} of {questions.length} · {remaining}s remaining
@@ -559,33 +687,55 @@ export function HostShell({
         )}
         {isTeam ? <TeamBattleHost {...extraProps} phase="header" /> : null}
         <div className="ml-auto flex flex-wrap gap-2">
-          {isRapid ? null : (
+          {isRapid || isAdaptive ? null : (
             <Button size="sm" variant="outline" onClick={() => void togglePause()}>
               {paused ? "Resume" : "Pause"}
             </Button>
           )}
-          <Button size="sm" variant="outline" onClick={() => void skip()}>
-            Skip
-          </Button>
+          {isAdaptive ? null : (
+            <Button size="sm" variant="outline" onClick={() => void skip()}>
+              Skip
+            </Button>
+          )}
           <Button size="sm" variant="ghost" onClick={() => setConfirmEnd(true)}>
             End session
           </Button>
         </div>
       </header>
 
-      <div className={`grid flex-1 gap-4 p-4 ${isRapid ? "" : "lg:grid-cols-[1fr_320px]"}`}>
+      <div className={`grid flex-1 gap-4 p-4 ${isRapid || isAdaptive ? "" : "lg:grid-cols-[1fr_320px]"}`}>
         {isRapid ? (
           <RapidFireHost {...extraProps} />
+        ) : isAdaptive ? (
+          <AdaptiveHost {...extraProps} />
         ) : (
           <>
-            <HostQuestionView
-              question={question}
-              phase={phase}
-              counts={counts}
-              remaining={remaining}
-              timePerQ={timePerQ}
-              paused={paused}
-            />
+            {phase === "intro" && caseProgress.group ? (
+              <div className="border border-[#2A9D8F]/40 bg-card p-6">
+                <p className="text-xs uppercase tracking-[0.18em] text-[#2A9D8F]">Case intro</p>
+                <h2 className="mt-2 font-display text-3xl">{caseProgress.group.title}</h2>
+                <div className="mt-4 max-h-[50vh] overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-ivory/80">
+                  {caseProgress.group.scenario}
+                </div>
+                <p className="mt-4 text-sm text-ivory/50">Players are reading the vignette. Press Next to open Q1.</p>
+              </div>
+            ) : phase === "case_complete" ? (
+              <div className="flex items-center justify-center border border-[#2A9D8F]/40 bg-[#2A9D8F]/10 p-10 text-center">
+                <div>
+                  <p className="font-display text-4xl text-[#2A9D8F]">Case complete</p>
+                  <p className="mt-2 text-ivory/70">Press Next for the following case, or End session.</p>
+                </div>
+              </div>
+            ) : (
+              <HostQuestionView
+                question={question}
+                phase={phase}
+                counts={counts}
+                remaining={remaining}
+                timePerQ={timePerQ}
+                paused={paused}
+              />
+            )}
             <HostSidePanel
               players={players}
               changedIds={changedIds}
@@ -612,16 +762,18 @@ export function HostShell({
         )}
       </div>
 
-      {isRapid ? null : (
+      {isRapid || isAdaptive ? null : (
         <footer className="flex flex-wrap gap-2 border-t border-white/10 px-4 py-3">
-          <Button variant="outline" disabled={index === 0} onClick={() => goPrev()}>
+          <Button variant="outline" disabled={index === 0 || phase === "intro"} onClick={() => goPrev()}>
             Previous
           </Button>
-          <Button variant="outline" onClick={() => void publishReveal()}>
-            Reveal answer
-          </Button>
+          {phase === "intro" || phase === "case_complete" ? null : (
+            <Button variant="outline" onClick={() => void publishReveal()}>
+              Reveal answer
+            </Button>
+          )}
           <Button className="bg-gold text-navy hover:bg-gold/90" onClick={() => goNext()}>
-            Next question
+            {phase === "intro" ? "Next" : phase === "case_complete" ? "Next case" : "Next question"}
           </Button>
           <Button variant="ghost" onClick={() => setConfirmEnd(true)}>
             End session

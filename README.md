@@ -2,7 +2,7 @@
 
 Personal teaching platform for CFA Institute ethics instruction (Levels I–III). The owner is the sole instructor-author. Students join live quizzes with an open link and a display name.
 
-This repository is at **Phase 6D.1**: mode plugins, Rapid Fire, and Team Battle on top of the live Jeopardy host/player flow.
+This repository is at **Phase 6D.2**: Case Study and Adaptive Drill on the mode plugin architecture. Jeopardy, Rapid Fire, and Team Battle remain playable. Boss Battle is the last Coming soon mode.
 
 Never commit `.env.local`, `SUPABASE_SERVICE_ROLE_KEY`, or `SUPABASE_DB_URL`.
 
@@ -17,7 +17,7 @@ pnpm dev
 The default Next.js port is `3000`. In this environment the preview server uses a non-default port (see the preview card). Open `/` for the landing page, `/login` for the magic-link instructor sign-in, and `/dashboard` for the class builder.
 
 Health check: `GET /api/health` returns `{ "ok": true }`.  
-Database check: `GET /api/health/db` returns `{ "ok": true, "tables": 28 }`.
+Database check: `GET /api/health/db` returns `{ "ok": true, "tables": 29 }`.
 
 ## Present a class
 
@@ -71,7 +71,8 @@ Scoring: 100 base + time bonus (max 100) + 20 per consecutive correct after the 
 
 Open **Games** in the sidebar (`/games`). Save a template once, then launch or schedule it without rebuilding the rules.
 
-- **New Game** — 5-step wizard (basics, pool or filter, mode, rules, preview). Jeopardy Classic, Rapid Fire, and Team Battle are playable. Case Study, Adaptive Drill, and Boss Battle stay Coming soon.
+- **New Game** — 5-step wizard (basics, pool or filter, mode, rules, preview). Jeopardy Classic, Rapid Fire, Team Battle, Case Study, and Adaptive Drill are playable. Boss Battle stays Coming soon.
+- **Cases** — `/class/{id}/cases` builds vignettes and attaches bank questions. Hidden in the sidebar when the class has 0 questions.
 - A game cannot be saved or launched with 0 playable (approved) questions. Overview, wizard preview, and launch all call `resolveGameQuestions`.
 - Troubleshoot a template at `/games/{id}/diagnose`.
 - **Start Game** — creates a `game_instances` row with a frozen settings snapshot, then opens the existing host dashboard.

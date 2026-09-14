@@ -8,6 +8,7 @@ export type SidebarClassLink = {
   id: string;
   title: string;
   meta: string;
+  questionCount: number;
 };
 
 export type SidebarNavData = {

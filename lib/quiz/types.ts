@@ -12,6 +12,13 @@ export type QuizPlayQuestion = {
 export type QuizHostQuestion = QuizPlayQuestion & {
   answer_key: string;
   explanation: string | null;
+  case_study_id?: string | null;
+  case_title?: string | null;
+  case_scenario?: string | null;
+  case_study_order?: number | null;
+  standard_id?: string | null;
+  standard_code?: string | null;
+  standard_title?: string | null;
 };
 
 export type QuizEventEnvelope = {
@@ -47,6 +54,27 @@ export type QuizEvent =
       avatar_color?: string | null;
       ms_taken: number;
       points: number;
+    } & QuizEventEnvelope)
+  | ({
+      type: "CASE_INTRO";
+      case_id: string;
+      title: string;
+      scenario: string;
+      current_question_index: number;
+    } & QuizEventEnvelope)
+  | ({
+      type: "CASE_COMPLETE";
+      case_id: string;
+      participant_results?: Array<{ participant_id: string; correct: number; total: number }>;
+    } & QuizEventEnvelope)
+  | ({
+      type: "ADAPTIVE_START";
+    } & QuizEventEnvelope)
+  | ({
+      type: "ADAPTIVE_PROGRESS";
+      participant_id: string;
+      question_index: number;
+      standard_id: string | null;
     } & QuizEventEnvelope)
   | ({ type: "HYDRATE"; state: Partial<QuizBusState> } & QuizEventEnvelope);
 

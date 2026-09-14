@@ -68,6 +68,11 @@ export function ClassWorkspace({
         <TabsTrigger value="questions" className="data-[state=active]:bg-gold data-[state=active]:text-navy">
           Questions
         </TabsTrigger>
+        {detail.questionCount > 0 ? (
+          <TabsTrigger value="cases" asChild className="data-[state=active]:bg-gold data-[state=active]:text-navy">
+            <Link href={`/class/${detail.id}/cases`}>Cases</Link>
+          </TabsTrigger>
+        ) : null}
         <TabsTrigger value="theme" className="data-[state=active]:bg-gold data-[state=active]:text-navy">
           Theme
         </TabsTrigger>

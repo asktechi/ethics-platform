@@ -2,7 +2,7 @@ import { formatDistanceToNow } from "date-fns";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/shell/app-shell";
 import { getInstructorProfile } from "@/lib/data/auth";
-import { listRecentClasses } from "@/lib/data/classes";
+import { getClass, listRecentClasses } from "@/lib/data/classes";
 import { listLevels, levelCopy } from "@/lib/data/levels";
 import { createClient } from "@/lib/supabase/server";
 
@@ -36,11 +36,14 @@ export default async function AppLayout({
           name: level.name,
           hint: levelCopy[level.slug]?.split("—")[0]?.trim() ?? "Ethics",
         })),
-        recentClasses: recent.map((item) => ({
-          id: item.id,
-          title: item.title,
-          meta: formatDistanceToNow(new Date(item.updated_at), { addSuffix: true }),
-        })),
+        recentClasses: await Promise.all(
+          recent.map(async (item) => ({
+            id: item.id,
+            title: item.title,
+            meta: formatDistanceToNow(new Date(item.updated_at), { addSuffix: true }),
+            questionCount: (await getClass(item.id).catch(() => ({ questionCount: 0 }))).questionCount,
+          })),
+        ),
       }}
     >
       {children}

@@ -32,6 +32,8 @@ export type QuestionRow = {
   ai_tag_reasoning: string | null;
   import_batch_id: string | null;
   class_id: string | null;
+  case_study_id: string | null;
+  case_study_order: number | null;
   created_by: string;
   created_at: string;
   updated_at: string;

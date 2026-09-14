@@ -14,7 +14,7 @@ export function estimateCostUsd(model: string, inputTokens: number, outputTokens
 export async function logAiUsage(input: {
   userId: string;
   classId?: string | null;
-  feature: "tagging" | "generation";
+  feature: "tagging" | "generation" | "hint";
   model: string;
   inputTokens: number;
   outputTokens: number;

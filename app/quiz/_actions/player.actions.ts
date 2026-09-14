@@ -96,3 +96,18 @@ export async function finalLeaderboardAction(sessionId: string) {
   if (error) return { ok: false as const, error: error.message };
   return { ok: true as const, rows: data ?? [] };
 }
+
+export async function nextAdaptiveQuestionAction(token: string) {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc("get_participant_by_token", { p_token: token });
+  if (error) return { ok: false as const, error: error.message };
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) return { ok: false as const, error: "Player not found." };
+  const { loadAdaptivePlayQuestion } = await import("@/lib/games/adaptive-next");
+  try {
+    const question = await loadAdaptivePlayQuestion(row.session_id, row.id);
+    return { ok: true as const, question };
+  } catch (caught) {
+    return { ok: false as const, error: caught instanceof Error ? caught.message : "Could not pick a question." };
+  }
+}
