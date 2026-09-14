@@ -223,7 +223,7 @@ const { data: restored } = await admin.from("game_templates").update({ deleted_a
 pass("restore", restored.deleted_at == null, "");
 
 const { data: tables } = await admin.rpc("health_public_table_count");
-pass("health tables 29", tables === 29, `tables=${tables}`);
+pass("health tables 30", tables === 30, `tables=${tables}`);
 
 const failed = results.filter((item) => !item.ok);
 console.log(JSON.stringify({ failed: failed.length, results }, null, 2));

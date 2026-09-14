@@ -62,7 +62,7 @@ pass("plugin rapid fire penalty", rfWrong.points === -25, String(rfWrong.points)
 pass(
   "registry playable",
   listModes().filter((mode) => mode.status === "playable").map((mode) => mode.id).join() ===
-    "jeopardy,rapid_fire,team_battle,case_study,adaptive",
+    "jeopardy,rapid_fire,team_battle,case_study,adaptive,boss_battle",
   "",
 );
 
@@ -366,7 +366,7 @@ const { data: jPlayer } = await admin.from("quiz_participants").select("score").
 pass("Jeopardy still 200 at 0ms streak0", jPlayer.score === 200, String(jPlayer.score));
 
 const { data: tables } = await admin.rpc("health_public_table_count");
-pass("health tables 29", tables === 29, String(tables));
+pass("health tables 30", tables === 30, String(tables));
 
 const failed = results.filter((item) => !item.ok);
 console.log(JSON.stringify({ failed: failed.length, results }, null, 2));

@@ -38,10 +38,10 @@ const playable = listModes()
   .map((mode) => mode.id);
 pass(
   "playable modes include case_study+adaptive",
-  playable.join() === "jeopardy,rapid_fire,team_battle,case_study,adaptive",
+  playable.join() === "jeopardy,rapid_fire,team_battle,case_study,adaptive,boss_battle",
   playable.join(),
 );
-pass("boss still coming soon", getMode("boss_battle").status === "coming_soon", "");
+pass("boss battle playable", getMode("boss_battle").status === "playable", "");
 pass("case study uses jeopardy scoring", getMode("case_study").scoreResponse({
   isCorrect: true,
   msTaken: 0,
@@ -62,7 +62,7 @@ try {
 } catch {
   bossBlocked = true;
 }
-pass("boss_battle still blocked", bossBlocked, "");
+pass("boss_battle save allowed", !bossBlocked, "");
 
 const algo = pickNextQuestionFromPool(
   [
@@ -538,7 +538,7 @@ pass(
 );
 
 const { data: tables } = await admin.rpc("health_public_table_count");
-pass("health tables 29", tables === 29, String(tables));
+pass("health tables 30", tables === 30, String(tables));
 
 const failed = results.filter((item) => !item.ok);
 console.log(JSON.stringify({ failed: failed.length, results }, null, 2));

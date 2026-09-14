@@ -257,7 +257,7 @@ try {
 } catch {
   bossBlocked = true;
 }
-pass("T5 boss_battle still blocked", bossBlocked, "");
+pass("T5 boss_battle save allowed", !bossBlocked, "");
 
 const unused = tagged;
 void unused;
