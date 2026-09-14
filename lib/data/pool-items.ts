@@ -29,6 +29,8 @@ export function normalizePoolItems(
           ai_tag_reasoning: null,
           import_batch_id: null,
           class_id: null,
+          case_study_id: null,
+          case_study_order: null,
           created_by: "",
           created_at: "",
           updated_at: "",

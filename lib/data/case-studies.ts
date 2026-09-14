@@ -36,8 +36,8 @@ export async function listCaseStudies(classId: string): Promise<CaseStudyRow[]> 
     .order("case_study_order", { ascending: true });
   if (qError) throw new Error(qError.message);
   const grouped = new Map<string, QuestionRow[]>();
-  for (const question of (questions ?? []) as QuestionRow[]) {
-    const key = (question as QuestionRow & { case_study_id?: string }).case_study_id;
+  for (const question of (questions ?? []) as unknown as QuestionRow[]) {
+    const key = question.case_study_id;
     if (!key) continue;
     const list = grouped.get(key) ?? [];
     list.push(question);

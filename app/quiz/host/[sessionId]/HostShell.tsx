@@ -403,7 +403,7 @@ export function HostShell({
       setChangedIds(changed);
       window.setTimeout(() => setChangedIds(new Set()), 2800);
     }
-  }, [ctx, index, isRapid, mode, players, question, sessionId]);
+  }, [ctx, index, isAdaptive, isRapid, mode, players, question, sessionId]);
 
   const publishIntro = useCallback(
     async (nextIndex: number) => {
