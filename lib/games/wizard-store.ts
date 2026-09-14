@@ -38,7 +38,13 @@ export const useGameWizard = create<WizardStore>((set) => ({
   step: 1,
   setStep: (step) => set({ step }),
   patch: (partial) => set(partial),
-  hydrate: (state) => set({ ...empty, ...state, step: 1 }),
+  hydrate: (state) =>
+    set({
+      ...empty,
+      ...state,
+      settings: { ...defaultGameSettings(), ...(state.settings ?? {}) },
+      step: 1,
+    }),
   reset: () =>
     set({
       ...empty,

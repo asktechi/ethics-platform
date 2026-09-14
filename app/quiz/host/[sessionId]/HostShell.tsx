@@ -23,6 +23,7 @@ import { RapidFireHost } from "@/app/quiz/host/[sessionId]/modes/RapidFireHost";
 import { TeamBattleHost } from "@/app/quiz/host/[sessionId]/modes/TeamBattleHost";
 import { AudienceQr } from "@/components/presentation/AudienceQr";
 import type { BestAnswer } from "@/components/quiz/BestAnswerPanel";
+import { CaseStudyHostEndLinks } from "@/components/quiz/EndNavBar";
 import { Leaderboard, type LivePlayer } from "@/components/quiz/Leaderboard";
 import { Button } from "@/components/ui/button";
 import { parseBossCombat, type BossCombatView } from "@/lib/games/boss-view";
@@ -31,9 +32,35 @@ import type { GameTeamRecord, HostExtraPanelProps } from "@/lib/games/modes/type
 import { caseProgressAt, groupQuestionsByCase } from "@/lib/games/case-groups";
 import { dispatch, resetQuizBus, subscribe } from "@/lib/quiz/bus";
 import { writeHostToken } from "@/lib/quiz/host-token";
+import {
+  countPacingProgress,
+  majorityHasAdvanced,
+  revealDelayMs,
+  shouldAutoReveal,
+} from "@/lib/quiz/pacing";
 import { hostConnect } from "@/lib/quiz/realtime";
 import type { QuizEvent, QuizHostQuestion, QuizSettings } from "@/lib/quiz/types";
 import { createClient } from "@/lib/supabase/client";
+
+function playAllAnsweredChime() {
+  try {
+    const AudioCtx = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = 880;
+    gain.gain.value = 0.07;
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.16);
+    window.setTimeout(() => void ctx.close(), 300);
+  } catch {
+    /* ignore locked autoplay */
+  }
+}
 
 type ResponseRow = {
   participant_id: string;
@@ -66,6 +93,10 @@ export type HostShellProps = {
   gameStartedAt: string | null;
   initialCombat?: unknown;
   templateId?: string | null;
+  instanceId?: string | null;
+  allowAudienceAdvance?: boolean;
+  rehearsalMode?: boolean;
+  autoRevealChime?: boolean;
 };
 
 const HOST_PANELS = {
@@ -99,6 +130,10 @@ export function HostShell({
   gameStartedAt,
   initialCombat,
   templateId,
+  instanceId,
+  allowAudienceAdvance = false,
+  rehearsalMode = false,
+  autoRevealChime = false,
 }: HostShellProps) {
   const router = useRouter();
   const mode = getMode(modeId);
@@ -142,9 +177,12 @@ export function HostShell({
   const lastEventRef = useRef<QuizEvent | null>(null);
   const revealingRef = useRef(false);
   const lastSeenRef = useRef(new Map<string, number>());
+  const disconnectedSinceRef = useRef(new Map<string, number>());
+  const chimedQuestionRef = useRef<string | null>(null);
   const phaseRef = useRef(phase);
   const indexRef = useRef(index);
   const endedRef = useRef(false);
+  const [advanceVotes, setAdvanceVotes] = useState<Set<string>>(new Set());
   phaseRef.current = phase;
   indexRef.current = index;
 
@@ -160,6 +198,18 @@ export function HostShell({
     }
     return next;
   }, [questionResponses]);
+
+  const pacing = countPacingProgress({
+    players: players.map((player) => ({
+      id: player.id,
+      disconnectedSince: disconnectedSinceRef.current.get(player.id) ?? null,
+    })),
+    responses: questionResponses,
+    questionId: question?.question_id,
+    now,
+  });
+  const allAnswered = pacing.allAnswered;
+  const majorityAdvance = allowAudienceAdvance && majorityHasAdvanced(advanceVotes.size, pacing.expectedCount);
 
   const remaining = isRapid
     ? clockStart
@@ -252,6 +302,7 @@ export function HostShell({
     writeHostToken(sessionId, hostToken);
     initialParticipants.forEach((player) => {
       if (player.connected !== false) lastSeenRef.current.set(player.id, Date.now());
+      else disconnectedSinceRef.current.set(player.id, Date.now());
     });
     resetQuizBus({
       sessionId,
@@ -263,10 +314,42 @@ export function HostShell({
       currentQuestionId: question?.question_id ?? null,
     });
     const client = createClient();
+    const applyPresence = (present: string[]) => {
+      const seenAt = Date.now();
+      present.forEach((id) => {
+        lastSeenRef.current.set(id, seenAt);
+        disconnectedSinceRef.current.delete(id);
+      });
+      setPlayers((current) =>
+        current.map((player) => {
+          const online = present.includes(player.id);
+          if (!online && !disconnectedSinceRef.current.has(player.id)) {
+            disconnectedSinceRef.current.set(player.id, seenAt);
+          }
+          return { ...player, connected: online };
+        }),
+      );
+      return present;
+    };
+
     const connection = hostConnect(client, sessionId, {
       hostId,
       hostToken,
       snapshot: () => lastEventRef.current ?? currentQuestionEvent(),
+      onPlayerEvent: (event) => {
+        if (event.type !== "PLAYER_ADVANCE") return;
+        const currentId = questions[indexRef.current]?.question_id;
+        if (event.question_id !== currentId) return;
+        setAdvanceVotes((current) => {
+          if (current.has(event.participant_id)) return current;
+          const next = new Set(current);
+          next.add(event.participant_id);
+          return next;
+        });
+      },
+      onPresence: (ids) => {
+        applyPresence(ids);
+      },
     });
     const unsub = subscribe((event) => {
       if (event.type === "QUESTION") setIndex(event.questionIndex);
@@ -329,13 +412,8 @@ export function HostShell({
           .flat()
           .map((item) => item.participant_id)
           .filter((id): id is string => Boolean(id));
-        const seenAt = Date.now();
-        present.forEach((id) => lastSeenRef.current.set(id, seenAt));
-        const online = [...lastSeenRef.current.entries()]
-          .filter(([, at]) => seenAt - at < 15_000)
-          .map(([id]) => id);
-        setPlayers((current) => current.map((player) => ({ ...player, connected: online.includes(player.id) })));
-        void quizSetConnectedAction(sessionId, online);
+        applyPresence(present);
+        void quizSetConnectedAction(sessionId, present);
       }, 4000);
     });
 
@@ -364,6 +442,8 @@ export function HostShell({
       const next = questions[nextIndex];
       if (!next) return;
       revealingRef.current = false;
+      setAdvanceVotes(new Set());
+      chimedQuestionRef.current = null;
       const result = await quizSetQuestionAction(sessionId, nextIndex);
       if (!result.ok) {
         setMessage(result.error);
@@ -681,9 +761,40 @@ export function HostShell({
     if (phase !== "question" || paused) return;
     const timeUp =
       remaining === 0 && startedAt != null && Date.now() >= startedAt + timePerQ * 1000 - 50;
-    const allIn = players.length > 0 && questionResponses.length >= players.length;
-    if (timeUp || allIn) void publishReveal();
-  }, [isAdaptive, isRapid, phase, paused, remaining, startedAt, timePerQ, questionResponses.length, players.length, publishReveal]);
+    const auto = shouldAutoReveal({
+      modeId: mode.id,
+      rehearsal: rehearsalMode,
+      phase,
+      paused,
+      timeUp,
+      allAnswered,
+    });
+    const fromMajority = allowAudienceAdvance && !rehearsalMode && majorityAdvance;
+    if (!auto && !fromMajority) return;
+    if (allAnswered && autoRevealChime && question?.question_id && chimedQuestionRef.current !== question.question_id) {
+      chimedQuestionRef.current = question.question_id;
+      playAllAnsweredChime();
+    }
+    const delay = auto ? revealDelayMs(allAnswered, timeUp) : 0;
+    const timer = window.setTimeout(() => void publishReveal(), delay);
+    return () => window.clearTimeout(timer);
+  }, [
+    allowAudienceAdvance,
+    allAnswered,
+    autoRevealChime,
+    isAdaptive,
+    isRapid,
+    majorityAdvance,
+    mode.id,
+    paused,
+    phase,
+    publishReveal,
+    question?.question_id,
+    remaining,
+    rehearsalMode,
+    startedAt,
+    timePerQ,
+  ]);
 
   useEffect(() => {
     if (!isRapid || phase !== "question" || clockStart == null) return;
@@ -796,6 +907,11 @@ export function HostShell({
           <p className="text-sm text-ivory/70">
             {players.length} players · Question {index + 1} of {questions.length} · {remaining}s
           </p>
+          {isRapid || isAdaptive || phase !== "question" ? null : (
+            <p className={`text-sm ${allAnswered ? "text-gold" : "text-ivory/70"}`}>
+              {allAnswered ? "All answered — revealing…" : pacing.label}
+            </p>
+          )}
         </header>
         <BossBattleHost
           sessionId={sessionId}
@@ -813,9 +929,13 @@ export function HostShell({
           combat={combat}
           overlay={bossOverlay}
           templateId={templateId}
+          instanceId={instanceId}
+          allAnswered={phase === "question" && allAnswered}
+          answeredLabel={pacing.label}
           onPrev={() => goPrev()}
           onNext={() => goNext()}
           onReveal={() => void publishReveal()}
+          onSkip={() => void skip()}
           onEnd={() => setConfirmEnd(true)}
           onForceVictory={() => void forceOutcome(true)}
           onForceDefeat={() => void forceOutcome(false)}
@@ -863,6 +983,11 @@ export function HostShell({
             Question {index + 1} of {questions.length} · {remaining}s remaining
           </p>
         )}
+        {isRapid || isAdaptive || phase !== "question" ? null : (
+          <p className={`text-sm font-medium ${allAnswered ? "text-gold" : "text-ivory/80"}`}>
+            {allAnswered ? "All answered — revealing…" : pacing.label}
+          </p>
+        )}
         {isTeam ? <TeamBattleHost {...extraProps} phase="header" /> : null}
         <div className="ml-auto flex flex-wrap gap-2">
           {isRapid || isAdaptive ? null : (
@@ -902,6 +1027,7 @@ export function HostShell({
                 <div>
                   <p className="font-display text-4xl text-[#2A9D8F]">Case complete</p>
                   <p className="mt-2 text-ivory/70">Press Next for the following case, or End session.</p>
+                  <CaseStudyHostEndLinks templateId={templateId} />
                 </div>
               </div>
             ) : (
@@ -912,6 +1038,7 @@ export function HostShell({
                 remaining={remaining}
                 timePerQ={timePerQ}
                 paused={paused}
+                allAnswered={phase === "question" && allAnswered}
               />
             )}
             <HostSidePanel

@@ -1,9 +1,8 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import Link from "next/link";
+import { HostEndNavBar, PlayerEndNavBar } from "@/components/quiz/EndNavBar";
 import type { BossCombatView, CombatLogEntry } from "@/lib/games/boss-view";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export function hpBarColor(ratio: number, hpBar?: string) {
@@ -128,14 +127,20 @@ export function BossOutcomeScreen({
   responses,
   sessionId,
   templateId,
+  instanceId,
   role,
+  allowReplay = false,
+  joinCode,
 }: {
   combat: BossCombatView;
   players: Array<{ id: string; display_name: string; score: number }>;
   responses: Array<{ ms_taken: number | null }>;
   sessionId: string;
   templateId?: string | null;
+  instanceId?: string | null;
   role: "host" | "player";
+  allowReplay?: boolean;
+  joinCode?: string | null;
 }) {
   const boss = combat.boss;
   const accent = boss?.palette_json.accent ?? "#E63946";
@@ -209,34 +214,15 @@ export function BossOutcomeScreen({
             ))}
           </ol>
         ) : null}
-        <p className="mt-6 text-sm text-ivory/60">
+        <p className="mt-6 text-sm text-ivory/60" data-session-id={sessionId}>
           {totalDamage} total damage · {answered} answers · avg {(avgMs / 1000).toFixed(1)}s
         </p>
-        <div className="mt-8 flex flex-wrap justify-center gap-2">
-          {role === "host" ? (
-            <>
-              <Button asChild className="bg-gold text-navy hover:bg-gold/90">
-                <Link href="/games">{victory ? "Play again" : "Retry"}</Link>
-              </Button>
-              <Button asChild variant="outline">
-                <Link href={templateId ? `/games/${templateId}` : "/games"}>
-                  {victory ? "Try another boss" : "Try easier boss"}
-                </Link>
-              </Button>
-              <Button asChild variant="outline">
-                <Link href={`/quiz/host/${sessionId}/summary`}>View Session</Link>
-              </Button>
-              <Button asChild variant="ghost">
-                <Link href="/dashboard">Dashboard</Link>
-              </Button>
-            </>
-          ) : (
-            <Button asChild variant="outline">
-              <Link href="/">Back</Link>
-            </Button>
-          )}
-        </div>
       </div>
+      {role === "host" ? (
+        <HostEndNavBar templateId={templateId} instanceId={instanceId} />
+      ) : (
+        <PlayerEndNavBar joinCode={joinCode} allowReplay={allowReplay} />
+      )}
     </div>
   );
 }

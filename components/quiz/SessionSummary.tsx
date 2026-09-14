@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { HostCloseToGames, HostEndNavBar } from "@/components/quiz/EndNavBar";
 import { Leaderboard, type LivePlayer } from "@/components/quiz/Leaderboard";
 import { Button } from "@/components/ui/button";
 import { groupQuestionsByCase } from "@/lib/games/case-groups";
@@ -29,6 +30,8 @@ export function SessionSummary({
   teams = [],
   modeId = "jeopardy",
   teamBonus = 20,
+  templateId = null,
+  instanceId = null,
 }: {
   sessionId: string;
   classId?: string;
@@ -40,6 +43,8 @@ export function SessionSummary({
   teams?: GameTeamRecord[];
   modeId?: string;
   teamBonus?: number;
+  templateId?: string | null;
+  instanceId?: string | null;
 }) {
   const [sortKey, setSortKey] = useState<"score" | "name">("score");
   const ranked = useMemo(() => {
@@ -121,9 +126,15 @@ export function SessionSummary({
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-8 px-4 py-8 text-ivory">
-      <p className="text-xs uppercase tracking-[0.18em] text-gold">{poolName}</p>
-      <h1 className="font-display text-4xl">Session summary</h1>
+    <div className="relative mx-auto flex min-h-screen max-w-5xl flex-col">
+      <div className="flex-1 space-y-8 px-4 py-8 text-ivory">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs uppercase tracking-[0.18em] text-gold">{poolName}</p>
+            <h1 className="font-display text-4xl">Session summary</h1>
+          </div>
+          <HostCloseToGames />
+        </div>
 
       {modeId === "case_study" ? (
         <section className="space-y-3">
@@ -279,6 +290,8 @@ export function SessionSummary({
           </Button>
         ) : null}
       </div>
+      </div>
+      <HostEndNavBar templateId={templateId} instanceId={instanceId} />
     </div>
   );
 }

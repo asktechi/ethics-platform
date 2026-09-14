@@ -468,24 +468,92 @@ export function GameWizard({
           })}
             </>
           )}
-          {(
-            [
-              ["shuffle_questions", "Shuffle questions"],
-              ["show_leaderboard_to_players", "Show leaderboard to players"],
-              ["show_correct_answer_after", "Show correct answer after each question"],
-              ["allow_late_join", "Allow late join"],
-              ["allow_audience_advance", "Allow audience advance"],
-            ] as const
-          ).map(([key, label]) => (
-            <label key={key} className="flex items-center gap-2 text-sm">
+          <div className="mt-6 space-y-2 border border-white/10 bg-card/40 p-4">
+            <h2 className="text-xs uppercase tracking-[0.16em] text-gold">Interaction</h2>
+            {(
+              [
+                ["shuffle_questions", "Shuffle questions"],
+                ["show_leaderboard_to_players", "Show leaderboard to players"],
+                ["show_correct_answer_after", "Show correct answer after each question"],
+                ["allow_late_join", "Allow late join"],
+              ] as const
+            ).map(([key, label]) => (
+              <label key={key} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={store.settings[key]}
+                  onChange={(event) => store.patch({ settings: { ...store.settings, [key]: event.target.checked } })}
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+          <div className="mt-4 space-y-3 border border-white/10 bg-card/40 p-4">
+            <h2 className="text-xs uppercase tracking-[0.16em] text-gold">Pacing</h2>
+            <label className="flex items-start gap-2 text-sm">
               <input
                 type="checkbox"
-                checked={store.settings[key]}
-                onChange={(event) => store.patch({ settings: { ...store.settings, [key]: event.target.checked } })}
+                className="mt-1"
+                checked={store.settings.allow_audience_advance}
+                onChange={(event) =>
+                  store.patch({ settings: { ...store.settings, allow_audience_advance: event.target.checked } })
+                }
               />
-              {label}
+              <span>
+                <span className="block">Allow students to advance the question</span>
+                <span className="mt-1 block text-xs leading-5 text-ivory/55">
+                  When ON, students can tap &apos;Next&apos; after answering to move to the next question before the
+                  timer runs out. When OFF (default), the host controls advancement.
+                </span>
+              </span>
             </label>
-          ))}
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={store.settings.allow_replay}
+                onChange={(event) =>
+                  store.patch({ settings: { ...store.settings, allow_replay: event.target.checked } })
+                }
+              />
+              <span>
+                <span className="block">Allow students to play again</span>
+                <span className="mt-1 block text-xs leading-5 text-ivory/55">
+                  When ON, the player end screen shows Play Again so they can rejoin this join code.
+                </span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={store.settings.rehearsal_mode}
+                onChange={(event) =>
+                  store.patch({ settings: { ...store.settings, rehearsal_mode: event.target.checked } })
+                }
+              />
+              <span>
+                <span className="block">Rehearsal mode</span>
+                <span className="mt-1 block text-xs leading-5 text-ivory/55">
+                  Host practices manually. Auto-reveal does not fire when everyone has answered.
+                </span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={store.settings.auto_reveal_chime}
+                onChange={(event) =>
+                  store.patch({ settings: { ...store.settings, auto_reveal_chime: event.target.checked } })
+                }
+              />
+              <span>
+                <span className="block">Play a chime when everyone has answered</span>
+                <span className="mt-1 block text-xs leading-5 text-ivory/55">Off by default.</span>
+              </span>
+            </label>
+          </div>
         </section>
       ) : null}
 

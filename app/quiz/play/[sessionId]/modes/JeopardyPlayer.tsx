@@ -19,6 +19,9 @@ export function JeopardyPlayer({
   submitError,
   highlight,
   onLock,
+  allowAdvance = false,
+  advancePressed = false,
+  onAdvance,
 }: {
   question: QuizPlayQuestion | null;
   questionIndex: number;
@@ -35,6 +38,9 @@ export function JeopardyPlayer({
   submitError: string | null;
   highlight: { display_name: string; avatar_color?: string | null; ms_taken: number; points: number } | null;
   onLock: (key: string) => void;
+  allowAdvance?: boolean;
+  advancePressed?: boolean;
+  onAdvance?: () => void;
 }) {
   return (
     <>
@@ -82,7 +88,21 @@ export function JeopardyPlayer({
       </div>
       <div className="mt-3 shrink-0 border border-white/10 bg-card p-3 text-center">
         {phase === "question" ? <p className="text-sm text-ivory/60">Tap an answer before the timer hits 0.</p> : null}
-        {phase === "locked" ? <p className="text-sm text-ivory/80">Waiting for others…</p> : null}
+        {phase === "locked" ? (
+          <div className="space-y-3">
+            <p className="text-sm text-ivory/80">Waiting for others…</p>
+            {allowAdvance ? (
+              <button
+                type="button"
+                disabled={advancePressed}
+                onClick={onAdvance}
+                className="w-full border border-gold/40 bg-navy px-4 py-2 text-sm font-medium text-gold disabled:opacity-60"
+              >
+                {advancePressed ? "Ready — waiting for the host" : "Ready for next"}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
         {submitError ? <p className="text-sm text-red-300">{submitError}</p> : null}
         {phase === "reveal" ? (
           <div className="text-left">

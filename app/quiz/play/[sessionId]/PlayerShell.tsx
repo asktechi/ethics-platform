@@ -8,6 +8,7 @@ import { CaseStudyPlayer } from "@/app/quiz/play/[sessionId]/modes/CaseStudyPlay
 import { JeopardyPlayer } from "@/app/quiz/play/[sessionId]/modes/JeopardyPlayer";
 import { RapidFirePlayer } from "@/app/quiz/play/[sessionId]/modes/RapidFirePlayer";
 import { TeamBattlePlayer } from "@/app/quiz/play/[sessionId]/modes/TeamBattlePlayer";
+import { PlayerEndNavBar } from "@/components/quiz/EndNavBar";
 import { finalLeaderboardAction, myParticipantAction, submitAnswerAction } from "@/app/quiz/_actions/player.actions";
 import { parseBossCombat, type BossCombatView } from "@/lib/games/boss-view";
 import { getMode } from "@/lib/games/modes/registry";
@@ -32,6 +33,8 @@ export function PlayerShell({
   gameStartedAt,
   timePerQ,
   initialCombat,
+  allowAudienceAdvance = false,
+  allowReplay = true,
 }: {
   sessionId: string;
   joinCode: string;
@@ -45,6 +48,8 @@ export function PlayerShell({
   gameStartedAt: string | null;
   timePerQ: number;
   initialCombat?: unknown;
+  allowAudienceAdvance?: boolean;
+  allowReplay?: boolean;
 }) {
   const router = useRouter();
   const mode = getMode(modeId);
@@ -93,6 +98,9 @@ export function PlayerShell({
   const choiceRef = useRef<string | null>(null);
   const questionIdRef = useRef<string | null>(null);
   const scoreRef = useRef(0);
+  const sendRef = useRef<(event: QuizEvent) => void>(() => undefined);
+  const advancedRef = useRef(false);
+  const [readyPressed, setReadyPressed] = useState(false);
 
   const totalTime = Number(modeConfig.total_time_seconds ?? timePerQ ?? 60);
   const teamBonus = Number(modeConfig.team_bonus_per_member ?? 20);
@@ -139,6 +147,9 @@ export function PlayerShell({
         participantId: identity.participant_id,
       },
     );
+    sendRef.current = (event) => {
+      void connection.send(event);
+    };
     return () => connection.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [identity, sessionId, hostId]);
@@ -191,6 +202,18 @@ export function PlayerShell({
     }
   }
 
+  function markReady() {
+    if (!identity || !question || advancedRef.current || !allowAudienceAdvance) return;
+    if (isRapid || isAdaptive) return;
+    advancedRef.current = true;
+    setReadyPressed(true);
+    sendRef.current({
+      type: "PLAYER_ADVANCE",
+      participant_id: identity.participant_id,
+      question_id: question.question_id,
+    });
+  }
+
   function handleEvent(event: QuizEvent) {
     if (event.type === "CASE_INTRO") {
       setCaseIntro({ title: event.title, scenario: event.scenario });
@@ -218,6 +241,8 @@ export function PlayerShell({
       }
       submitted.current = false;
       questionIdRef.current = event.question_id;
+      advancedRef.current = false;
+      setReadyPressed(false);
       setCaseReady(true);
       setCaseComplete(false);
       setQuestion({
@@ -413,29 +438,32 @@ export function PlayerShell({
   if (phase === "ended" && !(isBoss && combat && combat.outcome !== "ongoing")) {
     const mine = board.find((row) => row.participant_id === identity.participant_id);
     return (
-      <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-navy px-6 text-center text-ivory">
-        <p className="text-xs uppercase tracking-[0.18em] text-gold">
-          {endedEarly ? "Session ended early" : "Thanks for playing"}
-        </p>
-        <h1 className="mt-3 font-display text-4xl">{score} pts</h1>
-        <p className="mt-2 text-ivory/70">
-          {mine ? `Rank ${mine.rank}` : "Final score"} · streak {streak}
-        </p>
-        {team ? (
-          <p className="mt-2 text-sm" style={{ color: team.color }}>
-            Team {team.name}
+      <div className="flex min-h-[100dvh] flex-col bg-navy text-ivory">
+        <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
+          <p className="text-xs uppercase tracking-[0.18em] text-gold">
+            {endedEarly ? "Session ended early" : "Thanks for playing"}
           </p>
-        ) : null}
-        <ol className="mt-6 w-full max-w-sm space-y-2 text-left">
-          {board.slice(0, 8).map((row) => (
-            <li key={row.participant_id} className="flex items-center justify-between border border-white/10 px-3 py-2">
-              <span>
-                {row.rank}. {row.display_name}
-              </span>
-              <span className="tabular-nums text-gold">{row.score}</span>
-            </li>
-          ))}
-        </ol>
+          <h1 className="mt-3 font-display text-4xl">{score} pts</h1>
+          <p className="mt-2 text-ivory/70">
+            {mine ? `Rank ${mine.rank}` : "Final score"} · streak {streak}
+          </p>
+          {team ? (
+            <p className="mt-2 text-sm" style={{ color: team.color }}>
+              Team {team.name}
+            </p>
+          ) : null}
+          <ol className="mt-6 w-full max-w-sm space-y-2 text-left">
+            {board.slice(0, 8).map((row) => (
+              <li key={row.participant_id} className="flex items-center justify-between border border-white/10 px-3 py-2">
+                <span>
+                  {row.rank}. {row.display_name}
+                </span>
+                <span className="tabular-nums text-gold">{row.score}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+        <PlayerEndNavBar joinCode={joinCode} allowReplay={allowReplay} />
       </div>
     );
   }
@@ -493,6 +521,9 @@ export function PlayerShell({
           submitError={submitError}
           highlight={highlight}
           onLock={(key) => void lockIn(key)}
+          allowAdvance={allowAudienceAdvance}
+          advancePressed={readyPressed}
+          onAdvance={markReady}
         />
       ) : mode.id === "team_battle" ? (
         <TeamBattlePlayer
@@ -514,6 +545,9 @@ export function PlayerShell({
           submitError={submitError}
           highlight={highlight}
           onLock={(key) => void lockIn(key)}
+          allowAdvance={allowAudienceAdvance}
+          advancePressed={readyPressed}
+          onAdvance={markReady}
         />
       ) : isBoss ? (
         <BossBattlePlayer
@@ -538,6 +572,11 @@ export function PlayerShell({
           submitError={submitError}
           highlight={highlight}
           onLock={(key) => void lockIn(key)}
+          allowAdvance={allowAudienceAdvance}
+          advancePressed={readyPressed}
+          onAdvance={markReady}
+          allowReplay={allowReplay}
+          joinCode={joinCode}
         />
       ) : (
         <JeopardyPlayer
@@ -556,6 +595,9 @@ export function PlayerShell({
           submitError={submitError}
           highlight={highlight}
           onLock={(key) => void lockIn(key)}
+          allowAdvance={allowAudienceAdvance}
+          advancePressed={readyPressed}
+          onAdvance={markReady}
         />
       )}
     </div>

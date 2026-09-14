@@ -658,6 +658,10 @@ export async function launchGameFromTemplate(templateId: string) {
     base_points: Number(modeConfig.base_points ?? settings.base_points),
     time_bonus: Boolean(modeConfig.time_bonus ?? settings.time_bonus),
     streak_bonus: Boolean(modeConfig.streak_bonus ?? settings.streak_bonus),
+    allow_audience_advance: settings.allow_audience_advance === true,
+    allow_replay: settings.allow_replay !== false,
+    rehearsal_mode: settings.rehearsal_mode === true,
+    auto_reveal_chime: settings.auto_reveal_chime === true,
   };
 
   const assignment =

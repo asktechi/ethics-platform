@@ -26,6 +26,8 @@ export default async function QuizPlayPage({ params }: { params: { sessionId: st
       gameStartedAt={typeof settings.game_started_at === "string" ? settings.game_started_at : null}
       timePerQ={context.session.time_per_q ?? 30}
       initialCombat={context.bossCombat}
+      allowAudienceAdvance={settings.allow_audience_advance === true}
+      allowReplay={settings.allow_replay !== false}
     />
   );
 }

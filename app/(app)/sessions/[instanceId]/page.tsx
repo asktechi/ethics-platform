@@ -30,6 +30,24 @@ export default async function SessionPage({ params }: { params: { instanceId: st
           { label: "Session" },
         ]}
         title="Session replay"
+        actions={
+          <>
+            <a
+              href="/games"
+              className="inline-flex items-center justify-center border border-gold/40 bg-navy px-4 py-2.5 text-sm font-medium text-gold"
+            >
+              ← Back to Games
+            </a>
+            {instance.quiz_session_id ? (
+              <a
+                href={`/quiz/host/${instance.quiz_session_id}/replay`}
+                className="inline-flex items-center justify-center border border-gold/40 bg-navy px-4 py-2.5 text-sm font-medium text-gold"
+              >
+                Replay as host
+              </a>
+            ) : null}
+          </>
+        }
       />
       <div className="mt-8">
         <SessionDetail

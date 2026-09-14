@@ -32,7 +32,8 @@ function isQuizEvent(value: unknown): value is QuizEvent {
     type === "BOSS_PHASE" ||
     type === "PARTY_HP" ||
     type === "BOSS_VICTORY" ||
-    type === "BOSS_DEFEAT"
+    type === "BOSS_DEFEAT" ||
+    type === "PLAYER_ADVANCE"
   );
 }
 
@@ -59,12 +60,31 @@ export function hostConnect(
     snapshot?: () => QuizEvent | null;
     hostId: string;
     hostToken: string;
+    onPlayerEvent?: (event: QuizEvent) => void;
+    onPresence?: (participantIds: string[]) => void;
   },
 ) {
   const channel = client.channel(quizChannelName(sessionId), {
     config: { broadcast: { ack: true, self: false }, presence: { key: `host:${opts.hostId}` } },
   });
   let lastEvent: QuizEvent | null = null;
+
+  function presentIds() {
+    const state = channel.presenceState() as Record<string, Array<{ participant_id?: string }>>;
+    return Object.values(state)
+      .flat()
+      .map((item) => item.participant_id)
+      .filter((id): id is string => Boolean(id));
+  }
+
+  channel.on("broadcast", { event: CHANNEL_EVENT }, ({ payload }) => {
+    if (!isQuizEvent(payload)) return;
+    if (payload.type === "PLAYER_ADVANCE") opts.onPlayerEvent?.(payload);
+  });
+
+  channel.on("presence", { event: "sync" }, () => {
+    opts.onPresence?.(presentIds());
+  });
 
   channel.on("broadcast", { event: REQUEST_SNAPSHOT }, () => {
     const event = opts.snapshot?.() ?? lastEvent;
@@ -154,6 +174,13 @@ export function playerConnect(
   return {
     channel,
     ready,
+    send(event: QuizEvent) {
+      return channel.send({
+        type: "broadcast",
+        event: CHANNEL_EVENT,
+        payload: event,
+      });
+    },
     disconnect() {
       void client.removeChannel(channel);
     },

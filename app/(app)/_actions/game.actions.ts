@@ -49,6 +49,9 @@ const wizardSchema = z.object({
     show_correct_answer_after: z.boolean(),
     allow_late_join: z.boolean(),
     allow_audience_advance: z.boolean(),
+    allow_replay: z.boolean().optional(),
+    rehearsal_mode: z.boolean().optional(),
+    auto_reveal_chime: z.boolean().optional(),
   }),
 });
 
@@ -58,7 +61,14 @@ function asWizard(input: unknown): WizardState {
   return {
     ...parsed,
     filter: { ...defaultGameFilter(), ...parsed.filter },
-    settings: { ...defaultGameSettings(), ...parsed.settings },
+    settings: {
+      ...defaultGameSettings(),
+      ...parsed.settings,
+      allow_replay: parsed.settings.allow_replay ?? true,
+      rehearsal_mode: parsed.settings.rehearsal_mode ?? false,
+      auto_reveal_chime: parsed.settings.auto_reveal_chime ?? false,
+      allow_audience_advance: parsed.settings.allow_audience_advance ?? false,
+    },
     mode: parsed.mode,
     modeConfig: { ...defaults, ...(parsed.modeConfig ?? {}) },
     caseStudyIds: parsed.caseStudyIds ?? [],

@@ -28,6 +28,9 @@ export function TeamBattlePlayer({
   submitError: string | null;
   highlight: { display_name: string; avatar_color?: string | null; ms_taken: number; points: number } | null;
   onLock: (key: string) => void;
+  allowAdvance?: boolean;
+  advancePressed?: boolean;
+  onAdvance?: () => void;
 }) {
   return (
     <>

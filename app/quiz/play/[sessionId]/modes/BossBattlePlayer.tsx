@@ -33,6 +33,11 @@ export function BossBattlePlayer({
   submitError,
   highlight,
   onLock,
+  allowAdvance = false,
+  advancePressed = false,
+  onAdvance,
+  allowReplay = true,
+  joinCode,
 }: {
   combat: BossCombatView | null;
   overlay: { phase: number; taunt: string } | null;
@@ -55,6 +60,11 @@ export function BossBattlePlayer({
   submitError: string | null;
   highlight: { display_name: string; avatar_color?: string | null; ms_taken: number; points: number } | null;
   onLock: (key: string) => void;
+  allowAdvance?: boolean;
+  advancePressed?: boolean;
+  onAdvance?: () => void;
+  allowReplay?: boolean;
+  joinCode?: string | null;
 }) {
   const boss = combat?.boss;
   const palette = boss?.palette_json ?? {};
@@ -72,6 +82,8 @@ export function BossBattlePlayer({
           responses={responses}
           sessionId={sessionId}
           role="player"
+          allowReplay={allowReplay}
+          joinCode={joinCode}
         />
       ) : null}
       <PhaseOverlay
@@ -131,6 +143,9 @@ export function BossBattlePlayer({
         submitError={submitError}
         highlight={highlight}
         onLock={onLock}
+        allowAdvance={allowAdvance}
+        advancePressed={advancePressed}
+        onAdvance={onAdvance}
       />
     </div>
   );

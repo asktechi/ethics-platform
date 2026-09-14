@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { cloneGameAction } from "@/app/(app)/_actions/game.actions";
+import { BrandNavLink, brandNavClass } from "@/components/quiz/EndNavBar";
 import { Leaderboard, type LivePlayer } from "@/components/quiz/Leaderboard";
 import { ResponseDistribution } from "@/components/quiz/ResponseDistribution";
 import { Button } from "@/components/ui/button";
@@ -64,15 +65,34 @@ export function SessionDetail({
 
   return (
     <div className="space-y-8">
-      <div>
-        <p className="text-xs uppercase tracking-[0.16em] text-gold">
-          Template v{instance.template_version} · snapshot time {snapshot.time_per_q}s
-        </p>
-        <h1 className="mt-2 font-display text-4xl">{instance.template_name}</h1>
-        <p className="mt-2 text-sm text-ivory/60">
-          {new Date(instance.created_at).toLocaleString()} · {instance.participant_count} players · avg{" "}
-          {instance.avg_score ?? "—"} · {instance.duration_seconds ? `${Math.round(instance.duration_seconds / 60)} min` : "—"}
-        </p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-xs uppercase tracking-[0.16em] text-gold">
+            Template v{instance.template_version} · snapshot time {snapshot.time_per_q}s
+          </p>
+          <h1 className="mt-2 font-display text-4xl">{instance.template_name}</h1>
+          <p className="mt-2 text-sm text-ivory/60">
+            {new Date(instance.created_at).toLocaleString()} · {instance.participant_count} players · avg{" "}
+            {instance.avg_score ?? "—"} · {instance.duration_seconds ? `${Math.round(instance.duration_seconds / 60)} min` : "—"}
+          </p>
+        </div>
+        <div className="flex flex-wrap justify-end gap-2">
+          <BrandNavLink href="/games">← Back to Games</BrandNavLink>
+          {instance.quiz_session_id ? (
+            <BrandNavLink href={`/quiz/host/${instance.quiz_session_id}/replay`}>Replay as host</BrandNavLink>
+          ) : null}
+          <button
+            type="button"
+            className={brandNavClass}
+            onClick={() => {
+              void cloneGameAction(instance.template_id).then((result) => {
+                if (result.ok) router.push(`/games/${result.id}`);
+              });
+            }}
+          >
+            Clone as new game
+          </button>
+        </div>
       </div>
 
       {ended ? (

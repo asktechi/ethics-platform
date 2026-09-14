@@ -10,6 +10,7 @@ export function HostQuestionView({
   remaining,
   timePerQ,
   paused,
+  allAnswered = false,
 }: {
   question?: QuizHostQuestion;
   phase: string;
@@ -17,6 +18,7 @@ export function HostQuestionView({
   remaining: number;
   timePerQ: number;
   paused: boolean;
+  allAnswered?: boolean;
 }) {
   return (
     <section>
@@ -50,6 +52,7 @@ export function HostQuestionView({
         />
       </div>
       {paused ? <p className="mt-3 text-center text-gold">Paused</p> : null}
+      {allAnswered ? <p className="mt-3 text-center text-gold">All answered — revealing…</p> : null}
     </section>
   );
 }

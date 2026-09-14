@@ -32,9 +32,13 @@ export function BossBattleHost({
   combat,
   overlay,
   templateId,
+  instanceId,
+  allAnswered = false,
+  answeredLabel,
   onPrev,
   onNext,
   onReveal,
+  onSkip,
   onEnd,
   onForceVictory,
   onForceDefeat,
@@ -55,9 +59,13 @@ export function BossBattleHost({
   combat: BossCombatView | null;
   overlay: { phase: number; taunt: string } | null;
   templateId?: string | null;
+  instanceId?: string | null;
+  allAnswered?: boolean;
+  answeredLabel?: string;
   onPrev: () => void;
   onNext: () => void;
   onReveal: () => void;
+  onSkip: () => void;
   onEnd: () => void;
   onForceVictory: () => void;
   onForceDefeat: () => void;
@@ -81,6 +89,7 @@ export function BossBattleHost({
           responses={[]}
           sessionId={sessionId}
           templateId={templateId}
+          instanceId={instanceId}
           role="host"
         />
       ) : null}
@@ -103,6 +112,11 @@ export function BossBattleHost({
             </span>
           </div>
           <p className="text-sm text-ivory/60">{boss?.subtitle}</p>
+          {answeredLabel ? (
+            <p className={`mt-1 text-sm ${allAnswered ? "text-gold" : "text-ivory/70"}`}>
+              {allAnswered ? "All answered — revealing…" : answeredLabel}
+            </p>
+          ) : null}
           <div className="mt-2">
             <HpBar label="Boss HP" current={hp} max={max} color={hpBarColor(ratio, palette.hpBar)} />
           </div>
@@ -127,6 +141,7 @@ export function BossBattleHost({
           remaining={remaining}
           timePerQ={timePerQ}
           paused={paused}
+          allAnswered={allAnswered}
         />
         <HostSidePanel
           players={players}
@@ -147,6 +162,9 @@ export function BossBattleHost({
         </Button>
         <Button variant="outline" disabled={phase === "reveal" || ended} onClick={onReveal}>
           Reveal
+        </Button>
+        <Button variant="outline" disabled={ended} onClick={onSkip}>
+          Skip
         </Button>
         <Button
           className="bg-gold text-navy hover:bg-gold/90"

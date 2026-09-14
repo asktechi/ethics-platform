@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { JeopardyPlayer } from "@/app/quiz/play/[sessionId]/modes/JeopardyPlayer";
+import { BrandNavLink } from "@/components/quiz/EndNavBar";
 import { cn } from "@/lib/utils";
 import type { QuizPlayQuestion } from "@/lib/quiz/types";
 
@@ -26,6 +27,9 @@ export function CaseStudyPlayer({
   submitError,
   highlight,
   onLock,
+  allowAdvance = false,
+  advancePressed = false,
+  onAdvance,
 }: {
   intro: { title: string; scenario: string } | null;
   complete: boolean;
@@ -47,6 +51,9 @@ export function CaseStudyPlayer({
   submitError: string | null;
   highlight: { display_name: string; avatar_color?: string | null; ms_taken: number; points: number } | null;
   onLock: (key: string) => void;
+  allowAdvance?: boolean;
+  advancePressed?: boolean;
+  onAdvance?: () => void;
 }) {
   const [holdComplete, setHoldComplete] = useState(complete);
 
@@ -85,6 +92,9 @@ export function CaseStudyPlayer({
         <div className="border border-[#2A9D8F]/40 bg-[#2A9D8F]/10 px-6 py-8 text-center">
           <p className="font-display text-3xl text-[#2A9D8F]">Case complete</p>
           <p className="mt-2 text-ivory/70">Nice work</p>
+          <div className="mt-4 flex flex-wrap justify-center gap-2">
+            <BrandNavLink href="/quiz/join">Back to Home</BrandNavLink>
+          </div>
         </div>
       </div>
     );
@@ -111,6 +121,9 @@ export function CaseStudyPlayer({
         submitError={submitError}
         highlight={highlight}
         onLock={onLock}
+        allowAdvance={allowAdvance}
+        advancePressed={advancePressed}
+        onAdvance={onAdvance}
       />
     </>
   );

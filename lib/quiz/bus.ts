@@ -67,6 +67,7 @@ function reduce(state: QuizBusState, event: QuizEvent): QuizBusState {
     case "PARTY_HP":
     case "BOSS_VICTORY":
     case "BOSS_DEFEAT":
+    case "PLAYER_ADVANCE":
       return state;
     case "END":
       return { ...state, ended: true, isPaused: true, revealOpen: false };

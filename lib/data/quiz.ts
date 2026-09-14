@@ -67,6 +67,10 @@ export async function launchQuizSession(input: LaunchInput) {
     shuffle: input.shuffle,
     question_ids: questionIds,
     host_token: crypto.randomUUID(),
+    allow_audience_advance: false,
+    allow_replay: true,
+    rehearsal_mode: false,
+    auto_reveal_chime: false,
   };
 
   let session = null;
@@ -311,10 +315,17 @@ export async function listSessionResponses(sessionId: string, questionId?: strin
 
 export async function getSessionReport(sessionId: string) {
   const session = await getHostSession(sessionId);
-  const [participants, responses, teams] = await Promise.all([
+  const { supabase } = await requireUser();
+  const [participants, responses, teams, instanceResult] = await Promise.all([
     listSessionParticipants(sessionId),
     listSessionResponses(sessionId),
     listSessionTeams(sessionId),
+    supabase
+      .from("game_instances")
+      .select("id, template_id")
+      .eq("quiz_session_id", sessionId)
+      .is("deleted_at", null)
+      .maybeSingle(),
   ]);
   const settings = (session.settings_json ?? {}) as QuizSettings;
   const questions = session.pool_id
@@ -324,5 +335,14 @@ export async function getSessionReport(sessionId: string) {
     .map((id) => questions.find((item) => item.question_id === id))
     .filter(Boolean) as QuizHostQuestion[];
   const pool = session.pool as { id?: string; name?: string; class_id?: string } | null;
-  return { session, participants, responses, questions: ordered, pool, teams };
+  return {
+    session,
+    participants,
+    responses,
+    questions: ordered,
+    pool,
+    teams,
+    instanceId: instanceResult.data?.id ?? null,
+    templateId: instanceResult.data?.template_id ?? null,
+  };
 }

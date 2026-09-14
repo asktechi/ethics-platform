@@ -23,6 +23,8 @@ export default async function QuizSummaryPage({ params }: { params: { sessionId:
       teams={report.teams}
       modeId={report.session.mode ?? "jeopardy"}
       teamBonus={Number(((report.session.settings_json as { mode_config?: { team_bonus_per_member?: number } } | null)?.mode_config?.team_bonus_per_member) ?? 20)}
+      templateId={report.templateId}
+      instanceId={report.instanceId}
     />
   );
 }

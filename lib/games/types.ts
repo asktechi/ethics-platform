@@ -25,6 +25,9 @@ export type GameSettings = {
   show_correct_answer_after: boolean;
   allow_late_join: boolean;
   allow_audience_advance: boolean;
+  allow_replay: boolean;
+  rehearsal_mode: boolean;
+  auto_reveal_chime: boolean;
 };
 
 export type GameSource = "pool" | "filter";
@@ -54,6 +57,9 @@ export const defaultGameSettings = (): GameSettings => ({
   show_correct_answer_after: true,
   allow_late_join: true,
   allow_audience_advance: false,
+  allow_replay: true,
+  rehearsal_mode: false,
+  auto_reveal_chime: false,
 });
 
 export const defaultGameFilter = (): GameFilter => ({

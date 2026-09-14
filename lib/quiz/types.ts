@@ -105,6 +105,11 @@ export type QuizEvent =
       reason: "party_hp_zero" | "questions_exhausted";
       remaining_hp?: number;
     } & QuizEventEnvelope)
+  | ({
+      type: "PLAYER_ADVANCE";
+      participant_id: string;
+      question_id: string;
+    } & QuizEventEnvelope)
   | ({ type: "HYDRATE"; state: Partial<QuizBusState> } & QuizEventEnvelope);
 
 export type QuizEventType = QuizEvent["type"];
@@ -139,6 +144,10 @@ export type QuizSettings = {
   time_bonus?: boolean;
   streak_bonus?: boolean;
   game_started_at?: string | null;
+  allow_audience_advance?: boolean;
+  allow_replay?: boolean;
+  rehearsal_mode?: boolean;
+  auto_reveal_chime?: boolean;
 };
 
 export type PlayerIdentity = {

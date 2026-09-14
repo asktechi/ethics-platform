@@ -45,7 +45,7 @@ export default async function QuizHostPage({ params }: { params: { sessionId: st
       : Promise.resolve({ data: null }),
     admin
       .from("game_instances")
-      .select("template_id")
+      .select("id, template_id")
       .eq("quiz_session_id", session.id)
       .is("deleted_at", null)
       .maybeSingle(),
@@ -75,6 +75,10 @@ export default async function QuizHostPage({ params }: { params: { sessionId: st
       gameStartedAt={typeof settings.game_started_at === "string" ? settings.game_started_at : null}
       initialCombat={combat}
       templateId={instance?.template_id ?? null}
+      instanceId={instance?.id ?? null}
+      allowAudienceAdvance={settings.allow_audience_advance === true}
+      rehearsalMode={settings.rehearsal_mode === true}
+      autoRevealChime={settings.auto_reveal_chime === true}
     />
   );
 }
