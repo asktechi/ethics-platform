@@ -199,6 +199,12 @@ export function GameWizard({
           </div>
           {store.source === "pool" ? (
             <div>
+              {pools.length === 0 ? (
+                <p className="mb-3 text-sm text-ivory/60">
+                  This class has no pools yet. Open the class Questions tab, check items, click{" "}
+                  <strong>Add to pool</strong>, then come back.
+                </p>
+              ) : null}
               <select
                 className="h-10 w-full border border-border bg-navy px-2 text-sm"
                 value={store.poolId}

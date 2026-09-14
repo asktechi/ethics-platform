@@ -16,16 +16,18 @@ import { QuickSelect } from "@/components/questions/QuickSelect";
 import { TagReview } from "@/components/questions/TagReview";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import type { QuestionRow } from "@/lib/data/questions";
 import type { PoolRow } from "@/lib/data/question-pools";
-import { PAGE_SIZE, headerSelectState, pageSlice, railFilters, replaceIds, unionIds } from "@/lib/questions/selection";
+import {
+  PAGE_SIZE,
+  headerSelectState,
+  pageSlice,
+  railFilters,
+  replaceIds,
+  togglePageIds,
+  unionIds,
+} from "@/lib/questions/selection";
 import type { Concept, Standard } from "@/types/db.helpers";
 import { cn } from "@/lib/utils";
 
@@ -59,8 +61,7 @@ export function QuestionsBank({
   const [archived, setArchived] = useState(false);
   const [page, setPage] = useState(0);
   const [matchingCount, setMatchingCount] = useState(0);
-  const [headerMenu, setHeaderMenu] = useState(false);
-  const [newPoolOpen, setNewPoolOpen] = useState(false);
+  const [poolDialogOpen, setPoolDialogOpen] = useState(false);
   const [poolName, setPoolName] = useState("Full Mix");
   const [poolShuffle, setPoolShuffle] = useState(true);
   const [poolTime, setPoolTime] = useState("45");
@@ -131,12 +132,19 @@ export function QuestionsBank({
   }, [search, status, source, standardFilter, conceptFilter, difficulty, archived]);
 
   useEffect(() => {
-    if (initialPools.length) return;
-    start(async () => {
-      const result = await listPoolsAction(classId);
-      if (result.ok) setPools(result.pools);
-    });
-  }, [classId, initialPools.length]);
+    if (initialPools.length) setPools(initialPools);
+  }, [initialPools]);
+
+  const refreshPools = useCallback(async () => {
+    const result = await listPoolsAction(classId);
+    if (result.ok) setPools(result.pools);
+    else setMessage(result.error);
+    return result;
+  }, [classId]);
+
+  useEffect(() => {
+    void refreshPools();
+  }, [refreshPools]);
 
   useEffect(() => {
     let cancelled = false;
@@ -190,13 +198,58 @@ export function QuestionsBank({
     });
   }
 
-  function onHeaderClick() {
-    if (headerState === "none") {
-      setHeaderMenu((open) => !open);
+  function onHeaderChange() {
+    setSelected((prev) => togglePageIds(prev, pageIds, headerState));
+  }
+
+  function applyBulk(action: "approve" | "reject" | "delete" | "restore") {
+    if (selectedIds.length === 0) {
+      setMessage("Check one or more questions first.");
       return;
     }
-    setSelected(new Set());
-    setHeaderMenu(false);
+    start(async () => {
+      const result = await bulkQuestionAction({ classId, ids: selectedIds, action });
+      if (!result.ok) {
+        setMessage(result.error);
+        return;
+      }
+      const stamp = new Date().toISOString();
+      setQuestions((prev) =>
+        prev.map((question) => {
+          if (!selected.has(question.id)) return question;
+          if (action === "approve") return { ...question, approved: true, rejected: false };
+          if (action === "reject") return { ...question, approved: false, rejected: true };
+          if (action === "delete") return { ...question, deleted_at: stamp };
+          return { ...question, deleted_at: null };
+        }),
+      );
+      const count = selectedIds.length;
+      setSelected(new Set());
+      if (action === "approve") {
+        setMessage(`Approved ${count} question${count === 1 ? "" : "s"}. They can now go into a pool and launch.`);
+      } else if (action === "reject") {
+        setMessage(`Rejected ${count} question${count === 1 ? "" : "s"}.`);
+      } else if (action === "delete") {
+        setMessage(`Archived ${count} question${count === 1 ? "" : "s"}.`);
+      } else {
+        setMessage(`Restored ${count} question${count === 1 ? "" : "s"}.`);
+      }
+    });
+  }
+
+  async function addSelectedToPool(pool: PoolRow) {
+    if (selectedIds.length === 0) {
+      setMessage("Check one or more questions first.");
+      return;
+    }
+    const result = await addToPoolAction(classId, pool.id, selectedIds);
+    if (!result.ok) {
+      setMessage(result.error);
+      return;
+    }
+    await refreshPools();
+    setPoolDialogOpen(false);
+    setMessage(`Added ${result.added ?? selectedIds.length} questions to ${pool.name}.`);
   }
 
   return (
@@ -237,7 +290,7 @@ export function QuestionsBank({
       </div>
 
       {message ? (
-        <p className="text-sm text-ivory/70">
+        <p className={cn("text-sm", /fail|error|invalid|not authorized|check one/i.test(message) ? "text-red-300" : "text-ivory/70")}>
           {message}{" "}
           {message.toLowerCase().includes("pool") ? (
             <Link href={`/class/${classId}/questions/pools`} className="text-gold underline">
@@ -407,85 +460,54 @@ export function QuestionsBank({
         </aside>
 
         <section className="min-w-0 border border-border bg-card">
-          {selected.size > 0 ? (
-            <div className="flex flex-wrap gap-2 border-b border-white/10 px-3 py-2">
-              <Button
-                size="sm"
-                onClick={() =>
-                  start(() =>
-                    void bulkQuestionAction({ classId, ids: selectedIds, action: "approve" }).then(() => window.location.reload()),
-                  )
-                }
-              >
-                Approve
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() =>
-                  start(() =>
-                    void bulkQuestionAction({ classId, ids: selectedIds, action: "reject" }).then(() => window.location.reload()),
-                  )
-                }
-              >
-                Reject
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() =>
-                  start(async () => {
-                    const result = await autoTagUntaggedAction(classId, selectedIds);
-                    if (result.ok) {
-                      setProposals(result.results);
-                      setAiSpend((value) => value + (result.cost ?? 0));
-                    } else setMessage(result.error);
-                  })
-                }
-              >
-                Tag now
-              </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button size="sm" variant="outline">
-                    Add to pool ▾
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="border-border bg-navy text-ivory">
-                  {pools.map((pool) => (
-                    <DropdownMenuItem
-                      key={pool.id}
-                      onClick={() =>
-                        start(async () => {
-                          const result = await addToPoolAction(classId, pool.id, selectedIds);
-                          if (!result.ok) {
-                            setMessage(result.error);
-                            return;
-                          }
-                          setMessage(`Added ${result.added ?? selected.size} questions to ${pool.name}.`);
-                        })
-                      }
-                    >
-                      {pool.name}
-                    </DropdownMenuItem>
-                  ))}
-                  <DropdownMenuItem onClick={() => setNewPoolOpen(true)}>New pool…</DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <Button
-                size="sm"
-                variant="destructive"
-                onClick={() =>
-                  start(async () => {
-                    await bulkQuestionAction({ classId, ids: selectedIds, action: archived ? "restore" : "delete" });
-                    window.location.reload();
-                  })
-                }
-              >
-                {archived ? "Restore" : "Delete"}
-              </Button>
-            </div>
-          ) : null}
+          <div className="flex flex-wrap items-center gap-2 border-b border-white/10 px-3 py-2">
+            <Button size="sm" disabled={pending || selected.size === 0} onClick={() => applyBulk("approve")}>
+              Approve
+            </Button>
+            <Button size="sm" variant="outline" disabled={pending || selected.size === 0} onClick={() => applyBulk("reject")}>
+              Reject
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={pending || selected.size === 0}
+              onClick={() =>
+                start(async () => {
+                  const result = await autoTagUntaggedAction(classId, selectedIds);
+                  if (result.ok) {
+                    setProposals(result.results);
+                    setAiSpend((value) => value + (result.cost ?? 0));
+                  } else setMessage(result.error);
+                })
+              }
+            >
+              Tag now
+            </Button>
+            <Button
+              size="sm"
+              className="bg-gold text-navy hover:bg-gold/90"
+              disabled={pending}
+              onClick={() => {
+                void refreshPools();
+                setPoolDialogOpen(true);
+              }}
+            >
+              Add to pool
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              disabled={pending || selected.size === 0}
+              onClick={() => applyBulk(archived ? "restore" : "delete")}
+            >
+              {archived ? "Restore" : "Delete"}
+            </Button>
+            {selected.size === 0 ? (
+              <span className="text-xs text-ivory/45">Check questions, then approve or add them to a pool.</span>
+            ) : (
+              <span className="text-xs text-ivory/60">{selected.size} selected</span>
+            )}
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="text-[11px] uppercase tracking-[0.12em] text-ivory/45">
@@ -495,33 +517,9 @@ export function QuestionsBank({
                       ref={headerRef}
                       type="checkbox"
                       checked={headerState === "all" && pageIds.length > 0}
-                      onChange={onHeaderClick}
-                      aria-label="Select questions"
+                      onChange={onHeaderChange}
+                      aria-label="Select this page"
                     />
-                    {headerMenu && headerState === "none" ? (
-                      <div className="absolute left-0 top-8 z-20 w-64 space-y-1 border border-gold/40 bg-navy p-2 text-left normal-case tracking-normal text-ivory shadow-xl">
-                        <button
-                          type="button"
-                          className="block w-full px-2 py-1 text-left text-xs hover:bg-gold/10"
-                          onClick={() => {
-                            setSelected(unionIds(selected, pageIds));
-                            setHeaderMenu(false);
-                          }}
-                        >
-                          Select this page ({pageIds.length})
-                        </button>
-                        <button
-                          type="button"
-                          className="block w-full px-2 py-1 text-left text-xs hover:bg-gold/10"
-                          onClick={() => {
-                            selectMatching();
-                            setHeaderMenu(false);
-                          }}
-                        >
-                          Select all {matchingCount} matching current filters
-                        </button>
-                      </div>
-                    ) : null}
                   </th>
                   <th className="px-2 py-2">Stem</th>
                   <th className="px-2 py-2">Standard</th>
@@ -565,6 +563,14 @@ export function QuestionsBank({
             <div className="flex items-center justify-between border-t border-white/10 px-3 py-2 text-xs text-ivory/60">
               <span>
                 Page {safePage + 1} of {pageCount} · {visible.length} matching
+                {matchingCount > pageIds.length ? (
+                  <>
+                    {" · "}
+                    <button type="button" className="text-gold underline" onClick={selectMatching}>
+                      Select all {matchingCount} matching
+                    </button>
+                  </>
+                ) : null}
               </span>
               <div className="flex gap-2">
                 <Button type="button" size="sm" variant="ghost" disabled={safePage === 0} onClick={() => setPage((value) => Math.max(0, value - 1))}>
@@ -594,33 +600,82 @@ export function QuestionsBank({
             start(async () => {
               if (!active) return;
               const result = await updateQuestionAction({ classId, id: active.id, ...patch });
-              if (!result.ok) setMessage(result.error);
-              else window.location.reload();
+              if (!result.ok) {
+                setMessage(result.error);
+                return;
+              }
+              const id = active.id;
+              setQuestions((prev) =>
+                prev.map((question) => {
+                  if (question.id !== id) return question;
+                  const next = { ...question, ...patch };
+                  if (patch.standard_id !== undefined) {
+                    const standard = standards.find((item) => item.id === patch.standard_id);
+                    next.standard = standard
+                      ? { id: standard.id, code: standard.code, title: standard.title }
+                      : null;
+                  }
+                  if (patch.concept_id !== undefined) {
+                    const concept = concepts.find((item) => item.id === patch.concept_id);
+                    next.concept = concept ? { id: concept.id, title: concept.title } : null;
+                  }
+                  return next;
+                }),
+              );
+              setMessage(patch.approved ? "Question approved." : patch.rejected ? "Question rejected." : "Question saved.");
             })
           }
         />
       </div>
       <p className="text-[11px] text-ivory/40">AI spend for this class: ${aiSpend.toFixed(4)}</p>
 
-      <Dialog open={newPoolOpen} onOpenChange={setNewPoolOpen}>
+      <Dialog open={poolDialogOpen} onOpenChange={setPoolDialogOpen}>
         <DialogContent className="border-border bg-navy text-ivory">
           <DialogHeader>
-            <DialogTitle>New pool</DialogTitle>
+            <DialogTitle>Add to a pool</DialogTitle>
           </DialogHeader>
-          <label className="block text-sm">
-            Name
-            <Input className="mt-1" value={poolName} onChange={(event) => setPoolName(event.target.value)} />
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={poolShuffle} onChange={(event) => setPoolShuffle(event.target.checked)} />
-            Shuffle on play
-          </label>
-          <label className="block text-sm">
-            Seconds per question
-            <Input className="mt-1" value={poolTime} onChange={(event) => setPoolTime(event.target.value)} />
-          </label>
+          {selected.size === 0 ? (
+            <p className="text-sm text-ivory/70">Check one or more questions in the bank, then open this again.</p>
+          ) : (
+            <p className="text-sm text-ivory/70">
+              Add {selected.size} selected question{selected.size === 1 ? "" : "s"} to an existing pool, or create one.
+              Approve them if you want the pool to be playable.
+            </p>
+          )}
+          {pools.length ? (
+            <div className="max-h-48 space-y-1 overflow-y-auto">
+              {pools.map((pool) => (
+                <button
+                  key={pool.id}
+                  type="button"
+                  disabled={pending || selected.size === 0}
+                  className="block w-full border border-white/10 px-3 py-2 text-left text-sm text-ivory hover:bg-gold/10 disabled:opacity-40"
+                  onClick={() => start(() => addSelectedToPool(pool))}
+                >
+                  {pool.name}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-ivory/55">No pools yet. Create one below.</p>
+          )}
+          <div className="space-y-3 border-t border-white/10 pt-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gold">New pool</p>
+            <label className="block text-sm">
+              Name
+              <Input className="mt-1" value={poolName} onChange={(event) => setPoolName(event.target.value)} />
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={poolShuffle} onChange={(event) => setPoolShuffle(event.target.checked)} />
+              Shuffle on play
+            </label>
+            <label className="block text-sm">
+              Seconds per question
+              <Input className="mt-1" value={poolTime} onChange={(event) => setPoolTime(event.target.value)} />
+            </label>
+          </div>
           <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => setNewPoolOpen(false)}>
+            <Button type="button" variant="ghost" onClick={() => setPoolDialogOpen(false)}>
               Cancel
             </Button>
             <Button
@@ -641,8 +696,8 @@ export function QuestionsBank({
                     setMessage(result.error);
                     return;
                   }
-                  setPools((current) => [result.pool, ...current]);
-                  setNewPoolOpen(false);
+                  setPools((current) => [result.pool, ...current.filter((item) => item.id !== result.pool.id)]);
+                  setPoolDialogOpen(false);
                   setMessage(`Created ${result.pool.name} with ${selected.size} questions.`);
                 })
               }

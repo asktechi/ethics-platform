@@ -18,6 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Link from "next/link";
 import type { ClassDetail } from "@/lib/data/classes";
 import type { QuestionRow } from "@/lib/data/questions";
+import type { PoolRow } from "@/lib/data/question-pools";
 import type { MaterialListRow } from "@/lib/data/materials.types";
 import type { Concept, Section, Standard } from "@/types/db.helpers";
 
@@ -28,6 +29,7 @@ export function ClassWorkspace({
   materials,
   questions,
   standards,
+  pools,
   spend,
 }: {
   detail: ClassDetail;
@@ -36,6 +38,7 @@ export function ClassWorkspace({
   materials: MaterialListRow[];
   questions: QuestionRow[];
   standards: Standard[];
+  pools: PoolRow[];
   spend: number;
 }) {
   const firstActive = sections.find((section) => !section.deleted_at)?.id ?? null;
@@ -209,6 +212,7 @@ export function ClassWorkspace({
           initialQuestions={questions}
           standards={standards}
           concepts={concepts}
+          pools={pools}
           spend={spend}
         />
       </TabsContent>

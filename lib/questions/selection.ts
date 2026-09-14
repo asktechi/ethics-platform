@@ -76,6 +76,16 @@ export function unionIds(current: Set<string>, ids: string[]) {
   return next;
 }
 
+export function exceptIds(current: Set<string>, ids: string[]) {
+  const next = new Set(current);
+  ids.forEach((id) => next.delete(id));
+  return next;
+}
+
+export function togglePageIds(current: Set<string>, pageIds: string[], state: HeaderSelectState) {
+  return state === "all" ? exceptIds(current, pageIds) : unionIds(current, pageIds);
+}
+
 export function replaceIds(ids: string[]) {
   return new Set(ids);
 }

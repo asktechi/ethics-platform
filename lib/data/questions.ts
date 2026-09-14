@@ -201,6 +201,20 @@ export async function restoreQuestion(id: string) {
   if (error) throw new Error(error.message);
 }
 
+export async function bulkUpdateQuestions(
+  ids: string[],
+  patch: Partial<{ approved: boolean; rejected: boolean; deleted_at: string | null }>,
+) {
+  const unique = [...new Set(ids.filter(Boolean))];
+  if (unique.length === 0) return;
+  const { supabase } = await requireUser();
+  const { error } = await supabase
+    .from("questions")
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .in("id", unique);
+  if (error) throw new Error(error.message);
+}
+
 export async function applyTagApprovals(
   items: Array<{
     questionId: string;

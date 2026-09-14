@@ -217,11 +217,16 @@ export function GeneratePanel({
               disabled={pending}
               onClick={() =>
                 start(async () => {
-                  await bulkQuestionAction({
+                  const result = await bulkQuestionAction({
                     classId,
                     ids: inserted.slice(0, 3).map((item) => item.id),
                     action: "approve",
                   });
+                  if (!result.ok) {
+                    setError(result.error);
+                    return;
+                  }
+                  setError(null);
                   setInserted((prev) =>
                     prev.map((item, index) => (index < 3 ? { ...item, approved: true } : item)),
                   );
@@ -261,7 +266,12 @@ export function GeneratePanel({
                           disabled={pending || question.approved}
                           onClick={() =>
                             start(async () => {
-                              await bulkQuestionAction({ classId, ids: [question.id], action: "approve" });
+                              const result = await bulkQuestionAction({ classId, ids: [question.id], action: "approve" });
+                              if (!result.ok) {
+                                setError(result.error);
+                                return;
+                              }
+                              setError(null);
                               setInserted((prev) =>
                                 prev.map((item) => (item.id === question.id ? { ...item, approved: true } : item)),
                               );
@@ -276,7 +286,12 @@ export function GeneratePanel({
                           disabled={pending}
                           onClick={() =>
                             start(async () => {
-                              await bulkQuestionAction({ classId, ids: [question.id], action: "reject" });
+                              const result = await bulkQuestionAction({ classId, ids: [question.id], action: "reject" });
+                              if (!result.ok) {
+                                setError(result.error);
+                                return;
+                              }
+                              setError(null);
                               setInserted((prev) => prev.filter((item) => item.id !== question.id));
                             })
                           }

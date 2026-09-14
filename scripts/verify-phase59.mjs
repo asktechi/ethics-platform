@@ -1,4 +1,13 @@
-import { headerSelectState, pageSlice, questionMatchesFilters, replaceIds, unionIds } from "@/lib/questions/selection.ts";
+import { asJoinedRecord, normalizePoolItems } from "@/lib/data/pool-items.ts";
+import {
+  exceptIds,
+  headerSelectState,
+  pageSlice,
+  questionMatchesFilters,
+  replaceIds,
+  togglePageIds,
+  unionIds,
+} from "@/lib/questions/selection.ts";
 
 const results = [];
 function pass(step, ok, detail) {
@@ -26,6 +35,17 @@ pass("header none", headerSelectState(pageIds, new Set()) === "none");
 pass("header some", headerSelectState(pageIds, new Set(["a"])) === "some");
 pass("header all page", headerSelectState(pageIds, new Set(["a", "b", "c"])) === "all");
 pass("header some when selected off-page", headerSelectState(pageIds, new Set(["z"])) === "some");
+pass("header checkbox selects the page", [...togglePageIds(new Set(), pageIds, "none")].join(",") === "a,b,c");
+pass("header checkbox clears the page", togglePageIds(new Set(pageIds), pageIds, "all").size === 0);
+pass("exceptIds leaves off-page selection", exceptIds(new Set(["a", "z"]), ["a"]).has("z"));
+pass("join unwrap array", asJoinedRecord([{ id: "q1" }])?.id === "q1");
+pass("join unwrap object", asJoinedRecord({ id: "q1" })?.id === "q1");
+const normalized = normalizePoolItems([
+  { id: "i1", question_id: "q1", order: 0, question: [{ id: "q1", stem: "Independence?" }] },
+  { id: "i2", question_id: "q2", order: 1, question: null },
+]);
+pass("pool items survive array join", normalized[0].question.id === "q1" && normalized[0].question.stem.includes("Independence"));
+pass("pool items survive missing question", normalized[1].question_id === "q2" && Boolean(normalized[1].question.stem));
 
 const hardIII = {
   id: "1",

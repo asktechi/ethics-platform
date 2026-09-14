@@ -10,12 +10,11 @@ import { listConceptsByClass } from "@/lib/data/concepts";
 import { actionError } from "@/lib/data/errors";
 import {
   applyTagApprovals,
+  bulkUpdateQuestions,
   countQuestions,
   insertGeneratedQuestions,
   listQuestionIds,
   listQuestions,
-  restoreQuestion,
-  softDeleteQuestion,
   untaggedQuestionIds,
   updateQuestion,
   type QuestionFilters,
@@ -139,19 +138,17 @@ export async function bulkQuestionAction(input: unknown) {
     .safeParse(input);
   if (!parsed.success) return { ok: false as const, error: "Invalid bulk action" };
   try {
-    for (const id of parsed.data.ids) {
-      if (parsed.data.action === "approve") {
-        await updateQuestion(id, { approved: true, rejected: false });
-      } else if (parsed.data.action === "reject") {
-        await updateQuestion(id, { approved: false, rejected: true });
-      } else if (parsed.data.action === "delete") {
-        await softDeleteQuestion(id);
-      } else {
-        await restoreQuestion(id);
-      }
+    if (parsed.data.action === "approve") {
+      await bulkUpdateQuestions(parsed.data.ids, { approved: true, rejected: false });
+    } else if (parsed.data.action === "reject") {
+      await bulkUpdateQuestions(parsed.data.ids, { approved: false, rejected: true });
+    } else if (parsed.data.action === "delete") {
+      await bulkUpdateQuestions(parsed.data.ids, { deleted_at: new Date().toISOString() });
+    } else {
+      await bulkUpdateQuestions(parsed.data.ids, { deleted_at: null });
     }
     refresh(parsed.data.classId);
-    return { ok: true as const };
+    return { ok: true as const, count: parsed.data.ids.length };
   } catch (error) {
     return { ok: false as const, error: actionError(error) };
   }

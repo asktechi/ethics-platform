@@ -1,5 +1,8 @@
 import { requireUser } from "@/lib/data/auth";
+import { normalizePoolItems } from "@/lib/data/pool-items";
 import type { QuestionRow } from "@/lib/data/questions";
+
+export { asJoinedRecord, normalizePoolItems } from "@/lib/data/pool-items";
 
 export type PoolRow = {
   id: string;
@@ -132,7 +135,11 @@ export async function createPoolWithQuestions(
     p_question_ids: unique,
   });
   if (!error) {
-    const row = Array.isArray(data) ? data[0] : data;
+    const raw = Array.isArray(data) ? data[0] : data;
+    const row = typeof raw === "string" ? (JSON.parse(raw) as PoolRow & { added?: number }) : raw;
+    if (!row || typeof row !== "object" || !("id" in row)) {
+      throw new Error("Pool was created but the response was empty.");
+    }
     return row as PoolRow & { added?: number };
   }
   if (!/create_pool_with_questions|schema cache|does not exist/i.test(error.message)) {
@@ -172,12 +179,15 @@ export async function getPoolWithQuestions(poolId: string): Promise<PoolWithQues
   if (error) throw new Error(error.message);
   const { data: items, error: itemsError } = await supabase
     .from("question_pool_items")
-    .select("id, question_id, order, question:questions(*)")
+    .select('id, question_id, "order", question:questions(*)')
     .eq("pool_id", poolId)
     .is("deleted_at", null)
     .order("order", { ascending: true });
   if (itemsError) throw new Error(itemsError.message);
-  return { pool: pool as PoolRow, items: (items ?? []) as unknown as PoolItem[] };
+  return {
+    pool: pool as PoolRow,
+    items: normalizePoolItems((items ?? []) as Array<{ id: string; question_id: string; order: number; question?: unknown }>),
+  };
 }
 
 export function shufflePoolItems(items: PoolItem[]) {

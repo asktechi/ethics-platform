@@ -67,9 +67,9 @@ export function PoolsBoard({
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const selected = pools.find((pool) => pool.id === selectedId) ?? pools[0] ?? null;
-  const inPool = new Set(items.map((item) => item.question.id));
+  const inPool = new Set(items.map((item) => item.question_id));
   const addable = questions.filter((question) => !inPool.has(question.id) && !question.rejected && !question.deleted_at);
-  const orderedIds = useMemo(() => items.map((item) => item.question.id), [items]);
+  const orderedIds = useMemo(() => items.map((item) => item.question_id), [items]);
 
   function loadPool(id: string) {
     setSelectedId(id);
@@ -260,7 +260,7 @@ export function PoolsBoard({
                   <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gold">
                     Dry run {previewIndex + 1} / {preview.length}
                   </p>
-                  <p className="font-medium text-ivory">{preview[previewIndex]?.question.stem}</p>
+                  <p className="font-medium text-ivory">{preview[previewIndex]?.question?.stem ?? "Question unavailable"}</p>
                   <ol className="mt-2 list-inside list-[upper-alpha] text-sm text-ivory/70">
                     {(Array.isArray(preview[previewIndex]?.question.choices_json)
                       ? preview[previewIndex].question.choices_json
@@ -293,15 +293,24 @@ export function PoolsBoard({
                 <SortableContext items={orderedIds} strategy={verticalListSortingStrategy}>
                   <div className="space-y-2">
                     {items.map((item) => (
-                      <SortableItem key={item.id} id={item.question.id}>
+                      <SortableItem key={item.id} id={item.question_id}>
                         <div className="flex items-start justify-between gap-2">
-                          <p className="text-sm text-ivory/90">{item.question.stem}</p>
+                          <div className="min-w-0">
+                            <p className="text-sm text-ivory/90">{item.question?.stem ?? "Question unavailable"}</p>
+                            <p className="text-[11px] text-ivory/40">
+                              {item.question?.approved ? "approved" : item.question?.rejected ? "rejected" : "pending"}
+                            </p>
+                          </div>
                           <Button
                             size="sm"
                             variant="ghost"
                             onClick={() =>
                               start(async () => {
-                                await removeFromPoolAction(classId, selected.id, [item.question.id]);
+                                const result = await removeFromPoolAction(classId, selected.id, [item.question_id]);
+                                if (!result.ok) {
+                                  setError(result.error);
+                                  return;
+                                }
                                 loadPool(selected.id);
                               })
                             }
@@ -317,23 +326,38 @@ export function PoolsBoard({
 
               <div>
                 <p className="mb-2 text-sm font-medium text-ivory/80">Add from bank</p>
-                <div className="max-h-64 space-y-1 overflow-y-auto">
-                  {addable.map((question) => (
-                    <button
-                      key={question.id}
-                      type="button"
-                      className="block w-full border border-white/10 px-2 py-1.5 text-left text-sm text-ivory/80 hover:bg-white/5"
-                      onClick={() =>
-                        start(async () => {
-                          await addToPoolAction(classId, selected.id, [question.id]);
-                          loadPool(selected.id);
-                        })
-                      }
-                    >
-                      {question.stem.slice(0, 140)}
-                    </button>
-                  ))}
-                </div>
+                {addable.length === 0 ? (
+                  <p className="text-sm text-ivory/45">
+                    No questions left to add. Import or restore items in the question bank, approve them, then come back.
+                  </p>
+                ) : (
+                  <div className="max-h-64 space-y-1 overflow-y-auto">
+                    {addable.map((question) => (
+                      <button
+                        key={question.id}
+                        type="button"
+                        disabled={pending}
+                        className="block w-full border border-white/10 px-2 py-1.5 text-left text-sm text-ivory/80 hover:bg-white/5 disabled:opacity-50"
+                        onClick={() =>
+                          start(async () => {
+                            const result = await addToPoolAction(classId, selected.id, [question.id]);
+                            if (!result.ok) {
+                              setError(result.error);
+                              return;
+                            }
+                            setError(null);
+                            loadPool(selected.id);
+                          })
+                        }
+                      >
+                        <span className="block truncate">{question.stem.slice(0, 140)}</span>
+                        <span className="text-[11px] text-ivory/40">
+                          {question.approved ? "approved" : "pending — approve to make playable"}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </>
           )}

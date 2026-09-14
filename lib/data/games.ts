@@ -608,6 +608,7 @@ export async function loadWizardContext() {
           .from("question_pool_items")
           .select("pool_id, question:questions(stem)")
           .in("pool_id", ids)
+          .is("deleted_at", null)
       : { data: [] };
     const grouped = new Map<string, string[]>();
     (items ?? []).forEach((item) => {

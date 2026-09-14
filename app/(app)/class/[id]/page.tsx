@@ -6,6 +6,7 @@ import { getClass } from "@/lib/data/classes";
 import { listConceptsByClass } from "@/lib/data/concepts";
 import { listMaterials } from "@/lib/data/materials";
 import { listQuestions } from "@/lib/data/questions";
+import { listPools } from "@/lib/data/question-pools";
 import { listSections } from "@/lib/data/sections";
 import { listStandards } from "@/lib/data/standards";
 
@@ -17,12 +18,13 @@ export default async function ClassPage({ params }: { params: { id: string } }) 
     notFound();
   }
 
-  const [sections, concepts, materials, questions, standards, spend] = await Promise.all([
+  const [sections, concepts, materials, questions, standards, pools, spend] = await Promise.all([
     listSections(detail.id, { includeArchived: true }),
     listConceptsByClass(detail.id, { includeArchived: true }),
     listMaterials(detail.id, { includeArchived: true }),
     listQuestions(detail.id, { includeArchived: true }),
     listStandards(),
+    listPools(detail.id),
     classAiSpend(detail.id),
   ]);
 
@@ -44,6 +46,7 @@ export default async function ClassPage({ params }: { params: { id: string } }) 
         materials={materials}
         questions={questions}
         standards={standards}
+        pools={pools}
         spend={spend}
       />
     </div>

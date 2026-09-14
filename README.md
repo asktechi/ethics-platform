@@ -53,6 +53,8 @@ Open a class and use the **Questions** tab, or go to `/class/{id}/questions`.
 - **Prose grammar (DOCX / TXT / MD)** — start each item with `Q1.` (or `Question 1:` / `1.`), then the stem, then `A) B) C)` choices, then optional `Standard:`, `Answer:`, and `Explanation:` lines. Decorative separators (`===START===`, `=====`, `---`, page numbers) are ignored. AI-generated items are serialized through the same grammar before they are saved.
 - Imports land as `approved=false`, untagged. Auto-tag proposes a Standard, optional Concept, and difficulty. Nothing goes live until you approve.
 - **Generate new** — `/class/{id}/questions/generate` uses gpt-4o. Paste source text or pick approved slides. Drafts stay pending.
+- **Approve** — check questions in the bank, then **Approve**. Live games only load approved items.
+- **Add to pool** — the gold button stays visible. Check questions, pick an existing pool or create one. From `/class/{id}/questions/pools` you can also **Add from bank**.
 - **Pools** — `/class/{id}/questions/pools` groups questions, shuffle-on-play, seconds per question, and a dry-run preview
 - Soft-delete hides a question; **Show archived** restores it
 - AI spend for the class is the footer total from `ai_usage_log`
