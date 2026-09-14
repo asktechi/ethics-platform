@@ -13,8 +13,7 @@ import { HostSidePanel } from "@/app/quiz/host/[sessionId]/HostSidePanel";
 import { Button } from "@/components/ui/button";
 import type { BestAnswer } from "@/components/quiz/BestAnswerPanel";
 import type { LivePlayer } from "@/components/quiz/Leaderboard";
-import type { BossCombatView } from "@/lib/data/bosses";
-import type { HostExtraPanelProps } from "@/lib/games/modes/types";
+import type { BossCombatView } from "@/lib/games/boss-view";
 import type { QuizHostQuestion } from "@/lib/quiz/types";
 
 export function BossBattleHost({

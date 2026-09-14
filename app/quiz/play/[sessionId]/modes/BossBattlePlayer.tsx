@@ -8,7 +8,7 @@ import {
   PhaseOverlay,
   hpBarColor,
 } from "@/components/quiz/BossChrome";
-import type { BossCombatView } from "@/lib/data/bosses";
+import type { BossCombatView } from "@/lib/games/boss-view";
 import type { QuizPlayQuestion } from "@/lib/quiz/types";
 
 export function BossBattlePlayer({

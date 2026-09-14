@@ -9,7 +9,7 @@ import { JeopardyPlayer } from "@/app/quiz/play/[sessionId]/modes/JeopardyPlayer
 import { RapidFirePlayer } from "@/app/quiz/play/[sessionId]/modes/RapidFirePlayer";
 import { TeamBattlePlayer } from "@/app/quiz/play/[sessionId]/modes/TeamBattlePlayer";
 import { finalLeaderboardAction, myParticipantAction, submitAnswerAction } from "@/app/quiz/_actions/player.actions";
-import { parseBossCombat, type BossCombatView } from "@/lib/data/bosses";
+import { parseBossCombat, type BossCombatView } from "@/lib/games/boss-view";
 import { getMode } from "@/lib/games/modes/registry";
 import type { GameTeamRecord } from "@/lib/games/modes/types";
 import { playerConnect } from "@/lib/quiz/realtime";

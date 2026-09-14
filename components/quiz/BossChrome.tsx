@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
-import type { BossCombatView, CombatLogEntry } from "@/lib/data/bosses";
+import type { BossCombatView, CombatLogEntry } from "@/lib/games/boss-view";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 

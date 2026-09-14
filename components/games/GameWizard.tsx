@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { ResolveDiagnostics } from "@/lib/games/resolve";
 import { estimatedQuestionsToKill, asBossConfig } from "@/lib/games/boss-combat";
-import type { BossRow } from "@/lib/data/bosses";
+import type { BossRow } from "@/lib/games/boss-view";
 import { getMode } from "@/lib/games/modes/registry";
 import { schemaDefaults } from "@/lib/games/modes/types";
 import { MODE_META, type GameMode } from "@/lib/games/types";

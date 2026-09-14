@@ -25,7 +25,7 @@ import { AudienceQr } from "@/components/presentation/AudienceQr";
 import type { BestAnswer } from "@/components/quiz/BestAnswerPanel";
 import { Leaderboard, type LivePlayer } from "@/components/quiz/Leaderboard";
 import { Button } from "@/components/ui/button";
-import { parseBossCombat, type BossCombatView } from "@/lib/data/bosses";
+import { parseBossCombat, type BossCombatView } from "@/lib/games/boss-view";
 import { getMode } from "@/lib/games/modes/registry";
 import type { GameTeamRecord, HostExtraPanelProps } from "@/lib/games/modes/types";
 import { caseProgressAt, groupQuestionsByCase } from "@/lib/games/case-groups";
