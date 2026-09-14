@@ -960,6 +960,66 @@ export type Database = {
         };
         Relationships: [];
       };
+      bosses: {
+        Row: {
+          id: string;
+          slug: string;
+          name: string;
+          subtitle: string | null;
+          portrait_emoji: string | null;
+          portrait_url: string | null;
+          max_hp: number;
+          standard_id: string | null;
+          phase_1_taunts: string[];
+          phase_2_taunts: string[];
+          phase_3_taunts: string[];
+          victory_line: string | null;
+          defeat_line: string | null;
+          palette_json: Json;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          slug: string;
+          name: string;
+          subtitle?: string | null;
+          portrait_emoji?: string | null;
+          portrait_url?: string | null;
+          max_hp?: number;
+          standard_id?: string | null;
+          phase_1_taunts?: string[];
+          phase_2_taunts?: string[];
+          phase_3_taunts?: string[];
+          victory_line?: string | null;
+          defeat_line?: string | null;
+          palette_json?: Json;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          slug?: string;
+          name?: string;
+          subtitle?: string | null;
+          portrait_emoji?: string | null;
+          portrait_url?: string | null;
+          max_hp?: number;
+          standard_id?: string | null;
+          phase_1_taunts?: string[];
+          phase_2_taunts?: string[];
+          phase_3_taunts?: string[];
+          victory_line?: string | null;
+          defeat_line?: string | null;
+          palette_json?: Json;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Relationships: [];
+      };
       game_templates: {
         Row: {
           id: string;
@@ -975,6 +1035,8 @@ export type Database = {
           mode_config: Json;
           case_study_ids: string[];
           adaptive_config: Json;
+          boss_id: string | null;
+          boss_config: Json;
           version: number;
           play_count: number;
           last_played_at: string | null;
@@ -996,6 +1058,8 @@ export type Database = {
           mode_config?: Json;
           case_study_ids?: string[];
           adaptive_config?: Json;
+          boss_id?: string | null;
+          boss_config?: Json;
           version?: number;
           play_count?: number;
           last_played_at?: string | null;
@@ -1017,6 +1081,8 @@ export type Database = {
           mode_config?: Json;
           case_study_ids?: string[];
           adaptive_config?: Json;
+          boss_id?: string | null;
+          boss_config?: Json;
           version?: number;
           play_count?: number;
           last_played_at?: string | null;
@@ -1045,6 +1111,10 @@ export type Database = {
           settings_snapshot: Json;
           team_assignment_mode: "auto" | "manual" | "self_select";
           adaptive_state: Json;
+          boss_hp_current: number | null;
+          party_hp_current: number | null;
+          boss_phase: number;
+          boss_state: Json;
           created_at: string;
           updated_at: string;
           deleted_at: string | null;
@@ -1067,6 +1137,10 @@ export type Database = {
           settings_snapshot?: Json;
           team_assignment_mode?: "auto" | "manual" | "self_select";
           adaptive_state?: Json;
+          boss_hp_current?: number | null;
+          party_hp_current?: number | null;
+          boss_phase?: number;
+          boss_state?: Json;
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
@@ -1089,6 +1163,10 @@ export type Database = {
           settings_snapshot?: Json;
           team_assignment_mode?: "auto" | "manual" | "self_select";
           adaptive_state?: Json;
+          boss_hp_current?: number | null;
+          party_hp_current?: number | null;
+          boss_phase?: number;
+          boss_state?: Json;
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
@@ -1403,6 +1481,42 @@ export type Database = {
       quiz_apply_reveal: {
         Args: { p_session_id: string; p_question_id: string; p_correct_key: string };
         Returns: undefined;
+      };
+      init_boss_combat: {
+        Args: { p_session_id: string };
+        Returns: {
+          boss_hp: number;
+          boss_max_hp: number;
+          party_hp: number | null;
+          party_max_hp: number;
+          phase: number;
+        }[];
+      };
+      apply_boss_combat: {
+        Args: { p_session_id: string; p_question_id: string };
+        Returns: {
+          boss_hp: number;
+          boss_max_hp: number;
+          party_hp: number | null;
+          party_max_hp: number;
+          phase: number;
+          phase_changed: boolean;
+          taunt: string | null;
+          outcome: string;
+          combat_log: Json;
+        }[];
+      };
+      force_boss_outcome: {
+        Args: { p_session_id: string; p_victory: boolean };
+        Returns: undefined;
+      };
+      get_boss_combat: {
+        Args: { p_session_id: string };
+        Returns: Json;
+      };
+      finalize_boss_combat: {
+        Args: { p_session_id: string };
+        Returns: Json;
       };
       quiz_end_session: {
         Args: { p_session_id: string };
