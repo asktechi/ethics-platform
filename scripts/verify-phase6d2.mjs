@@ -323,9 +323,87 @@ pass("CS8 per-case results available", aliceCorrect === 4, `aliceCorrect=${alice
 // ---------- Adaptive E2E ----------
 const stdA = standards[0]?.id;
 const stdB = standards[1]?.id ?? standards[0]?.id;
+
+async function seedWeakness(studentProfileId) {
+  if (!studentProfileId || !stdB) return;
+  const conflict = "student_profile_id,class_id,standard_id";
+  await admin.from("student_performance").upsert({
+    student_profile_id: studentProfileId,
+    class_id: klass.id,
+    standard_id: stdB,
+    attempts: 8,
+    correct: 1,
+    accuracy: 12.5,
+    avg_ms: 9000,
+    weakness_score: 0.95,
+    last_practiced_at: new Date().toISOString(),
+  }, { onConflict: conflict });
+  await admin.from("student_performance").upsert({
+    student_profile_id: studentProfileId,
+    class_id: klass.id,
+    standard_id: stdA,
+    attempts: 8,
+    correct: 7,
+    accuracy: 87.5,
+    avg_ms: 3000,
+    weakness_score: 0.12,
+    last_practiced_at: new Date().toISOString(),
+  }, { onConflict: conflict });
+}
+
+const ad4Pool = await makePool("Adaptive AD4 pool", [
+  questionRow("Adapt weak-stdB", stdB, "hard"),
+  questionRow("Adapt strong-stdA", stdA, "easy"),
+]);
+const ad4Game = await launch("adaptive", {
+  pool: ad4Pool.pool,
+  questions: ad4Pool.questions,
+  modeConfig: {
+    total_questions: 2,
+    prefer_weak: true,
+    avoid_recent_days: 14,
+    min_questions_per_standard: 1,
+    difficulty_ramp: false,
+    allow_hint: true,
+    hint_penalty: 50,
+    base_points: 100,
+    time_bonus: true,
+    streak_bonus: true,
+  },
+});
+const ad4Player = await joinPlayer(ad4Game.joinCode, "Alice");
+await admin.rpc("quiz_set_question", { p_session_id: ad4Game.session.id, p_index: 0 });
+const { data: ad4Profile } = await admin.from("quiz_participants").select("id, student_profile_id").eq("id", ad4Player.participant_id).maybeSingle();
+await seedWeakness(ad4Profile?.student_profile_id);
+const ad4First = await admin.rpc("pick_next_adaptive_question", {
+  p_session_id: ad4Game.session.id,
+  p_participant_id: ad4Player.participant_id,
+});
+const ad4FirstQ = ad4Pool.questions.find((row) => row.id === ad4First.data);
+await pub.rpc("submit_answer", {
+  p_participant_token: ad4Player.participant_token,
+  p_question_id: ad4First.data,
+  p_choice_key: "A",
+  p_ms_taken: 500,
+});
+const ad4Second = await admin.rpc("pick_next_adaptive_question", {
+  p_session_id: ad4Game.session.id,
+  p_participant_id: ad4Player.participant_id,
+});
+const ad4SecondQ = ad4Pool.questions.find((row) => row.id === ad4Second.data);
+pass(
+  "AD4 second question targets a different standard",
+  Boolean(ad4First.data && ad4Second.data) &&
+    ad4FirstQ?.standard_id === stdB &&
+    ad4SecondQ?.standard_id === stdA &&
+    ad4FirstQ.standard_id !== ad4SecondQ.standard_id,
+  `firstStd=${ad4FirstQ?.standard_id} secondStd=${ad4SecondQ?.standard_id} first=${ad4First.error?.message ?? ad4First.data}`,
+);
+await admin.rpc("quiz_end_session", { p_session_id: ad4Game.session.id });
+
 const adaptiveRows = [];
-for (let index = 0; index < 10; index += 1) adaptiveRows.push(questionRow(`Adapt A${index + 1}`, stdA, index < 3 ? "easy" : "medium"));
-for (let index = 0; index < 10; index += 1) adaptiveRows.push(questionRow(`Adapt B${index + 1}`, stdB, "hard"));
+adaptiveRows.push(questionRow("Adapt weak-1", stdB, "hard"));
+for (let index = 0; index < 19; index += 1) adaptiveRows.push(questionRow(`Adapt A${index + 1}`, stdA, index < 3 ? "easy" : "medium"));
 const adPool = await makePool("Adaptive pool", adaptiveRows);
 const adGame = await launch("adaptive", {
   pool: adPool.pool,
@@ -347,37 +425,13 @@ const carol = await joinPlayer(adGame.joinCode, "Alice");
 await admin.rpc("quiz_set_question", { p_session_id: adGame.session.id, p_index: 0 });
 
 const { data: profile } = await admin.from("quiz_participants").select("id, student_profile_id").eq("id", carol.participant_id).maybeSingle();
-if (profile?.student_profile_id && stdB) {
-  await admin.from("student_performance").upsert({
-    student_profile_id: profile.student_profile_id,
-    class_id: klass.id,
-    standard_id: stdB,
-    attempts: 8,
-    correct: 1,
-    accuracy: 12.5,
-    avg_ms: 9000,
-    weakness_score: 0.95,
-    last_practiced_at: new Date().toISOString(),
-  });
-  await admin.from("student_performance").upsert({
-    student_profile_id: profile.student_profile_id,
-    class_id: klass.id,
-    standard_id: stdA,
-    attempts: 8,
-    correct: 7,
-    accuracy: 87.5,
-    avg_ms: 3000,
-    weakness_score: 0.12,
-    last_practiced_at: new Date().toISOString(),
-  });
-}
+await seedWeakness(profile?.student_profile_id);
 
 const firstId = await admin.rpc("pick_next_adaptive_question", {
   p_session_id: adGame.session.id,
   p_participant_id: carol.participant_id,
 });
 pass("AD3 first question picked", Boolean(firstId.data), String(firstId.error?.message ?? firstId.data));
-const firstQuestion = adPool.questions.find((row) => row.id === firstId.data);
 await pub.rpc("submit_answer", {
   p_participant_token: carol.participant_token,
   p_question_id: firstId.data,
@@ -388,12 +442,7 @@ const secondId = await admin.rpc("pick_next_adaptive_question", {
   p_session_id: adGame.session.id,
   p_participant_id: carol.participant_id,
 });
-const secondQuestion = adPool.questions.find((row) => row.id === secondId.data);
-pass(
-  "AD4 second question can target a different standard",
-  Boolean(secondId.data) && secondId.data !== firstId.data,
-  `firstStd=${firstQuestion?.standard_id} secondStd=${secondQuestion?.standard_id}`,
-);
+pass("AD3b second question picked", Boolean(secondId.data), String(secondId.error?.message ?? secondId.data));
 
 const hint = await admin.rpc("apply_adaptive_hint", {
   p_participant_token: carol.participant_token,
@@ -427,7 +476,16 @@ const exhausted = await admin.rpc("pick_next_adaptive_question", {
 });
 const { data: adState } = await admin.from("game_instances").select("adaptive_state").eq("id", adGame.instance.id).maybeSingle();
 const answeredIds = adState?.adaptive_state?.per_participant?.[carol.participant_id]?.answered_ids ?? [];
-pass("AD6 completed 15 or pool exhausted", answeredIds.length >= 15 || exhausted.data == null, `answered=${answeredIds.length}`);
+const { data: adResponses } = await admin
+  .from("quiz_responses")
+  .select("id")
+  .eq("session_id", adGame.session.id)
+  .eq("participant_id", carol.participant_id);
+pass(
+  "AD6 completed 15 questions",
+  answeredIds.length >= 15 || (adResponses ?? []).length >= 15,
+  `answered_ids=${answeredIds.length} responses=${(adResponses ?? []).length}`,
+);
 
 await admin.rpc("quiz_end_session", { p_session_id: adGame.session.id });
 await admin.rpc("finalize_game_instance", { p_session_id: adGame.session.id });
@@ -440,15 +498,20 @@ const { data: perf } = await admin
 pass("AD7 weakness_score present for Alice", (perf ?? []).length > 0, JSON.stringify(perf));
 
 const weakest = [...(perf ?? [])].sort((a, b) => Number(b.weakness_score) - Number(a.weakness_score))[0];
+await seedWeakness(profile?.student_profile_id);
+const ad8Pool = await makePool("Adaptive AD8 pool", [
+  questionRow("Adapt2 weak-stdB", stdB, "hard"),
+  questionRow("Adapt2 strong-stdA", stdA, "easy"),
+]);
 const adGame2 = await launch("adaptive", {
-  pool: adPool.pool,
-  questions: adPool.questions,
+  pool: ad8Pool.pool,
+  questions: ad8Pool.questions,
   modeConfig: {
-    total_questions: 15,
+    total_questions: 2,
     prefer_weak: true,
     avoid_recent_days: 0,
-    min_questions_per_standard: 2,
-    difficulty_ramp: true,
+    min_questions_per_standard: 1,
+    difficulty_ramp: false,
     allow_hint: true,
     hint_penalty: 50,
   },
@@ -456,18 +519,18 @@ const adGame2 = await launch("adaptive", {
 const alice2 = await joinPlayer(adGame2.joinCode, "Alice");
 await admin.rpc("quiz_set_question", { p_session_id: adGame2.session.id, p_index: 0 });
 const { data: profile2 } = await admin.from("quiz_participants").select("id, student_profile_id").eq("id", alice2.participant_id).maybeSingle();
-if (profile2?.student_profile_id && profile?.student_profile_id && profile2.student_profile_id !== profile.student_profile_id) {
-  // same display name should match the same profile via match_or_create
+if (profile2?.student_profile_id) {
+  await seedWeakness(profile2.student_profile_id);
 }
 const first2 = await admin.rpc("pick_next_adaptive_question", {
   p_session_id: adGame2.session.id,
   p_participant_id: alice2.participant_id,
 });
-const first2q = adPool.questions.find((row) => row.id === first2.data);
+const first2q = ad8Pool.questions.find((row) => row.id === first2.data);
 pass(
-  "AD8 first question of session 2 targets a remaining pool item",
-  Boolean(first2.data),
-  `weakest=${weakest?.standard_id} pickedStd=${first2q?.standard_id}`,
+  "AD8 first question of session 2 targets weakest standard",
+  first2q?.standard_id === stdB,
+  `weakest=${weakest?.standard_id} pickedStd=${first2q?.standard_id} err=${first2.error?.message ?? ""}`,
 );
 
 const { data: tables } = await admin.rpc("health_public_table_count");

@@ -116,6 +116,23 @@ begin
 end;
 $$;
 
+-- Nested jsonb_set('{ }', '{per_participant,<uuid>}', v) does not create
+-- intermediate keys. Merge objects instead.
+create or replace function public._adaptive_put_participant(
+  p_state jsonb,
+  p_participant_id uuid,
+  p_part jsonb
+)
+returns jsonb
+language sql
+immutable
+as $$
+  select coalesce(p_state, '{}'::jsonb) || jsonb_build_object(
+    'per_participant',
+    coalesce(p_state->'per_participant', '{}'::jsonb) || jsonb_build_object(p_participant_id::text, p_part)
+  );
+$$;
+
 -- Recreate submit_answer with Adaptive Drill instant scoring (Jeopardy formula).
 drop function if exists public.submit_answer(uuid, uuid, text, int);
 create or replace function public.submit_answer(
@@ -346,19 +363,13 @@ begin
         'answered_ids', v_answered_ids,
         'last_standard_id', v_standard,
         'current_standard_id', v_standard,
-        'current_question_id', null,
         'streak', case when v_correct then coalesce((v_part->>'streak')::int, v_participant.streak) + 1 else 0 end,
         'wrong_in_row', case when v_correct then 0 else coalesce((v_part->>'wrong_in_row')::int, 0) + 1 end,
         'question_index', jsonb_array_length(v_answered_ids)
-      );
-      v_state := jsonb_set(
-        coalesce(v_state, '{}'::jsonb),
-        array['per_participant', v_participant.id::text],
-        v_part,
-        true
-      );
+      ) || '{"current_question_id": null}'::jsonb;
       update public.game_instances
-      set adaptive_state = v_state, updated_at = now()
+      set adaptive_state = public._adaptive_put_participant(v_state, v_participant.id, v_part),
+          updated_at = now()
       where id = v_instance;
     end if;
 
@@ -692,18 +703,26 @@ begin
             when v_ramp and v_wrong >= 2 and difficulty = 'medium' then 1
             else 0
           end
+        + case
+            when v_part->>'last_standard_id' is not null
+             and (v_part->>'last_standard_id') is not distinct from standard_id::text
+             and std_count >= v_min_per
+            then -3
+            else 0
+          end
       ) as score
     from filtered
   ),
   ranked as (
-    select *, ntile(greatest(1, least(10, (select count(*) from scored)))) over (order by score desc) as bucket
+    select
+      *,
+      row_number() over (order by score desc) as rn,
+      count(*) over () as total
     from scored
   ),
   candidates as (
     select * from ranked
-    where bucket = 1 or score >= (
-      select percentile_cont(0.7) within group (order by score) from ranked
-    )
+    where rn <= greatest(1, ceil(total * 0.3))
   )
   select id, standard_id into v_picked, v_standard
   from candidates
@@ -724,14 +743,9 @@ begin
       'wrong_in_row', v_wrong,
       'question_index', jsonb_array_length(v_answered)
     );
-    v_state := jsonb_set(
-      coalesce(v_state, '{}'::jsonb),
-      array['per_participant', p_participant_id::text],
-      v_part,
-      true
-    );
     update public.game_instances
-    set adaptive_state = v_state, updated_at = now()
+    set adaptive_state = public._adaptive_put_participant(v_state, p_participant_id, v_part),
+        updated_at = now()
     where id = v_instance.id;
   end if;
 
@@ -828,12 +842,6 @@ begin
 
   v_hinted := v_hinted || jsonb_build_array(p_question_id::text);
   v_part := v_part || jsonb_build_object('hinted_ids', v_hinted);
-  v_state := jsonb_set(
-    coalesce(v_state, '{}'::jsonb),
-    array['per_participant', v_participant.id::text],
-    v_part,
-    true
-  );
 
   update public.quiz_participants
   set score = score - v_cost, updated_at = now()
@@ -842,7 +850,8 @@ begin
 
   if v_instance is not null then
     update public.game_instances
-    set adaptive_state = v_state, updated_at = now()
+    set adaptive_state = public._adaptive_put_participant(v_state, v_participant.id, v_part),
+        updated_at = now()
     where id = v_instance;
   end if;
 
