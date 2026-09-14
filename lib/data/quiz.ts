@@ -178,7 +178,7 @@ export async function getPublicSession(sessionId: string) {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("quiz_sessions")
-    .select("id, pool_id, host_id, status, join_code, time_per_q, current_question_index, reveal_answer, settings_json, mode, ended_at")
+    .select("id, pool_id, host_id, status, join_code, time_per_q, current_question_index, reveal_answer, settings_json, mode, ended_at, started_at")
     .eq("id", sessionId)
     .is("deleted_at", null)
     .maybeSingle();
@@ -190,19 +190,64 @@ export async function getPublicSession(sessionId: string) {
 export async function getPublicPlayContext(sessionId: string) {
   const session = await getPublicSession(sessionId);
   const admin = createAdminClient();
-  const { data, error } = await admin.rpc("load_pool_questions", { p_pool_id: session.pool_id });
-  if (error) throw new Error(error.message);
-
   const settings = (session.settings_json ?? {}) as QuizSettings;
-  const rows = (data ?? []) as PoolQuestionRow[];
+  const ids = settings.question_ids ?? [];
+  let rows: PoolQuestionRow[] = [];
+  if (session.pool_id) {
+    const { data, error } = await admin.rpc("load_pool_questions", { p_pool_id: session.pool_id });
+    if (error) throw new Error(error.message);
+    rows = (data ?? []) as PoolQuestionRow[];
+  }
+  if (ids.length) {
+    const { data, error } = await admin
+      .from("questions")
+      .select("id, stem, choices_json, answer_key, explanation")
+      .in("id", ids);
+    if (error) throw new Error(error.message);
+    rows = ((data ?? []) as Array<{
+      id: string;
+      stem: string;
+      choices_json: Json;
+      answer_key: string | null;
+      explanation: string | null;
+    }>).map((row) => ({
+      question_id: row.id,
+      stem: row.stem,
+      choices_json: row.choices_json,
+      answer_key: row.answer_key,
+      explanation: row.explanation,
+    }));
+  }
   const byId = new Map(rows.map((row) => [row.question_id, row]));
-  const orderedIds = settings.question_ids?.length ? settings.question_ids : rows.map((row) => row.question_id);
+  const orderedIds = ids.length ? ids : rows.map((row) => row.question_id);
   const currentRow = byId.get(orderedIds[session.current_question_index] ?? "");
+  const playQuestions = orderedIds
+    .map((id) => byId.get(id))
+    .filter(Boolean)
+    .map((row) => ({
+      question_id: row!.question_id,
+      stem: row!.stem,
+      choices: asChoices(row!.choices_json),
+      time_limit_seconds: session.time_per_q ?? 30,
+    }));
+
+  const { data: instance } = await admin
+    .from("game_instances")
+    .select("id, team_assignment_mode")
+    .eq("quiz_session_id", session.id)
+    .is("deleted_at", null)
+    .maybeSingle();
+  const { data: teams } = instance?.id
+    ? await admin.from("game_teams").select("id, instance_id, team_key, name, color, created_at").eq("instance_id", instance.id)
+    : { data: [] };
 
   return {
     session,
     questionCount: orderedIds.length,
     hostId: session.host_id,
+    playQuestions,
+    teams: teams ?? [],
+    teamAssignmentMode: instance?.team_assignment_mode ?? "auto",
     currentQuestion: currentRow
       ? {
           question_id: currentRow.question_id,
@@ -214,11 +259,30 @@ export async function getPublicPlayContext(sessionId: string) {
   };
 }
 
+export async function listSessionTeams(sessionId: string) {
+  const { supabase } = await requireUser();
+  const { data: instance, error: instanceError } = await supabase
+    .from("game_instances")
+    .select("id")
+    .eq("quiz_session_id", sessionId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (instanceError) throw new Error(instanceError.message);
+  if (!instance) return [];
+  const { data, error } = await supabase
+    .from("game_teams")
+    .select("id, instance_id, team_key, name, color, created_at")
+    .eq("instance_id", instance.id)
+    .order("created_at", { ascending: true });
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
 export async function listSessionParticipants(sessionId: string) {
   const { supabase } = await requireUser();
   const { data, error } = await supabase
     .from("quiz_participants")
-    .select("id, display_name, score, streak, avatar_color, connected, last_correct_at, joined_at")
+    .select("id, display_name, score, streak, avatar_color, connected, last_correct_at, joined_at, team_id, team_role")
     .eq("session_id", sessionId)
     .is("deleted_at", null)
     .order("score", { ascending: false });
@@ -241,15 +305,18 @@ export async function listSessionResponses(sessionId: string, questionId?: strin
 
 export async function getSessionReport(sessionId: string) {
   const session = await getHostSession(sessionId);
-  const [participants, responses] = await Promise.all([
+  const [participants, responses, teams] = await Promise.all([
     listSessionParticipants(sessionId),
     listSessionResponses(sessionId),
+    listSessionTeams(sessionId),
   ]);
-  const questions = await loadHostQuestions(session.pool_id);
   const settings = (session.settings_json ?? {}) as QuizSettings;
+  const questions = session.pool_id
+    ? await loadHostQuestions(session.pool_id)
+    : await (await import("@/lib/data/games")).loadQuestionsByIds(settings.question_ids ?? []);
   const ordered = (settings.question_ids ?? questions.map((item) => item.question_id))
     .map((id) => questions.find((item) => item.question_id === id))
     .filter(Boolean) as QuizHostQuestion[];
   const pool = session.pool as { id?: string; name?: string; class_id?: string } | null;
-  return { session, participants, responses, questions: ordered, pool };
+  return { session, participants, responses, questions: ordered, pool, teams };
 }

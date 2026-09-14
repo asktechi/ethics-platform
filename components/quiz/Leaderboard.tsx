@@ -13,6 +13,7 @@ export type LivePlayer = {
   avatar_color: string | null;
   connected?: boolean;
   last_correct_at?: string | null;
+  team_id?: string | null;
 };
 
 export function Leaderboard({

@@ -35,6 +35,7 @@ export default async function EditGamePage({ params }: { params: { id: string } 
           filter: template.filter_json,
           mode: template.mode,
           settings: template.settings_json,
+          modeConfig: template.mode_config ?? {},
         }}
       />
       <div className="mt-8">

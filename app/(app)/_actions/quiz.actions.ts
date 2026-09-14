@@ -9,6 +9,7 @@ import {
   launchQuizSession,
   listSessionParticipants,
   listSessionResponses,
+  listSessionTeams,
   loadHostQuestions,
 } from "@/lib/data/quiz";
 import { requireUser } from "@/lib/data/auth";
@@ -18,7 +19,7 @@ export async function launchQuizAction(input: unknown) {
     .object({
       classId: z.string().uuid(),
       poolId: z.string().uuid(),
-      mode: z.enum(["jeopardy", "standard"]),
+      mode: z.enum(["jeopardy", "standard", "rapid_fire", "team_battle"]),
       timePerQ: z.number().int().min(5).max(300),
       shuffle: z.boolean(),
       allowLateJoin: z.boolean(),
@@ -123,14 +124,30 @@ export async function quizSetConnectedAction(sessionId: string, onlineIds: strin
   }
 }
 
+export async function quizReassignTeamAction(sessionId: string, participantId: string, teamKey: string) {
+  try {
+    const { supabase } = await requireUser();
+    const { error } = await supabase.rpc("quiz_reassign_team", {
+      p_session_id: sessionId,
+      p_participant_id: participantId,
+      p_team_key: teamKey,
+    });
+    if (error) throw new Error(error.message);
+    return { ok: true as const };
+  } catch (error) {
+    return { ok: false as const, error: actionError(error) };
+  }
+}
+
 export async function loadHostLiveAction(sessionId: string) {
   try {
-    const [session, participants, responses] = await Promise.all([
+    const [session, participants, responses, teams] = await Promise.all([
       getHostSession(sessionId),
       listSessionParticipants(sessionId),
       listSessionResponses(sessionId),
+      listSessionTeams(sessionId),
     ]);
-    return { ok: true as const, session, participants, responses };
+    return { ok: true as const, session, participants, responses, teams };
   } catch (error) {
     return { ok: false as const, error: actionError(error) };
   }

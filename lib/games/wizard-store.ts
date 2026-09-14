@@ -1,6 +1,8 @@
 "use client";
 
 import { create } from "zustand";
+import { schemaDefaults } from "@/lib/games/modes/types";
+import { getMode } from "@/lib/games/modes/registry";
 import {
   defaultGameFilter,
   defaultGameSettings,
@@ -18,6 +20,7 @@ const empty: WizardState = {
   filter: defaultGameFilter(),
   mode: "jeopardy",
   settings: defaultGameSettings(),
+  modeConfig: schemaDefaults(getMode("jeopardy").configSchema),
 };
 
 type WizardStore = WizardState & {
@@ -34,5 +37,13 @@ export const useGameWizard = create<WizardStore>((set) => ({
   setStep: (step) => set({ step }),
   patch: (partial) => set(partial),
   hydrate: (state) => set({ ...empty, ...state, step: 1 }),
-  reset: () => set({ ...empty, step: 1, mode: "jeopardy" as GameMode, settings: defaultGameSettings(), filter: defaultGameFilter() }),
+  reset: () =>
+    set({
+      ...empty,
+      step: 1,
+      mode: "jeopardy" as GameMode,
+      settings: defaultGameSettings(),
+      filter: defaultGameFilter(),
+      modeConfig: schemaDefaults(getMode("jeopardy").configSchema),
+    }),
 }));

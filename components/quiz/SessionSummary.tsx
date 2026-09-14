@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Leaderboard, type LivePlayer } from "@/components/quiz/Leaderboard";
 import { Button } from "@/components/ui/button";
+import { mvpPlayer, teamStandings } from "@/lib/games/modes/team-score";
+import type { GameTeamRecord } from "@/lib/games/modes/types";
 import { sortLeaderboard } from "@/lib/quiz/scoring";
 import type { QuizHostQuestion } from "@/lib/quiz/types";
 
@@ -23,6 +25,9 @@ export function SessionSummary({
   questions,
   participants,
   responses,
+  teams = [],
+  modeId = "jeopardy",
+  teamBonus = 20,
 }: {
   sessionId: string;
   classId?: string;
@@ -31,6 +36,9 @@ export function SessionSummary({
   questions: QuizHostQuestion[];
   participants: LivePlayer[];
   responses: ResponseRow[];
+  teams?: GameTeamRecord[];
+  modeId?: string;
+  teamBonus?: number;
 }) {
   const [sortKey, setSortKey] = useState<"score" | "name">("score");
   const ranked = useMemo(() => {
@@ -115,6 +123,41 @@ export function SessionSummary({
     <div className="mx-auto max-w-5xl space-y-8 px-4 py-8 text-ivory">
       <p className="text-xs uppercase tracking-[0.18em] text-gold">{poolName}</p>
       <h1 className="font-display text-4xl">Session summary</h1>
+
+      {modeId === "team_battle" && teams.length > 0 ? (
+        <section className="space-y-3">
+          {(() => {
+            const standings = teamStandings(teams, participants, responses, teamBonus);
+            const winner = standings[0];
+            const mvp = mvpPlayer(participants);
+            return (
+              <>
+                <div className="border border-gold/40 bg-gold/10 p-4">
+                  <p className="text-xs uppercase tracking-[0.14em] text-gold">Winning team</p>
+                  <p className="mt-1 font-display text-3xl" style={{ color: winner?.color }}>
+                    {winner?.name ?? "—"} · {winner?.score ?? 0}
+                  </p>
+                  {mvp ? (
+                    <p className="mt-2 text-sm text-ivory/70">
+                      MVP: {mvp.display_name} · {mvp.score} pts
+                    </p>
+                  ) : null}
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {standings.map((team) => (
+                    <div key={team.team_key} className="border px-3 py-3" style={{ borderColor: `${team.color}66` }}>
+                      <p style={{ color: team.color }}>
+                        {team.name} · {team.score}
+                      </p>
+                      <p className="text-xs text-ivory/50">{team.members.length} players · {team.correct} correct</p>
+                    </div>
+                  ))}
+                </div>
+              </>
+            );
+          })()}
+        </section>
+      ) : null}
 
       <section className="grid gap-3 sm:grid-cols-3">
         {podium.map((player, index) => (

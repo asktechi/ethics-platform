@@ -1,10 +1,11 @@
 import { notFound, redirect } from "next/navigation";
-import { HostDashboard } from "@/components/quiz/HostDashboard";
+import { HostShell } from "@/app/quiz/host/[sessionId]/HostShell";
 import { loadQuestionsByIds } from "@/lib/data/games";
 import {
   getHostSession,
   listSessionParticipants,
   listSessionResponses,
+  listSessionTeams,
   loadHostQuestions,
 } from "@/lib/data/quiz";
 import type { QuizSettings } from "@/lib/quiz/types";
@@ -28,9 +29,10 @@ export default async function QuizHostPage({ params }: { params: { sessionId: st
     ? await loadHostQuestions(pool.id)
     : await loadQuestionsByIds(settings.question_ids ?? []);
   if (loaded.length === 0) notFound();
-  const [participants, responses] = await Promise.all([
+  const [participants, responses, teams] = await Promise.all([
     listSessionParticipants(session.id),
     listSessionResponses(session.id),
+    listSessionTeams(session.id),
   ]);
   const ordered = (settings.question_ids ?? loaded.map((item) => item.question_id))
     .map((id) => loaded.find((item) => item.question_id === id))
@@ -39,9 +41,10 @@ export default async function QuizHostPage({ params }: { params: { sessionId: st
   const host = headerList.get("x-forwarded-host") ?? headerList.get("host") ?? "127.0.0.1:43127";
   const proto = headerList.get("x-forwarded-proto") ?? "http";
   const joinUrl = `${proto}://${host}/quiz/join/${session.join_code}`;
+  const modeConfig = (settings.mode_config ?? {}) as Record<string, unknown>;
 
   return (
-    <HostDashboard
+    <HostShell
       sessionId={session.id}
       hostId={session.host_id}
       hostToken={settings.host_token ?? ""}
@@ -49,6 +52,8 @@ export default async function QuizHostPage({ params }: { params: { sessionId: st
       joinUrl={joinUrl}
       questions={ordered as typeof loaded}
       timePerQ={session.time_per_q ?? 30}
+      modeId={session.mode ?? "jeopardy"}
+      modeConfig={modeConfig}
       initialIndex={session.current_question_index ?? 0}
       initialReveal={Boolean(session.reveal_answer)}
       initialEnded={session.status === "ended"}
@@ -57,7 +62,9 @@ export default async function QuizHostPage({ params }: { params: { sessionId: st
       initialQuestionStartedAt={settings.question_started_at ?? null}
       initialParticipants={participants}
       initialResponses={responses}
-      poolName={pool?.name ?? "Game"}
+      initialTeams={teams}
+      poolName={pool?.name ?? settings.name ?? "Game"}
+      gameStartedAt={typeof settings.game_started_at === "string" ? settings.game_started_at : null}
     />
   );
 }

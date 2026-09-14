@@ -15,9 +15,16 @@ export function JoinForm({ initialCode = "", skipLookup = false }: { initialCode
   const [code, setCode] = useState(normalizeJoinCode(initialCode));
   const [name, setName] = useState("");
   const [studentCode, setStudentCode] = useState("");
-  const [meta, setMeta] = useState<{ pool_name?: string; host_name?: string; participant_count?: number; status?: string } | null>(
-    null,
-  );
+  const [teamKey, setTeamKey] = useState("");
+  const [meta, setMeta] = useState<{
+    pool_name?: string;
+    host_name?: string;
+    participant_count?: number;
+    status?: string;
+    mode?: string;
+    team_assignment_mode?: string;
+    teams?: Array<{ team_key: string; name: string; color: string }>;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
@@ -26,6 +33,14 @@ export function JoinForm({ initialCode = "", skipLookup = false }: { initialCode
   useEffect(() => {
     setStudentCode(readStudentCode());
   }, []);
+
+  useEffect(() => {
+    const normalized = normalizeJoinCode(initialCode);
+    if (normalized.length !== 6) return;
+    void lookupQuizAction(normalized).then((lookup) => {
+      if (lookup.ok) setMeta(lookup.session);
+    });
+  }, [initialCode]);
 
   return (
     <form
@@ -50,7 +65,16 @@ export function JoinForm({ initialCode = "", skipLookup = false }: { initialCode
             if (!name.trim()) return;
           }
           if (!studentCode) setStudentCode(readStudentCode());
-          const joined = await joinQuizAction(normalized, name, studentCode || readStudentCode());
+          if (meta?.team_assignment_mode === "self_select" && !teamKey) {
+            setError("Pick a team to join.");
+            return;
+          }
+          const joined = await joinQuizAction(
+            normalized,
+            name,
+            studentCode || readStudentCode(),
+            meta?.team_assignment_mode === "self_select" ? teamKey || undefined : undefined,
+          );
           if (!joined.ok) {
             setError(joined.error);
             return;
@@ -101,6 +125,27 @@ export function JoinForm({ initialCode = "", skipLookup = false }: { initialCode
               className="font-mono tracking-[0.16em]"
             />
           </div>
+          {meta?.mode === "team_battle" && meta.team_assignment_mode === "self_select" ? (
+            <div className="space-y-1.5">
+              <Label className="text-ivory/70">Team</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {(meta.teams ?? []).map((team) => (
+                  <button
+                    key={team.team_key}
+                    type="button"
+                    onClick={() => setTeamKey(team.team_key)}
+                    className="border px-3 py-2 text-sm"
+                    style={{
+                      borderColor: teamKey === team.team_key ? team.color : `${team.color}66`,
+                      color: team.color,
+                    }}
+                  >
+                    {team.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </>
       ) : null}
       {error ? <p className="text-sm text-red-300">{error}</p> : null}

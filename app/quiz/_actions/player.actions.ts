@@ -14,7 +14,7 @@ export async function lookupQuizAction(code: string) {
   return { ok: true as const, session: row };
 }
 
-export async function joinQuizAction(code: string, displayName: string, studentCode?: string) {
+export async function joinQuizAction(code: string, displayName: string, studentCode?: string, teamKey?: string) {
   const supabase = createClient();
   const trimmedCode = studentCode?.trim() || null;
   const joinCode = code.trim().toUpperCase();
@@ -22,6 +22,7 @@ export async function joinQuizAction(code: string, displayName: string, studentC
     p_join_code: joinCode,
     p_display_name: displayName.trim(),
     p_student_code: trimmedCode,
+    p_team_key: teamKey || null,
   });
   if (!game.error) {
     const row = Array.isArray(game.data) ? game.data[0] : game.data;
@@ -71,6 +72,8 @@ export async function submitAnswerAction(input: {
   return {
     ok: true as const,
     alreadyAnswered: Boolean(row?.already_answered),
+    isCorrect: row?.is_correct ?? null,
+    points: typeof row?.points === "number" ? row.points : 0,
   };
 }
 

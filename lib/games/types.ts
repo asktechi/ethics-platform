@@ -39,6 +39,7 @@ export type WizardState = {
   filter: GameFilter;
   mode: GameMode;
   settings: GameSettings;
+  modeConfig: Record<string, string | number | boolean>;
 };
 
 export const defaultGameSettings = (): GameSettings => ({
@@ -75,7 +76,7 @@ export const MODE_META: Record<
     label: "Rapid Fire",
     blurb: "60-second sprint, as many questions as possible.",
     accent: "#E07A3D",
-    playable: false,
+    playable: true,
   },
   case_study: {
     label: "Case Study",
@@ -87,7 +88,7 @@ export const MODE_META: Record<
     label: "Team Battle",
     blurb: "Class split into teams; scores accumulate.",
     accent: "#9B5DE5",
-    playable: false,
+    playable: true,
   },
   adaptive: {
     label: "Adaptive Drill",
@@ -121,4 +122,5 @@ export type SettingsSnapshot = {
   pool_id?: string | null;
   filter?: GameFilter | null;
   name?: string;
+  mode_config?: Record<string, string | number | boolean>;
 };

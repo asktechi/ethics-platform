@@ -1,3 +1,5 @@
+import { jeopardyScoreResponse } from "@/lib/games/modes/jeopardy";
+
 export function scoreQuestion(
   msTaken: number,
   timePerQSeconds: number,
@@ -11,8 +13,15 @@ export function scoreQuestion(
   const elapsed = Math.min(Math.max(0, msTaken), limit);
   const timeBonus = Math.min(100, Math.max(0, Math.round(100 * (1 - elapsed / limit))));
   const streakBonus = 20 * Math.max(0, priorStreak);
+  const scored = jeopardyScoreResponse({
+    isCorrect: true,
+    msTaken,
+    timeLimitMs: limit,
+    basePoints: 100,
+    priorCorrect: priorStreak,
+  });
   return {
-    points: 100 + timeBonus + streakBonus,
+    points: scored.points,
     timeBonus,
     streakBonus,
     nextStreak: priorStreak + 1,

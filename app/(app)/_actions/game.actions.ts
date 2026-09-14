@@ -13,6 +13,8 @@ import {
   scheduleGameInstance,
   updateGameTemplate,
 } from "@/lib/data/games";
+import { schemaDefaults } from "@/lib/games/modes/types";
+import { getMode } from "@/lib/games/modes/registry";
 import { GameLaunchBlockedError, type ResolveDiagnostics } from "@/lib/games/resolve";
 import { defaultGameFilter, defaultGameSettings, type WizardState } from "@/lib/games/types";
 
@@ -33,7 +35,8 @@ const wizardSchema = z.object({
   source: z.enum(["pool", "filter"]),
   poolId: z.string(),
   filter: filterSchema,
-  mode: z.literal("jeopardy"),
+  mode: z.enum(["jeopardy", "rapid_fire", "team_battle", "case_study", "adaptive", "boss_battle"]),
+  modeConfig: z.record(z.union([z.string(), z.number(), z.boolean()])).optional(),
   settings: z.object({
     time_per_q: z.number().int().min(5).max(300),
     base_points: z.number().int().min(0).max(1000),
@@ -49,11 +52,13 @@ const wizardSchema = z.object({
 
 function asWizard(input: unknown): WizardState {
   const parsed = wizardSchema.parse(input);
+  const defaults = schemaDefaults(getMode(parsed.mode).configSchema);
   return {
     ...parsed,
     filter: { ...defaultGameFilter(), ...parsed.filter },
     settings: { ...defaultGameSettings(), ...parsed.settings },
-    mode: "jeopardy",
+    mode: parsed.mode,
+    modeConfig: { ...defaults, ...(parsed.modeConfig ?? {}) },
   };
 }
 

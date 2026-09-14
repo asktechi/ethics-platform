@@ -2,6 +2,8 @@ import { requireUser } from "@/lib/data/auth";
 import type { QuestionFilters, QuestionRow } from "@/lib/data/questions";
 import { randomJoinCode } from "@/lib/quiz/codes";
 import type { QuizHostQuestion, QuizSettings } from "@/lib/quiz/types";
+import { getMode } from "@/lib/games/modes/registry";
+import { schemaDefaults, teamsFromCount } from "@/lib/games/modes/types";
 import {
   GameLaunchBlockedError,
   launchBlockMessage,
@@ -65,6 +67,7 @@ export type GameTemplateRow = {
   pool_id: string | null;
   filter_json: GameFilter;
   settings_json: GameSettings;
+  mode_config: Record<string, string | number | boolean>;
   version: number;
   play_count: number;
   last_played_at: string | null;
@@ -95,6 +98,7 @@ export type GameInstanceRow = {
   avg_score: number | null;
   duration_seconds: number | null;
   settings_snapshot: SettingsSnapshot;
+  team_assignment_mode?: "auto" | "manual" | "self_select";
   created_at: string;
   template_name?: string;
   top_scorer?: string | null;
@@ -113,6 +117,7 @@ function mapTemplate(row: Record<string, unknown>): GameTemplateRow {
     pool_id: (row.pool_id as string | null) ?? null,
     filter_json: asFilter(row.filter_json as Json),
     settings_json: asSettings(row.settings_json as Json),
+    mode_config: (row.mode_config as Record<string, string | number | boolean> | null) ?? {},
     version: Number(row.version ?? 1),
     play_count: Number(row.play_count ?? 0),
     last_played_at: (row.last_played_at as string | null) ?? null,
@@ -218,7 +223,8 @@ export async function createGameTemplate(input: WizardState) {
       name: input.name.trim(),
       description: input.description.trim() || null,
       tags: input.tags,
-      mode: "jeopardy",
+      mode: input.mode,
+      mode_config: input.modeConfig ?? schemaDefaults(getMode(input.mode).configSchema),
       pool_id: poolId,
       filter_json: input.source === "filter" ? input.filter : defaultGameFilter(),
       settings_json: input.settings,
@@ -235,11 +241,13 @@ export async function updateGameTemplate(id: string, input: Partial<WizardState>
   const nextPoolId = input.source === "filter" ? null : input.poolId ?? current.pool_id;
   const nextClassId = input.classId ?? current.class_id;
   const nextFilter = input.filter ?? current.filter_json;
+  const nextMode = input.mode ?? current.mode;
+  const nextConfig = input.modeConfig ?? current.mode_config;
   await validateTemplateSource(supabase, {
     class_id: nextClassId,
     pool_id: nextPoolId,
     filter_json: nextFilter,
-    mode: "jeopardy",
+    mode: nextMode,
   });
   const { data, error } = await supabase
     .from("game_templates")
@@ -247,7 +255,8 @@ export async function updateGameTemplate(id: string, input: Partial<WizardState>
       name: input.name?.trim() ?? current.name,
       description: input.description !== undefined ? input.description.trim() || null : current.description,
       tags: input.tags ?? current.tags,
-      mode: "jeopardy",
+      mode: nextMode,
+      mode_config: nextConfig,
       pool_id: nextPoolId,
       filter_json: nextFilter,
       settings_json: input.settings ?? current.settings_json,
@@ -296,6 +305,7 @@ export async function cloneGameTemplate(id: string) {
       description: current.description,
       tags: current.tags,
       mode: current.mode,
+      mode_config: current.mode_config,
       pool_id: current.pool_id,
       filter_json: current.filter_json,
       settings_json: current.settings_json,
@@ -500,6 +510,7 @@ export async function scheduleGameInstance(templateId: string, when: string) {
           pool_id: template.pool_id,
           filter: template.filter_json,
           name: template.name,
+          mode_config: template.mode_config,
         } satisfies SettingsSnapshot,
       })
       .select("*")
@@ -512,10 +523,8 @@ export async function scheduleGameInstance(templateId: string, when: string) {
 
 export async function launchGameFromTemplate(templateId: string) {
   const template = await getGameTemplate(templateId);
-  if (template.mode !== "jeopardy") {
-    throw new Error("This mode is coming in Phase 6D.");
-  }
   const { supabase, user } = await requireUser();
+  await validateTemplateSource(supabase, template);
   const resolved = await resolveGameQuestions(template, { supabase, requireApproved: true });
   if (resolved.questions.length === 0) {
     console.log("[games] launch blocked", {
@@ -526,17 +535,30 @@ export async function launchGameFromTemplate(templateId: string) {
     throw new GameLaunchBlockedError(launchBlockMessage(resolved), resolved.diagnostics);
   }
   const settings = template.settings_json;
-  const questionIds = settings.shuffle_questions ? shuffleIds(resolved.questionIds) : resolved.questionIds;
+  const modeConfig = {
+    ...schemaDefaults(getMode(template.mode).configSchema),
+    ...(template.mode_config ?? {}),
+  };
+  let questionIds = settings.shuffle_questions ? shuffleIds(resolved.questionIds) : resolved.questionIds;
+  if (template.mode === "rapid_fire" && modeConfig.questions_unlimited === false) {
+    questionIds = questionIds.slice(0, Number(modeConfig.questions_max ?? 30));
+  }
+
+  const timePerQ =
+    template.mode === "rapid_fire"
+      ? Number(modeConfig.total_time_seconds ?? 60)
+      : settings.time_per_q;
 
   const hostToken = crypto.randomUUID();
   const snapshot: SettingsSnapshot = {
     settings,
-    time_per_q: settings.time_per_q,
+    time_per_q: timePerQ,
     mode: template.mode,
     question_ids: questionIds,
     pool_id: template.pool_id,
     filter: template.filter_json,
     name: template.name,
+    mode_config: modeConfig,
   };
 
   const quizSettings: QuizSettings = {
@@ -546,7 +568,17 @@ export async function launchGameFromTemplate(templateId: string) {
     shuffle: settings.shuffle_questions,
     question_ids: questionIds,
     host_token: hostToken,
+    mode_config: modeConfig,
+    name: template.name,
+    base_points: Number(modeConfig.base_points ?? settings.base_points),
+    time_bonus: Boolean(modeConfig.time_bonus ?? settings.time_bonus),
+    streak_bonus: Boolean(modeConfig.streak_bonus ?? settings.streak_bonus),
   };
+
+  const assignment =
+    template.mode === "team_battle"
+      ? ((modeConfig.team_assignment_mode as "auto" | "manual" | "self_select") ?? "auto")
+      : "auto";
 
   let session = null;
   let lastError = "Could not create a unique join code.";
@@ -557,8 +589,8 @@ export async function launchGameFromTemplate(templateId: string) {
       .insert({
         pool_id: template.pool_id,
         host_id: user.id,
-        mode: "jeopardy",
-        time_per_q: settings.time_per_q,
+        mode: template.mode,
+        time_per_q: timePerQ,
         status: "live",
         join_code: joinCode,
         current_question_index: 0,
@@ -570,18 +602,36 @@ export async function launchGameFromTemplate(templateId: string) {
       .single();
     if (!error && data) {
       session = data;
-      const { error: instanceError } = await supabase.from("game_instances").insert({
-        template_id: template.id,
-        template_version: template.version,
-        host_id: user.id,
-        quiz_session_id: session.id,
-        join_code: joinCode,
-        host_token: hostToken,
-        status: "lobby",
-        started_at: new Date().toISOString(),
-        settings_snapshot: snapshot as unknown as Json,
-      });
+      const { data: instance, error: instanceError } = await supabase
+        .from("game_instances")
+        .insert({
+          template_id: template.id,
+          template_version: template.version,
+          host_id: user.id,
+          quiz_session_id: session.id,
+          join_code: joinCode,
+          host_token: hostToken,
+          status: "lobby",
+          started_at: new Date().toISOString(),
+          settings_snapshot: snapshot as unknown as Json,
+          team_assignment_mode: assignment,
+        })
+        .select("id")
+        .single();
       if (instanceError) throw new Error(instanceError.message);
+      if (template.mode === "team_battle" && instance) {
+        const teams = teamsFromCount(Number(modeConfig.team_count ?? 4));
+        const { error: teamError } = await supabase.from("game_teams").insert(
+          teams.map((team) => ({
+            instance_id: instance.id,
+            team_key: team.team_key,
+            name: team.name,
+            color: team.color,
+          })),
+        );
+        if (teamError) throw new Error(teamError.message);
+        await supabase.rpc("quiz_ensure_teams", { p_session_id: session.id });
+      }
       break;
     }
     lastError = error?.message ?? lastError;

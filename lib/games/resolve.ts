@@ -62,7 +62,7 @@ export type ResolveClient = {
   from: (relation: string) => QueryChain;
 };
 
-export const PLAYABLE_GAME_MODES = ["jeopardy"] as const;
+export const PLAYABLE_GAME_MODES = ["jeopardy", "rapid_fire", "team_battle"] as const;
 
 const QUESTION_COLUMNS =
   "id, stem, choices_json, answer_key, explanation, standard_id, concept_id, difficulty, source, approved";
@@ -133,8 +133,9 @@ export function launchBlockMessage(result: ResolveGameResult): string {
 }
 
 export function assertPlayableMode(mode: string | null | undefined) {
-  if (mode && mode !== "jeopardy") {
-    throw new Error("This mode is coming in Phase 6D. Save a Jeopardy game for now.");
+  const id = mode || "jeopardy";
+  if (!(PLAYABLE_GAME_MODES as readonly string[]).includes(id)) {
+    throw new Error("This mode is coming in a later 6D session. Save Jeopardy, Rapid Fire, or Team Battle for now.");
   }
 }
 

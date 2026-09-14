@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { ResolveDiagnostics } from "@/lib/games/resolve";
+import { getMode } from "@/lib/games/modes/registry";
+import { schemaDefaults } from "@/lib/games/modes/types";
 import { MODE_META, type GameMode } from "@/lib/games/types";
 import { useGameWizard } from "@/lib/games/wizard-store";
 import { cn } from "@/lib/utils";
@@ -20,7 +22,7 @@ type PreviewState = {
   diagnostics: ResolveDiagnostics;
 };
 
-const COMING_SOON = "This mode is coming soon. Save a Jeopardy game for now, or check back after the next update.";
+const COMING_SOON = "This mode is coming soon. Save a Jeopardy, Rapid Fire, or Team Battle game for now.";
 
 export function GameWizard({
   classes,
@@ -49,13 +51,11 @@ export function GameWizard({
     if (!store.classId && classes[0]) store.patch({ classId: classes[0].id });
   }, [classes, store]);
 
-  useEffect(() => {
-    if (store.mode !== "jeopardy") store.patch({ mode: "jeopardy" });
-  }, [store, store.mode]);
-
   const pools = poolsByClass[store.classId] ?? [];
   const concepts = conceptsByClass[store.classId] ?? [];
   const selectedPool = pools.find((item) => item.id === store.poolId);
+  const modeDef = getMode(store.mode);
+  const config = store.modeConfig ?? schemaDefaults(modeDef.configSchema);
 
   useEffect(() => {
     if (!store.classId) return;
@@ -112,7 +112,8 @@ export function GameWizard({
         source: store.source,
         poolId: store.poolId,
         filter: store.filter,
-        mode: "jeopardy" as const,
+        mode: store.mode,
+        modeConfig: store.modeConfig,
         settings: store.settings,
       };
       const result = editId ? await updateGameAction(editId, payload) : await saveGameAction(payload);
@@ -325,7 +326,7 @@ export function GameWizard({
                     className="pointer-events-none relative cursor-not-allowed border border-white/10 p-4 text-left opacity-60"
                   >
                     <span className="absolute right-2 top-2 bg-[#E63946] px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-ivory">
-                      Coming in 6D
+                      Coming soon
                     </span>
                     <p className="font-display text-lg" style={{ color: meta.accent }}>
                       {meta.label}
@@ -338,7 +339,12 @@ export function GameWizard({
                 <button
                   key={mode}
                   type="button"
-                  onClick={() => store.patch({ mode })}
+                  onClick={() =>
+                    store.patch({
+                      mode,
+                      modeConfig: schemaDefaults(getMode(mode).configSchema),
+                    })
+                  }
                   className={cn(
                     "border p-4 text-left hover:border-gold/70",
                     store.mode === mode ? "border-gold bg-gold/10" : "border-white/15",
@@ -358,30 +364,65 @@ export function GameWizard({
       {store.step === 4 ? (
         <section className="mt-8 space-y-3">
           <h1 className="font-display text-3xl">Rules</h1>
-          <Field label="Seconds per question">
-            <Input
-              type="number"
-              min={5}
-              max={300}
-              value={store.settings.time_per_q}
-              onChange={(event) =>
-                store.patch({ settings: { ...store.settings, time_per_q: Number(event.target.value) } })
-              }
-            />
-          </Field>
-          <Field label="Base points">
-            <Input
-              type="number"
-              value={store.settings.base_points}
-              onChange={(event) =>
-                store.patch({ settings: { ...store.settings, base_points: Number(event.target.value) } })
-              }
-            />
-          </Field>
+          {modeDef.configSchema.map((field) => {
+            const value = config[field.key] ?? field.default;
+            if (field.key === "team_assignment_mode") {
+              return (
+                <Field key={field.key} label={field.label}>
+                  <select
+                    className="h-10 w-full border border-border bg-navy px-2 text-sm"
+                    value={String(value)}
+                    onChange={(event) =>
+                      store.patch({ modeConfig: { ...config, [field.key]: event.target.value } })
+                    }
+                  >
+                    <option value="auto">Auto (round-robin on join)</option>
+                    <option value="manual">Manual (host assigns in lobby)</option>
+                    <option value="self_select">Players pick a team</option>
+                  </select>
+                </Field>
+              );
+            }
+            if (field.type === "boolean") {
+              return (
+                <label key={field.key} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(value)}
+                    onChange={(event) =>
+                      store.patch({ modeConfig: { ...config, [field.key]: event.target.checked } })
+                    }
+                  />
+                  {field.label}
+                </label>
+              );
+            }
+            return (
+              <Field key={field.key} label={field.label}>
+                <Input
+                  type="number"
+                  min={field.min}
+                  max={field.max}
+                  value={Number(value)}
+                  onChange={(event) => {
+                    const next = Number(event.target.value);
+                    store.patch({
+                      modeConfig: { ...config, [field.key]: next },
+                      settings:
+                        field.key === "time_per_q" || field.key === "base_points"
+                          ? {
+                              ...store.settings,
+                              ...(field.key === "time_per_q" ? { time_per_q: next } : { base_points: next }),
+                            }
+                          : store.settings,
+                    });
+                  }}
+                />
+              </Field>
+            );
+          })}
           {(
             [
-              ["time_bonus", "Time bonus"],
-              ["streak_bonus", "Streak bonus"],
               ["shuffle_questions", "Shuffle questions"],
               ["show_leaderboard_to_players", "Show leaderboard to players"],
               ["show_correct_answer_after", "Show correct answer after each question"],
@@ -418,8 +459,9 @@ export function GameWizard({
           </ul>
           <p className="text-sm text-ivory/55">
             Estimated length:{" "}
-            {((((preview?.count ?? 0) * store.settings.time_per_q) / 60 + 0.5 * (preview?.count ?? 0))).toFixed(1)} minutes
-            including reveal buffer.
+            {store.mode === "rapid_fire"
+              ? `${Number(config.total_time_seconds ?? 60)} seconds on a shared clock.`
+              : `${((((preview?.count ?? 0) * store.settings.time_per_q) / 60 + 0.5 * (preview?.count ?? 0))).toFixed(1)} minutes including reveal buffer.`}
           </p>
         </section>
       ) : null}

@@ -794,7 +794,7 @@ export type Database = {
           id: string;
           pool_id: string | null;
           host_id: string;
-          mode: "jeopardy" | "standard";
+          mode: "jeopardy" | "standard" | "rapid_fire" | "team_battle" | "case_study" | "adaptive" | "boss_battle";
           time_per_q: number | null;
           status: "draft" | "live" | "ended";
           join_code: string;
@@ -811,7 +811,7 @@ export type Database = {
           id?: string;
           pool_id?: string | null;
           host_id: string;
-          mode: "jeopardy" | "standard";
+          mode: "jeopardy" | "standard" | "rapid_fire" | "team_battle" | "case_study" | "adaptive" | "boss_battle";
           time_per_q?: number | null;
           status: "draft" | "live" | "ended";
           join_code: string;
@@ -828,7 +828,7 @@ export type Database = {
           id?: string;
           pool_id?: string;
           host_id?: string;
-          mode?: "jeopardy" | "standard";
+          mode?: "jeopardy" | "standard" | "rapid_fire" | "team_battle" | "case_study" | "adaptive" | "boss_battle";
           time_per_q?: number | null;
           status?: "draft" | "live" | "ended";
           join_code?: string;
@@ -856,6 +856,8 @@ export type Database = {
           avatar_color: string | null;
           student_profile_id: string | null;
           left_at: string | null;
+          team_id: string | null;
+          team_role: string | null;
           joined_at: string;
           created_at: string;
           updated_at: string;
@@ -873,6 +875,8 @@ export type Database = {
           avatar_color?: string | null;
           student_profile_id?: string | null;
           left_at?: string | null;
+          team_id?: string | null;
+          team_role?: string | null;
           joined_at?: string;
           created_at?: string;
           updated_at?: string;
@@ -890,6 +894,8 @@ export type Database = {
           avatar_color?: string | null;
           student_profile_id?: string | null;
           left_at?: string | null;
+          team_id?: string | null;
+          team_role?: string | null;
           joined_at?: string;
           created_at?: string;
           updated_at?: string;
@@ -960,6 +966,7 @@ export type Database = {
           pool_id: string | null;
           filter_json: Json;
           settings_json: Json;
+          mode_config: Json;
           version: number;
           play_count: number;
           last_played_at: string | null;
@@ -978,6 +985,7 @@ export type Database = {
           pool_id?: string | null;
           filter_json?: Json;
           settings_json?: Json;
+          mode_config?: Json;
           version?: number;
           play_count?: number;
           last_played_at?: string | null;
@@ -996,6 +1004,7 @@ export type Database = {
           pool_id?: string | null;
           filter_json?: Json;
           settings_json?: Json;
+          mode_config?: Json;
           version?: number;
           play_count?: number;
           last_played_at?: string | null;
@@ -1022,6 +1031,7 @@ export type Database = {
           avg_score: number | null;
           duration_seconds: number | null;
           settings_snapshot: Json;
+          team_assignment_mode: "auto" | "manual" | "self_select";
           created_at: string;
           updated_at: string;
           deleted_at: string | null;
@@ -1042,6 +1052,7 @@ export type Database = {
           avg_score?: number | null;
           duration_seconds?: number | null;
           settings_snapshot?: Json;
+          team_assignment_mode?: "auto" | "manual" | "self_select";
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
@@ -1062,9 +1073,37 @@ export type Database = {
           avg_score?: number | null;
           duration_seconds?: number | null;
           settings_snapshot?: Json;
+          team_assignment_mode?: "auto" | "manual" | "self_select";
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
+        };
+        Relationships: [];
+      };
+      game_teams: {
+        Row: {
+          id: string;
+          instance_id: string;
+          team_key: string;
+          name: string;
+          color: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          instance_id: string;
+          team_key: string;
+          name: string;
+          color: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          instance_id?: string;
+          team_key?: string;
+          name?: string;
+          color?: string;
+          created_at?: string;
         };
         Relationships: [];
       };
@@ -1226,7 +1265,7 @@ export type Database = {
         }[];
       };
       join_game_by_code: {
-        Args: { p_join_code: string; p_display_name: string; p_student_code?: string | null };
+        Args: { p_join_code: string; p_display_name: string; p_student_code?: string | null; p_team_key?: string | null };
         Returns: {
           instance_id: string;
           session_id: string;
@@ -1253,6 +1292,9 @@ export type Database = {
           status: string;
           join_code: string;
           time_per_q: number | null;
+          mode: string;
+          team_assignment_mode: string;
+          teams: Json;
         }[];
       };
       get_participant_by_token: {
@@ -1268,6 +1310,10 @@ export type Database = {
           status: string;
           host_id: string;
           host_token: string;
+          team_id: string | null;
+          team_role: string | null;
+          team_name: string | null;
+          team_color: string | null;
         }[];
       };
       submit_answer: {
@@ -1277,7 +1323,7 @@ export type Database = {
           p_choice_key: string | null;
           p_ms_taken: number;
         };
-        Returns: { ok: boolean; already_answered: boolean }[];
+        Returns: { ok: boolean; already_answered: boolean; is_correct: boolean | null; points: number }[];
       };
       quiz_set_question: {
         Args: { p_session_id: string; p_index: number };
@@ -1298,6 +1344,18 @@ export type Database = {
       quiz_skip_question: {
         Args: { p_session_id: string };
         Returns: undefined;
+      };
+      quiz_ensure_teams: {
+        Args: { p_session_id: string };
+        Returns: undefined;
+      };
+      quiz_reassign_team: {
+        Args: { p_session_id: string; p_participant_id: string; p_team_key: string };
+        Returns: undefined;
+      };
+      quiz_assign_join_team: {
+        Args: { p_session_id: string; p_participant_id: string; p_team_key?: string | null };
+        Returns: string | null;
       };
       quiz_set_connected: {
         Args: { p_session_id: string; p_online_ids: string[] };

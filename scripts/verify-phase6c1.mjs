@@ -211,18 +211,32 @@ pass("T4 overview === launch", overview.questionIds.join() === launch.questionId
 // Test 5 — mode gating
 const wizardSource = readFileSync(join(process.cwd(), "components/games/GameWizard.tsx"), "utf8");
 pass(
-  "T5 rapid_fire pointer-events-none",
-  wizardSource.includes("pointer-events-none") && wizardSource.includes("Coming in 6D"),
+  "T5 coming soon still gated",
+  wizardSource.includes("pointer-events-none") && wizardSource.includes("Coming soon"),
   "",
 );
-pass("T5 coming in 6D ribbon", wizardSource.includes("Coming in 6D"), "");
-let modeBlocked = false;
+pass("T5 rapid_fire playable in wizard", wizardSource.includes("Rapid Fire") && !wizardSource.includes("Coming in 6D"), "");
+let rapidBlocked = false;
 try {
   assertPlayableMode("rapid_fire");
 } catch {
-  modeBlocked = true;
+  rapidBlocked = true;
 }
-pass("T5 non-jeopardy save rejected", modeBlocked, "");
+pass("T5 rapid_fire save allowed", !rapidBlocked, "");
+let teamBlocked = false;
+try {
+  assertPlayableMode("team_battle");
+} catch {
+  teamBlocked = true;
+}
+pass("T5 team_battle save allowed", !teamBlocked, "");
+let caseBlocked = false;
+try {
+  assertPlayableMode("case_study");
+} catch {
+  caseBlocked = true;
+}
+pass("T5 case_study still blocked", caseBlocked, "");
 
 const unused = tagged;
 void unused;

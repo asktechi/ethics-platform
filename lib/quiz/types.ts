@@ -1,4 +1,4 @@
-export type QuizMode = "jeopardy" | "standard";
+export type QuizMode = "jeopardy" | "standard" | "rapid_fire" | "team_battle" | "case_study" | "adaptive" | "boss_battle";
 
 export type QuizChoice = { key: string; text: string };
 
@@ -39,7 +39,7 @@ export type QuizEvent =
   | ({ type: "PREV" } & QuizEventEnvelope)
   | ({ type: "PAUSE"; remaining_ms?: number } & QuizEventEnvelope)
   | ({ type: "RESUME"; started_at?: string; remaining_ms?: number } & QuizEventEnvelope)
-  | ({ type: "SKIP"; question_id?: string } & QuizEventEnvelope)
+  | ({ type: "SKIP"; question_id?: string; questionIndex?: number } & QuizEventEnvelope)
   | ({ type: "END"; early?: boolean } & QuizEventEnvelope)
   | ({
       type: "HIGHLIGHT";
@@ -76,6 +76,12 @@ export type QuizSettings = {
   question_started_at?: string | null;
   last_revealed_question_id?: string | null;
   scored_question_ids?: string[];
+  mode_config?: Record<string, string | number | boolean>;
+  name?: string;
+  base_points?: number;
+  time_bonus?: boolean;
+  streak_bonus?: boolean;
+  game_started_at?: string | null;
 };
 
 export type PlayerIdentity = {
@@ -87,6 +93,9 @@ export type PlayerIdentity = {
   host_id?: string;
   host_token?: string;
   student_code?: string;
+  team_id?: string | null;
+  team_name?: string | null;
+  team_color?: string | null;
 };
 
 export type LeaderboardRow = {
