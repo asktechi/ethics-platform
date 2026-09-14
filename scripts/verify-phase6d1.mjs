@@ -41,7 +41,7 @@ const jeopardy = getMode("jeopardy").scoreResponse({
 });
 pass("plugin jeopardy 0ms streak2", jeopardy.points === 240, String(jeopardy.points));
 pass("scoreQuestion wrapper still 240", scoreQuestion(0, 30, 2, true).points === 240, "");
-const rf = getMode("rapid_fire").scoreResponse({
+const rfCorrect = getMode("rapid_fire").scoreResponse({
   isCorrect: true,
   msTaken: 10,
   timeLimitMs: 60000,
@@ -49,7 +49,7 @@ const rf = getMode("rapid_fire").scoreResponse({
   priorCorrect: 3,
   wrongPenalty: 0,
 });
-pass("plugin rapid fire no streak", rf.points === 100, String(rf.points));
+pass("plugin rapid fire no streak", rfCorrect.points === 100, String(rfCorrect.points));
 const rfWrong = getMode("rapid_fire").scoreResponse({
   isCorrect: false,
   msTaken: 10,
@@ -175,7 +175,7 @@ async function launch(mode, pool, questions, modeConfig, extraSettings = {}) {
   return { session, instance, joinCode, questionIds, settings };
 }
 
-async function join(code, name) {
+async function joinPlayer(code, name) {
   const { data, error } = await pub.rpc("join_game_by_code", {
     p_join_code: code,
     p_display_name: name,
@@ -186,34 +186,34 @@ async function join(code, name) {
 
 // Rapid Fire E2E
 const rfPool = await makePool("RF pool", 15);
-const rf = await launch("rapid_fire", rfPool.pool, rfPool.questions, {
+const rfGame = await launch("rapid_fire", rfPool.pool, rfPool.questions, {
   total_time_seconds: 60,
   questions_unlimited: true,
   questions_max: 30,
   wrong_answer_penalty: 0,
   score_per_correct: 100,
 });
-pass("RF1 create 15q 60s", rf.questionIds.length === 15 && rf.session.mode === "rapid_fire", rf.session.id);
+pass("RF1 create 15q 60s", rfGame.questionIds.length === 15 && rfGame.session.mode === "rapid_fire", rfGame.session.id);
 
-const alice = await join(rf.joinCode, "Alice RF");
-const bob = await join(rf.joinCode, "Bob RF");
+const alice = await joinPlayer(rfGame.joinCode, "Alice RF");
+const bob = await joinPlayer(rfGame.joinCode, "Bob RF");
 pass("RF2 two players join", Boolean(alice?.participant_token && bob?.participant_token), "");
 
 const tooSoon = await pub.rpc("submit_answer", {
   p_participant_token: alice.participant_token,
-  p_question_id: rf.questionIds[0],
+  p_question_id: rfGame.questionIds[0],
   p_choice_key: "A",
   p_ms_taken: 100,
 });
 pass("RF lobby blocked until start", Boolean(tooSoon.error), tooSoon.error?.message ?? "no error");
 
-await admin.rpc("quiz_set_question", { p_session_id: rf.session.id, p_index: 0 });
-const { data: started } = await admin.from("quiz_sessions").select("settings_json").eq("id", rf.session.id).single();
+await admin.rpc("quiz_set_question", { p_session_id: rfGame.session.id, p_index: 0 });
+const { data: started } = await admin.from("quiz_sessions").select("settings_json").eq("id", rfGame.session.id).single();
 pass("RF3 clock started", Boolean(started.settings_json.game_started_at), started.settings_json.game_started_at);
 
 const a1 = await pub.rpc("submit_answer", {
   p_participant_token: alice.participant_token,
-  p_question_id: rf.questionIds[0],
+  p_question_id: rfGame.questionIds[0],
   p_choice_key: "A",
   p_ms_taken: 200,
 });
@@ -222,7 +222,7 @@ pass("RF4 Alice Q1 instant score", a1row?.ok === true && a1row?.is_correct === t
 
 const a2 = await pub.rpc("submit_answer", {
   p_participant_token: alice.participant_token,
-  p_question_id: rf.questionIds[1],
+  p_question_id: rfGame.questionIds[1],
   p_choice_key: "B",
   p_ms_taken: 150,
 });
@@ -231,7 +231,7 @@ pass("RF4 Alice Q2 independent", a2row?.ok === true && a2row?.is_correct === fal
 
 const b1 = await pub.rpc("submit_answer", {
   p_participant_token: bob.participant_token,
-  p_question_id: rf.questionIds[0],
+  p_question_id: rfGame.questionIds[0],
   p_choice_key: "A",
   p_ms_taken: 400,
 });
@@ -240,7 +240,7 @@ pass("RF5 Bob independent Q1", b1row?.ok === true && b1row?.is_correct === true,
 
 const b2 = await pub.rpc("submit_answer", {
   p_participant_token: bob.participant_token,
-  p_question_id: rf.questionIds[1],
+  p_question_id: rfGame.questionIds[1],
   p_choice_key: "A",
   p_ms_taken: 100,
 });
@@ -251,10 +251,10 @@ await admin
   .update({
     settings_json: { ...started.settings_json, game_started_at: new Date(Date.now() - 70_000).toISOString() },
   })
-  .eq("id", rf.session.id);
+  .eq("id", rfGame.session.id);
 const frozen = await pub.rpc("submit_answer", {
   p_participant_token: alice.participant_token,
-  p_question_id: rf.questionIds[2],
+  p_question_id: rfGame.questionIds[2],
   p_choice_key: "A",
   p_ms_taken: 100,
 });
@@ -263,7 +263,7 @@ pass("RF6 clock 0 freezes", Boolean(frozen.error) && /clock/i.test(frozen.error.
 const { data: rfPlayers } = await admin
   .from("quiz_participants")
   .select("display_name, score")
-  .eq("session_id", rf.session.id)
+  .eq("session_id", rfGame.session.id)
   .is("deleted_at", null);
 const aliceRow = rfPlayers.find((row) => row.display_name === "Alice RF");
 const bobRow = rfPlayers.find((row) => row.display_name === "Bob RF");
@@ -272,7 +272,7 @@ pass("RF7 host totals", aliceRow?.score === 100 && bobRow?.score === 200, JSON.s
 const { data: rfResponses } = await admin
   .from("quiz_responses")
   .select("participant_id, is_correct")
-  .eq("session_id", rf.session.id);
+  .eq("session_id", rfGame.session.id);
 const aliceCorrect = rfResponses.filter((row) => row.participant_id === alice.participant_id && row.is_correct).length;
 pass("RF7 total correct Alice", aliceCorrect === 1, String(aliceCorrect));
 
@@ -292,7 +292,7 @@ pass("TB1 four teams", tbTeams.length === 4, tbTeams.map((row) => row.team_key).
 
 const names = ["P1", "P2", "P3", "P4"];
 const players = [];
-for (const name of names) players.push(await join(tb.joinCode, name));
+for (const name of names) players.push(await joinPlayer(tb.joinCode, name));
 const { data: assigned } = await admin
   .from("quiz_participants")
   .select("display_name, team_id")
@@ -349,7 +349,7 @@ const jq = await launch("jeopardy", jqPool.pool, jqPool.questions, {
   time_bonus: true,
   streak_bonus: true,
 });
-const jAlice = await join(jq.joinCode, "Jeopardy Alice");
+const jAlice = await joinPlayer(jq.joinCode, "Jeopardy Alice");
 await admin.rpc("quiz_set_question", { p_session_id: jq.session.id, p_index: 0 });
 await pub.rpc("submit_answer", {
   p_participant_token: jAlice.participant_token,

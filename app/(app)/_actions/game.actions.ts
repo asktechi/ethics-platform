@@ -36,7 +36,7 @@ const wizardSchema = z.object({
   poolId: z.string(),
   filter: filterSchema,
   mode: z.enum(["jeopardy", "rapid_fire", "team_battle", "case_study", "adaptive", "boss_battle"]),
-  modeConfig: z.record(z.union([z.string(), z.number(), z.boolean()])).optional(),
+  modeConfig: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
   settings: z.object({
     time_per_q: z.number().int().min(5).max(300),
     base_points: z.number().int().min(0).max(1000),

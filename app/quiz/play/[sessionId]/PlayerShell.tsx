@@ -331,7 +331,7 @@ export function PlayerShell({
           identity={identity}
           questions={playQuestions}
           remaining={remaining}
-          frozen={frozen || phase === "ended"}
+          frozen={frozen}
           skipIndex={skipIndex}
           onDelta={(delta) => {
             setScore((value) => {

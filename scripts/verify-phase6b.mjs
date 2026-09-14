@@ -56,14 +56,21 @@ async function applySessionBMigration() {
     pass("apply session B migration", false, "SUPABASE_DB_URL missing");
     return false;
   }
-  const sql = readFileSync(join(process.cwd(), "supabase/migrations/20260913230000_quiz_session_b.sql"), "utf8");
   const client = new pg.Client({
     connectionString: poolerUrl(process.env.SUPABASE_DB_URL),
     ssl: { rejectUnauthorized: false },
   });
   try {
     await client.connect();
+    const existing = await client.query("select 1 from pg_proc where proname = 'quiz_skip_question' limit 1");
+    if (existing.rowCount) {
+      await client.query("drop function if exists public.join_quiz(text, text)");
+      pass("apply session B migration", true, "already applied");
+      return true;
+    }
+    const sql = readFileSync(join(process.cwd(), "supabase/migrations/20260913230000_quiz_session_b.sql"), "utf8");
     await client.query(sql);
+    await client.query("drop function if exists public.join_quiz(text, text)");
     pass("apply session B migration", true, "ok");
     return true;
   } catch (error) {
@@ -326,7 +333,7 @@ const board = await publicClient.rpc("get_final_leaderboard", { p_session_id: se
 pass("final leaderboard 50 rows", (board.data?.length ?? 0) === 50, `rows=${board.data?.length ?? 0}`);
 
 const { data: pub } = await admin.rpc("health_public_table_count");
-pass("health tables", pub === 22, `tables=${pub}`);
+pass("health tables", pub === 28, `tables=${pub}`);
 
 let publication = [];
 if (process.env.SUPABASE_DB_URL) {

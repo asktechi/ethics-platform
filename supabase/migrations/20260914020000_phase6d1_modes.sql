@@ -213,7 +213,8 @@ $$;
 revoke all on function public.quiz_reassign_team(uuid, uuid, text) from public;
 grant execute on function public.quiz_reassign_team(uuid, uuid, text) to authenticated, service_role;
 
--- Extend join_quiz (3-arg) with auto team assignment.
+-- Keep a single join_quiz signature so PostgREST can resolve 2-arg calls.
+drop function if exists public.join_quiz(text, text);
 create or replace function public.join_quiz(
   p_join_code text,
   p_display_name text,

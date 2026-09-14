@@ -505,7 +505,7 @@ export function HostShell({
 
   const origin = typeof window === "undefined" ? "" : window.location.origin;
   const url = joinUrl.startsWith("http") ? joinUrl : `${origin}${joinUrl}`;
-  const Extra = (mode.HostExtraPanel ?? HOST_PANELS[mode.id as keyof typeof HOST_PANELS] ?? JeopardyHost) as typeof JeopardyHost;
+  const Extra = (mode.HostExtraPanel ?? HOST_PANELS[mode.id as keyof typeof HOST_PANELS] ?? JeopardyHost);
   const extraProps: HostExtraPanelProps = {
     sessionId,
     questions,

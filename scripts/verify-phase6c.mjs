@@ -45,13 +45,18 @@ function poolerUrl(direct) {
 }
 
 async function applyMigration() {
-  const sql = readFileSync(join(process.cwd(), "supabase/migrations/20260914010000_game_library.sql"), "utf8");
   const client = new pg.Client({
     connectionString: poolerUrl(process.env.SUPABASE_DB_URL),
     ssl: { rejectUnauthorized: false },
   });
   await client.connect();
   try {
+    const existing = await client.query("select to_regclass('public.game_templates') as t");
+    if (existing.rows[0]?.t) {
+      pass("apply game library migration", true, "already applied");
+      return;
+    }
+    const sql = readFileSync(join(process.cwd(), "supabase/migrations/20260914010000_game_library.sql"), "utf8");
     await client.query(sql);
     pass("apply game library migration", true, "ok");
   } catch (error) {
@@ -218,7 +223,7 @@ const { data: restored } = await admin.from("game_templates").update({ deleted_a
 pass("restore", restored.deleted_at == null, "");
 
 const { data: tables } = await admin.rpc("health_public_table_count");
-pass("health tables 27", tables === 27, `tables=${tables}`);
+pass("health tables 28", tables === 28, `tables=${tables}`);
 
 const failed = results.filter((item) => !item.ok);
 console.log(JSON.stringify({ failed: failed.length, results }, null, 2));
