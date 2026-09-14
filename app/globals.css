@@ -70,4 +70,15 @@
   h2 {
     font-family: var(--font-playfair), Georgia, serif;
   }
+
+  a.brand-nav,
+  a.brand-nav:link,
+  a.brand-nav:visited,
+  a.brand-nav:hover,
+  a.brand-nav:active {
+    background-color: #0b1b2b;
+    color: #c9a227;
+    text-decoration: none;
+    border: 1px solid rgba(201, 162, 39, 0.45);
+  }
 }

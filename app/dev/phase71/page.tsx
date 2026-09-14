@@ -68,6 +68,7 @@ export default function Phase71PreviewPage() {
           templateId="template-fixture"
           instanceId="instance-fixture"
           role="host"
+          embedded
         />
       </section>
 

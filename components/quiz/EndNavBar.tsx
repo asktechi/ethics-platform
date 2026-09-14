@@ -5,7 +5,7 @@ import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export const brandNavClass =
-  "inline-flex items-center justify-center border border-gold/40 bg-navy px-4 py-2.5 text-sm font-medium text-gold transition-colors hover:border-gold hover:bg-navy/80 hover:text-gold";
+  "brand-nav inline-flex items-center justify-center border border-gold/40 bg-navy px-4 py-2.5 text-sm font-medium text-gold no-underline transition-colors hover:border-gold hover:bg-navy/80 hover:text-gold visited:text-gold";
 
 export function BrandNavLink({
   href,
@@ -66,7 +66,7 @@ export function HostCloseToGames({ className }: { className?: string }) {
       href="/games"
       aria-label="Close and go to games"
       className={cn(
-        "inline-flex h-9 w-9 items-center justify-center border border-gold/40 bg-navy text-gold hover:border-gold hover:bg-navy/80",
+        "brand-nav inline-flex h-9 w-9 items-center justify-center border border-gold/40 bg-navy text-gold no-underline hover:border-gold hover:bg-navy/80 visited:text-gold",
         className,
       )}
     >

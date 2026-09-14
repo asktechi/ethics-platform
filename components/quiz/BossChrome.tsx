@@ -131,6 +131,7 @@ export function BossOutcomeScreen({
   role,
   allowReplay = false,
   joinCode,
+  embedded = false,
 }: {
   combat: BossCombatView;
   players: Array<{ id: string; display_name: string; score: number }>;
@@ -141,6 +142,7 @@ export function BossOutcomeScreen({
   role: "host" | "player";
   allowReplay?: boolean;
   joinCode?: string | null;
+  embedded?: boolean;
 }) {
   const boss = combat.boss;
   const accent = boss?.palette_json.accent ?? "#E63946";
@@ -154,7 +156,10 @@ export function BossOutcomeScreen({
 
   return (
     <div
-      className="fixed inset-0 z-40 overflow-auto px-4 py-10 text-ivory"
+      className={cn(
+        "z-40 overflow-auto px-4 py-10 text-ivory",
+        embedded ? "absolute inset-0" : "fixed inset-0",
+      )}
       style={{
         background: victory
           ? `radial-gradient(circle at 50% 20%, ${accent}55, #0B1320 70%)`
