@@ -70,6 +70,8 @@ export type GameTemplateRow = {
   mode_config: Record<string, string | number | boolean>;
   case_study_ids: string[];
   adaptive_config: Record<string, unknown>;
+  boss_id: string | null;
+  boss_config: Record<string, unknown>;
   version: number;
   play_count: number;
   last_played_at: string | null;
@@ -101,6 +103,10 @@ export type GameInstanceRow = {
   duration_seconds: number | null;
   settings_snapshot: SettingsSnapshot;
   team_assignment_mode?: "auto" | "manual" | "self_select";
+  boss_hp_current?: number | null;
+  party_hp_current?: number | null;
+  boss_phase?: number | null;
+  boss_state?: Record<string, unknown>;
   created_at: string;
   template_name?: string;
   top_scorer?: string | null;
@@ -122,6 +128,8 @@ function mapTemplate(row: Record<string, unknown>): GameTemplateRow {
     mode_config: (row.mode_config as Record<string, string | number | boolean> | null) ?? {},
     case_study_ids: Array.isArray(row.case_study_ids) ? (row.case_study_ids as string[]) : [],
     adaptive_config: (row.adaptive_config as Record<string, unknown> | null) ?? {},
+    boss_id: (row.boss_id as string | null) ?? null,
+    boss_config: (row.boss_config as Record<string, unknown> | null) ?? {},
     version: Number(row.version ?? 1),
     play_count: Number(row.play_count ?? 0),
     last_played_at: (row.last_played_at as string | null) ?? null,
@@ -212,6 +220,7 @@ export async function createGameTemplate(input: WizardState) {
   const { supabase, user } = await requireUser();
   if (!input.name.trim()) throw new Error("Name is required.");
   if (!input.classId) throw new Error("Pick a class.");
+  if (input.mode === "boss_battle" && !input.bossId) throw new Error("Pick a boss for Boss Battle.");
   const poolId = input.mode === "case_study" ? null : input.source === "pool" ? input.poolId || null : null;
   await validateTemplateSource(supabase, {
     class_id: input.classId,
@@ -234,6 +243,8 @@ export async function createGameTemplate(input: WizardState) {
       filter_json: input.source === "filter" ? input.filter : defaultGameFilter(),
       settings_json: input.settings,
       case_study_ids: input.caseStudyIds ?? [],
+      boss_id: input.mode === "boss_battle" ? input.bossId ?? null : null,
+      boss_config: input.mode === "boss_battle" ? (input.modeConfig ?? {}) : {},
       adaptive_config:
         input.mode === "adaptive"
           ? {
@@ -279,6 +290,8 @@ export async function updateGameTemplate(id: string, input: Partial<WizardState>
       settings_json: input.settings ?? current.settings_json,
       class_id: nextClassId,
       case_study_ids: nextCases,
+      boss_id: nextMode === "boss_battle" ? (input.bossId ?? current.boss_id) : null,
+      boss_config: nextMode === "boss_battle" ? nextConfig : current.boss_config,
       adaptive_config:
         nextMode === "adaptive"
           ? {
@@ -337,6 +350,8 @@ export async function cloneGameTemplate(id: string) {
       settings_json: current.settings_json,
       case_study_ids: current.case_study_ids,
       adaptive_config: current.adaptive_config,
+      boss_id: current.boss_id,
+      boss_config: current.boss_config,
     })
     .select("*")
     .single();
@@ -367,6 +382,7 @@ function questionToHost(
     standard_id?: string | null;
     standard_code?: string | null;
     standard_title?: string | null;
+    difficulty?: string | null;
   },
 ): QuizHostQuestion {
   return {
@@ -383,6 +399,7 @@ function questionToHost(
     standard_id: row.standard_id ?? null,
     standard_code: row.standard_code ?? null,
     standard_title: row.standard_title ?? null,
+    difficulty: row.difficulty ?? null,
   };
 }
 
@@ -392,7 +409,7 @@ export async function loadQuestionsByIds(ids: string[]): Promise<QuizHostQuestio
   const { data, error } = await supabase
     .from("questions")
     .select(
-      "id, stem, choices_json, answer_key, explanation, case_study_id, case_study_order, standard_id, case_study:case_studies(title, scenario_text), standard:standards(code, title)",
+      "id, stem, choices_json, answer_key, explanation, difficulty, case_study_id, case_study_order, standard_id, case_study:case_studies(title, scenario_text), standard:standards(code, title)",
     )
     .in("id", ids);
   if (error) throw new Error(error.message);
@@ -416,6 +433,7 @@ export async function loadQuestionsByIds(ids: string[]): Promise<QuizHostQuestio
         standard_id: row!.standard_id,
         standard_code: standard?.code ?? null,
         standard_title: standard?.title ?? null,
+        difficulty: (row as { difficulty?: string | null }).difficulty ?? null,
       });
     });
 }
@@ -625,6 +643,7 @@ export async function launchGameFromTemplate(templateId: string) {
     name: template.name,
     mode_config: modeConfig,
     case_study_ids: template.case_study_ids,
+    boss_id: template.boss_id,
   };
 
   const quizSettings: QuizSettings = {
@@ -698,6 +717,12 @@ export async function launchGameFromTemplate(templateId: string) {
         if (teamError) throw new Error(teamError.message);
         await supabase.rpc("quiz_ensure_teams", { p_session_id: session.id });
       }
+      if (template.mode === "boss_battle") {
+        const { error: initError } = await supabase.rpc("init_boss_combat", {
+          p_session_id: session.id,
+        });
+        if (initError) throw new Error(initError.message);
+      }
       break;
     }
     lastError = error?.message ?? lastError;
@@ -754,12 +779,15 @@ export async function loadWizardContext() {
       preview: item.scenario_text.slice(0, 140),
     }));
   }
+  const { listBosses } = await import("@/lib/data/bosses");
+  const bosses = await listBosses().catch(() => []);
   return {
     classes: classes.map((item) => ({ id: item.id, title: item.title })),
     poolsByClass,
     standards: standards.map((item) => ({ id: item.id, code: item.code, title: item.title })),
     conceptsByClass,
     casesByClass,
+    bosses,
   };
 }
 

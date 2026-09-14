@@ -66,7 +66,8 @@ export async function quizRevealAction(sessionId: string, questionId: string, co
       p_correct_key: correctKey,
     });
     if (error) throw new Error(error.message);
-    return { ok: true as const };
+    const { data: combat } = await supabase.rpc("get_boss_combat", { p_session_id: sessionId });
+    return { ok: true as const, combat: combat ?? null };
   } catch (error) {
     return { ok: false as const, error: actionError(error) };
   }
@@ -75,10 +76,53 @@ export async function quizRevealAction(sessionId: string, questionId: string, co
 export async function quizEndAction(sessionId: string) {
   try {
     const { supabase } = await requireUser();
+    const { data: session } = await supabase.from("quiz_sessions").select("mode").eq("id", sessionId).maybeSingle();
+    if (session?.mode === "boss_battle") {
+      await supabase.rpc("finalize_boss_combat", { p_session_id: sessionId });
+    }
     const { error } = await supabase.rpc("quiz_end_session", { p_session_id: sessionId });
     if (error) throw new Error(error.message);
     await supabase.rpc("finalize_game_instance", { p_session_id: sessionId });
-    return { ok: true as const };
+    const { data: combat } = await supabase.rpc("get_boss_combat", { p_session_id: sessionId });
+    return { ok: true as const, combat: combat ?? null };
+  } catch (error) {
+    return { ok: false as const, error: actionError(error) };
+  }
+}
+
+export async function initBossCombatAction(sessionId: string) {
+  try {
+    const { supabase } = await requireUser();
+    const { error } = await supabase.rpc("init_boss_combat", { p_session_id: sessionId });
+    if (error) throw new Error(error.message);
+    const { data } = await supabase.rpc("get_boss_combat", { p_session_id: sessionId });
+    return { ok: true as const, combat: data ?? null };
+  } catch (error) {
+    return { ok: false as const, error: actionError(error) };
+  }
+}
+
+export async function forceBossOutcomeAction(sessionId: string, victory: boolean) {
+  try {
+    const { supabase } = await requireUser();
+    const { error } = await supabase.rpc("force_boss_outcome", {
+      p_session_id: sessionId,
+      p_victory: victory,
+    });
+    if (error) throw new Error(error.message);
+    const { data } = await supabase.rpc("get_boss_combat", { p_session_id: sessionId });
+    return { ok: true as const, combat: data ?? null };
+  } catch (error) {
+    return { ok: false as const, error: actionError(error) };
+  }
+}
+
+export async function loadBossCombatAction(sessionId: string) {
+  try {
+    const { supabase } = await requireUser();
+    const { data, error } = await supabase.rpc("get_boss_combat", { p_session_id: sessionId });
+    if (error) throw new Error(error.message);
+    return { ok: true as const, combat: data ?? null };
   } catch (error) {
     return { ok: false as const, error: actionError(error) };
   }

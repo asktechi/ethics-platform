@@ -41,6 +41,7 @@ export type WizardState = {
   settings: GameSettings;
   modeConfig: Record<string, string | number | boolean>;
   caseStudyIds: string[];
+  bossId?: string | null;
 };
 
 export const defaultGameSettings = (): GameSettings => ({
@@ -99,9 +100,9 @@ export const MODE_META: Record<
   },
   boss_battle: {
     label: "Boss Battle",
-    blurb: "Narrative campaign; correct answers advance the story.",
+    blurb: "Narrative campaign; correct answers deal damage.",
     accent: "#E63946",
-    playable: false,
+    playable: true,
   },
 };
 
@@ -125,4 +126,5 @@ export type SettingsSnapshot = {
   name?: string;
   mode_config?: Record<string, string | number | boolean>;
   case_study_ids?: string[];
+  boss_id?: string | null;
 };

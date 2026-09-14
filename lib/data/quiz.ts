@@ -233,10 +233,14 @@ export async function getPublicPlayContext(sessionId: string) {
 
   const { data: instance } = await admin
     .from("game_instances")
-    .select("id, team_assignment_mode")
+    .select("id, team_assignment_mode, template_id")
     .eq("quiz_session_id", session.id)
     .is("deleted_at", null)
     .maybeSingle();
+  const { data: combatRaw } =
+    session.mode === "boss_battle"
+      ? await admin.rpc("get_boss_combat", { p_session_id: session.id })
+      : { data: null };
   const { data: teams } = instance?.id
     ? await admin.from("game_teams").select("id, instance_id, team_key, name, color, created_at").eq("instance_id", instance.id)
     : { data: [] };
@@ -248,6 +252,8 @@ export async function getPublicPlayContext(sessionId: string) {
     playQuestions,
     teams: teams ?? [],
     teamAssignmentMode: instance?.team_assignment_mode ?? "auto",
+    templateId: instance?.template_id ?? null,
+    bossCombat: combatRaw,
     currentQuestion: currentRow
       ? {
           question_id: currentRow.question_id,

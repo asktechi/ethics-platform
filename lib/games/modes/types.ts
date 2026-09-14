@@ -23,6 +23,11 @@ export type ScoreResponseArgs = {
   timeBonusEnabled?: boolean;
   streakBonusEnabled?: boolean;
   teamBonusPerMember?: number;
+  difficulty?: string | null;
+  baseDamage?: number;
+  timeBonusDamage?: number;
+  wrongAnswerPenalty?: "boss_heal" | "party_damage";
+  streakDamageMultiplier?: boolean;
 };
 
 export type ScoreResponseResult = {

@@ -27,7 +27,12 @@ function isQuizEvent(value: unknown): value is QuizEvent {
     type === "CASE_INTRO" ||
     type === "CASE_COMPLETE" ||
     type === "ADAPTIVE_START" ||
-    type === "ADAPTIVE_PROGRESS"
+    type === "ADAPTIVE_PROGRESS" ||
+    type === "BOSS_HP" ||
+    type === "BOSS_PHASE" ||
+    type === "PARTY_HP" ||
+    type === "BOSS_VICTORY" ||
+    type === "BOSS_DEFEAT"
   );
 }
 

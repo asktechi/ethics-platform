@@ -38,6 +38,7 @@ const wizardSchema = z.object({
   mode: z.enum(["jeopardy", "rapid_fire", "team_battle", "case_study", "adaptive", "boss_battle"]),
   modeConfig: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
   caseStudyIds: z.array(z.string().uuid()).optional(),
+  bossId: z.string().uuid().nullable().optional(),
   settings: z.object({
     time_per_q: z.number().int().min(5).max(300),
     base_points: z.number().int().min(0).max(1000),
@@ -61,6 +62,7 @@ function asWizard(input: unknown): WizardState {
     mode: parsed.mode,
     modeConfig: { ...defaults, ...(parsed.modeConfig ?? {}) },
     caseStudyIds: parsed.caseStudyIds ?? [],
+    bossId: parsed.bossId ?? null,
   };
 }
 

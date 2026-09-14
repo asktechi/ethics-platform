@@ -19,6 +19,7 @@ export type QuizHostQuestion = QuizPlayQuestion & {
   standard_id?: string | null;
   standard_code?: string | null;
   standard_title?: string | null;
+  difficulty?: string | null;
 };
 
 export type QuizEventEnvelope = {
@@ -75,6 +76,34 @@ export type QuizEvent =
       participant_id: string;
       question_index: number;
       standard_id: string | null;
+    } & QuizEventEnvelope)
+  | ({
+      type: "BOSS_HP";
+      boss_hp: number;
+      boss_max_hp: number;
+      delta: number;
+      source: "correct" | "heal";
+    } & QuizEventEnvelope)
+  | ({
+      type: "BOSS_PHASE";
+      phase: number;
+      taunt: string;
+    } & QuizEventEnvelope)
+  | ({
+      type: "PARTY_HP";
+      party_hp: number;
+      party_max_hp: number;
+      delta: number;
+    } & QuizEventEnvelope)
+  | ({
+      type: "BOSS_VICTORY";
+      final_score: number;
+      summary: string;
+    } & QuizEventEnvelope)
+  | ({
+      type: "BOSS_DEFEAT";
+      reason: "party_hp_zero" | "questions_exhausted";
+      remaining_hp?: number;
     } & QuizEventEnvelope)
   | ({ type: "HYDRATE"; state: Partial<QuizBusState> } & QuizEventEnvelope);
 

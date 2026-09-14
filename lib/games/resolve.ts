@@ -63,7 +63,14 @@ export type ResolveClient = {
   from: (relation: string) => QueryChain;
 };
 
-export const PLAYABLE_GAME_MODES = ["jeopardy", "rapid_fire", "team_battle", "case_study", "adaptive"] as const;
+export const PLAYABLE_GAME_MODES = [
+  "jeopardy",
+  "rapid_fire",
+  "team_battle",
+  "case_study",
+  "adaptive",
+  "boss_battle",
+] as const;
 
 const QUESTION_COLUMNS =
   "id, stem, choices_json, answer_key, explanation, standard_id, concept_id, difficulty, source, approved";
