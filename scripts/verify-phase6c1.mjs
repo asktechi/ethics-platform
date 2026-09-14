@@ -210,12 +210,19 @@ pass("T4 overview === launch", overview.questionIds.join() === launch.questionId
 
 // Test 5 — mode gating
 const wizardSource = readFileSync(join(process.cwd(), "components/games/GameWizard.tsx"), "utf8");
+const modeMetaSource = readFileSync(join(process.cwd(), "lib/games/types.ts"), "utf8");
 pass(
   "T5 coming soon still gated",
   wizardSource.includes("pointer-events-none") && wizardSource.includes("Coming soon"),
   "",
 );
-pass("T5 rapid_fire playable in wizard", wizardSource.includes("Rapid Fire") && !wizardSource.includes("Coming in 6D"), "");
+pass(
+  "T5 rapid_fire playable in wizard",
+  modeMetaSource.includes('label: "Rapid Fire"') &&
+    modeMetaSource.includes("playable: true") &&
+    !wizardSource.includes("Coming in 6D"),
+  "",
+);
 let rapidBlocked = false;
 try {
   assertPlayableMode("rapid_fire");

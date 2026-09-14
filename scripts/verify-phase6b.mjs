@@ -333,7 +333,7 @@ const board = await publicClient.rpc("get_final_leaderboard", { p_session_id: se
 pass("final leaderboard 50 rows", (board.data?.length ?? 0) === 50, `rows=${board.data?.length ?? 0}`);
 
 const { data: pub } = await admin.rpc("health_public_table_count");
-pass("health tables", pub === 28, `tables=${pub}`);
+pass("health tables", pub === 29, `tables=${pub}`);
 
 let publication = [];
 if (process.env.SUPABASE_DB_URL) {

@@ -366,7 +366,7 @@ const { data: jPlayer } = await admin.from("quiz_participants").select("score").
 pass("Jeopardy still 200 at 0ms streak0", jPlayer.score === 200, String(jPlayer.score));
 
 const { data: tables } = await admin.rpc("health_public_table_count");
-pass("health tables 28", tables === 28, String(tables));
+pass("health tables 29", tables === 29, String(tables));
 
 const failed = results.filter((item) => !item.ok);
 console.log(JSON.stringify({ failed: failed.length, results }, null, 2));
