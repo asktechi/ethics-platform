@@ -454,15 +454,19 @@ const { data: afterHint } = await admin.from("quiz_participants").select("score"
 pass("AD5 score reduced by hint", typeof afterHint?.score === "number", `score=${afterHint?.score}`);
 
 let current = secondId.data;
-let answered = 2;
+let answered = 1;
 for (let index = 0; index < 20 && answered < 15; index += 1) {
   if (!current) break;
-  await pub.rpc("submit_answer", {
+  const submitted = await pub.rpc("submit_answer", {
     p_participant_token: carol.participant_token,
     p_question_id: current,
     p_choice_key: index % 4 === 0 ? "B" : "A",
     p_ms_taken: 600,
   });
+  if (submitted.error) {
+    pass("AD6 submit during drill", false, submitted.error.message);
+    break;
+  }
   answered += 1;
   const next = await admin.rpc("pick_next_adaptive_question", {
     p_session_id: adGame.session.id,
@@ -483,8 +487,8 @@ const { data: adResponses } = await admin
   .eq("participant_id", carol.participant_id);
 pass(
   "AD6 completed 15 questions",
-  answeredIds.length >= 15 || (adResponses ?? []).length >= 15,
-  `answered_ids=${answeredIds.length} responses=${(adResponses ?? []).length}`,
+  (answeredIds.length >= 15 || (adResponses ?? []).length >= 15) && exhausted.data == null,
+  `answered_ids=${answeredIds.length} responses=${(adResponses ?? []).length} next=${exhausted.data}`,
 );
 
 await admin.rpc("quiz_end_session", { p_session_id: adGame.session.id });
