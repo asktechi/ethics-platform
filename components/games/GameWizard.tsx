@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { ResolveDiagnostics } from "@/lib/games/resolve";
+import { estimatedQuestionsToKill, asBossConfig } from "@/lib/games/boss-combat";
+import type { BossRow } from "@/lib/data/bosses";
 import { getMode } from "@/lib/games/modes/registry";
 import { schemaDefaults } from "@/lib/games/modes/types";
 import { MODE_META, type GameMode } from "@/lib/games/types";
@@ -31,6 +33,7 @@ export function GameWizard({
   standards,
   conceptsByClass,
   casesByClass = {},
+  bosses = [],
   existingTags,
   editId,
 }: {
@@ -39,6 +42,7 @@ export function GameWizard({
   standards: Array<{ id: string; code: string; title: string }>;
   conceptsByClass: Record<string, Array<{ id: string; title: string }>>;
   casesByClass?: Record<string, CaseOption[]>;
+  bosses?: BossRow[];
   existingTags: string[];
   editId?: string;
 }) {
@@ -96,6 +100,7 @@ export function GameWizard({
       return store.source === "filter" || Boolean(store.poolId);
     }
     if (store.step === 3 && store.mode === "case_study") return caseStudyIds.length >= 1;
+    if (store.step === 4 && store.mode === "boss_battle") return Boolean(store.bossId);
     return true;
   }, [store, caseStudyIds.length]);
 
@@ -130,6 +135,7 @@ export function GameWizard({
         mode: store.mode,
         modeConfig: store.modeConfig,
         caseStudyIds: store.caseStudyIds ?? [],
+        bossId: store.bossId ?? null,
         settings: store.settings,
       };
       const result = editId ? await updateGameAction(editId, payload) : await saveGameAction(payload);
@@ -399,7 +405,11 @@ export function GameWizard({
       {store.step === 4 ? (
         <section className="mt-8 space-y-3">
           <h1 className="font-display text-3xl">Rules</h1>
-          {modeDef.configSchema.map((field) => {
+          {store.mode === "boss_battle" ? (
+            <BossRules bosses={bosses} />
+          ) : (
+            <>
+            {modeDef.configSchema.map((field) => {
             const value = config[field.key] ?? field.default;
             if (field.key === "team_assignment_mode") {
               return (
@@ -456,6 +466,8 @@ export function GameWizard({
               </Field>
             );
           })}
+            </>
+          )}
           {(
             [
               ["shuffle_questions", "Shuffle questions"],
@@ -498,6 +510,7 @@ export function GameWizard({
               ? `${Number(config.total_time_seconds ?? 60)} seconds on a shared clock.`
               : `${((((preview?.count ?? 0) * store.settings.time_per_q) / 60 + 0.5 * (preview?.count ?? 0))).toFixed(1)} minutes including reveal buffer.`}
           </p>
+          {store.mode === "boss_battle" ? <BossPreview bosses={bosses} /> : null}
         </section>
       ) : null}
 
@@ -522,6 +535,142 @@ export function GameWizard({
           </Button>
         )}
       </div>
+    </div>
+  );
+}
+
+function BossRules({ bosses }: { bosses: BossRow[] }) {
+  const store = useGameWizard();
+  const config = asBossConfig(store.modeConfig);
+  const selected = bosses.find((boss) => boss.id === store.bossId);
+  return (
+    <div className="space-y-4">
+      <div>
+        <p className="mb-2 text-sm text-ivory/70">Boss</p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {bosses.map((boss) => (
+            <button
+              key={boss.id}
+              type="button"
+              onClick={() => store.patch({ bossId: boss.id })}
+              className={cn(
+                "border p-3 text-left",
+                store.bossId === boss.id ? "border-gold bg-gold/10" : "border-white/15",
+              )}
+            >
+              <p className="text-2xl">{boss.portrait_emoji}</p>
+              <p className="mt-1 font-display text-lg">{boss.name}</p>
+              <p className="text-xs text-ivory/55">{boss.subtitle}</p>
+              <p className="mt-1 text-xs text-ivory/45">
+                {boss.max_hp} HP · {boss.standard?.code ?? "Ethics"}
+              </p>
+            </button>
+          ))}
+        </div>
+        {!selected ? <p className="mt-2 text-sm text-red-300">Pick a boss to continue.</p> : null}
+      </div>
+      <Field label="Play mode">
+        <select
+          className="h-10 w-full border border-border bg-navy px-2 text-sm"
+          value={config.mode}
+          onChange={(event) =>
+            store.patch({ modeConfig: { ...store.modeConfig, mode: event.target.value } })
+          }
+        >
+          <option value="co-op">Co-op class fight</option>
+          <option value="solo">Solo</option>
+        </select>
+      </Field>
+      <Field label="Base damage">
+        <Input
+          type="number"
+          min={1}
+          max={200}
+          value={config.base_damage}
+          onChange={(event) =>
+            store.patch({ modeConfig: { ...store.modeConfig, base_damage: Number(event.target.value) } })
+          }
+        />
+      </Field>
+      <Field label="Time bonus damage">
+        <Input
+          type="number"
+          min={0}
+          max={100}
+          value={config.time_bonus_damage}
+          onChange={(event) =>
+            store.patch({
+              modeConfig: { ...store.modeConfig, time_bonus_damage: Number(event.target.value) },
+            })
+          }
+        />
+      </Field>
+      <Field label="Wrong-answer penalty">
+        <select
+          className="h-10 w-full border border-border bg-navy px-2 text-sm"
+          value={config.wrong_answer_penalty}
+          onChange={(event) =>
+            store.patch({ modeConfig: { ...store.modeConfig, wrong_answer_penalty: event.target.value } })
+          }
+        >
+          <option value="boss_heal">Boss heals</option>
+          <option value="party_damage">Party takes damage</option>
+        </select>
+      </Field>
+      {config.mode === "co-op" ? (
+        <Field label="Party max HP">
+          <Input
+            type="number"
+            min={50}
+            max={2000}
+            value={config.party_max_hp}
+            onChange={(event) =>
+              store.patch({ modeConfig: { ...store.modeConfig, party_max_hp: Number(event.target.value) } })
+            }
+          />
+        </Field>
+      ) : null}
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={config.streak_damage_multiplier}
+          onChange={(event) =>
+            store.patch({
+              modeConfig: { ...store.modeConfig, streak_damage_multiplier: event.target.checked },
+            })
+          }
+        />
+        Streak damage multiplier
+      </label>
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={config.phases_enabled}
+          onChange={(event) =>
+            store.patch({ modeConfig: { ...store.modeConfig, phases_enabled: event.target.checked } })
+          }
+        />
+        Phase taunts as HP drops
+      </label>
+    </div>
+  );
+}
+
+function BossPreview({ bosses }: { bosses: BossRow[] }) {
+  const store = useGameWizard();
+  const boss = bosses.find((item) => item.id === store.bossId);
+  const config = asBossConfig(store.modeConfig);
+  if (!boss) return <p className="text-sm text-red-300">No boss selected.</p>;
+  const kills = estimatedQuestionsToKill(boss.max_hp, config);
+  return (
+    <div className="border border-white/10 bg-card/50 p-4" style={{ borderColor: boss.palette_json.accent }}>
+      <p className="text-3xl">{boss.portrait_emoji}</p>
+      <p className="mt-2 font-display text-2xl">{boss.name}</p>
+      <p className="text-sm text-ivory/60">{boss.subtitle}</p>
+      <p className="mt-2 text-sm text-ivory/70">
+        {boss.max_hp} HP · {boss.standard?.code ?? "Ethics"} · {config.mode}
+      </p>
+      <p className="mt-2 text-sm text-gold">About {kills} average hits to finish the boss.</p>
     </div>
   );
 }

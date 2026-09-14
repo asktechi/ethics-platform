@@ -22,6 +22,7 @@ export default async function NewGamePage() {
           standards={context.standards}
           conceptsByClass={context.conceptsByClass}
           casesByClass={context.casesByClass}
+          bosses={context.bosses}
           existingTags={tags}
         />
       </div>

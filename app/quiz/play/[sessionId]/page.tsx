@@ -25,6 +25,7 @@ export default async function QuizPlayPage({ params }: { params: { sessionId: st
       modeConfig={(settings.mode_config ?? {}) as Record<string, unknown>}
       gameStartedAt={typeof settings.game_started_at === "string" ? settings.game_started_at : null}
       timePerQ={context.session.time_per_q ?? 30}
+      initialCombat={context.bossCombat}
     />
   );
 }

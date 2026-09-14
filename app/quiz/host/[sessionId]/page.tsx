@@ -1,13 +1,8 @@
 import { notFound, redirect } from "next/navigation";
 import { HostShell } from "@/app/quiz/host/[sessionId]/HostShell";
 import { loadQuestionsByIds } from "@/lib/data/games";
-import {
-  getHostSession,
-  listSessionParticipants,
-  listSessionResponses,
-  listSessionTeams,
-  loadHostQuestions,
-} from "@/lib/data/quiz";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getHostSession, listSessionParticipants, listSessionResponses, listSessionTeams, loadHostQuestions } from "@/lib/data/quiz";
 import type { QuizSettings } from "@/lib/quiz/types";
 import { headers } from "next/headers";
 
@@ -43,6 +38,19 @@ export default async function QuizHostPage({ params }: { params: { sessionId: st
   const joinUrl = `${proto}://${host}/quiz/join/${session.join_code}`;
   const modeConfig = (settings.mode_config ?? {}) as Record<string, unknown>;
 
+  const admin = createAdminClient();
+  const [{ data: combat }, { data: instance }] = await Promise.all([
+    session.mode === "boss_battle"
+      ? admin.rpc("get_boss_combat", { p_session_id: session.id })
+      : Promise.resolve({ data: null }),
+    admin
+      .from("game_instances")
+      .select("template_id")
+      .eq("quiz_session_id", session.id)
+      .is("deleted_at", null)
+      .maybeSingle(),
+  ]);
+
   return (
     <HostShell
       sessionId={session.id}
@@ -65,6 +73,8 @@ export default async function QuizHostPage({ params }: { params: { sessionId: st
       initialTeams={teams}
       poolName={pool?.name ?? settings.name ?? "Game"}
       gameStartedAt={typeof settings.game_started_at === "string" ? settings.game_started_at : null}
+      initialCombat={combat}
+      templateId={instance?.template_id ?? null}
     />
   );
 }

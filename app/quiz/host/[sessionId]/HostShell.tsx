@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  forceBossOutcomeAction,
+  initBossCombatAction,
   loadHostLiveAction,
   quizEndAction,
   quizPauseAction,
@@ -14,6 +16,7 @@ import {
 import { HostQuestionView } from "@/app/quiz/host/[sessionId]/HostQuestionView";
 import { HostSidePanel } from "@/app/quiz/host/[sessionId]/HostSidePanel";
 import { AdaptiveHost } from "@/app/quiz/host/[sessionId]/modes/AdaptiveHost";
+import { BossBattleHost } from "@/app/quiz/host/[sessionId]/modes/BossBattleHost";
 import { CaseStudyHost } from "@/app/quiz/host/[sessionId]/modes/CaseStudyHost";
 import { JeopardyHost } from "@/app/quiz/host/[sessionId]/modes/JeopardyHost";
 import { RapidFireHost } from "@/app/quiz/host/[sessionId]/modes/RapidFireHost";
@@ -22,6 +25,7 @@ import { AudienceQr } from "@/components/presentation/AudienceQr";
 import type { BestAnswer } from "@/components/quiz/BestAnswerPanel";
 import { Leaderboard, type LivePlayer } from "@/components/quiz/Leaderboard";
 import { Button } from "@/components/ui/button";
+import { parseBossCombat, type BossCombatView } from "@/lib/data/bosses";
 import { getMode } from "@/lib/games/modes/registry";
 import type { GameTeamRecord, HostExtraPanelProps } from "@/lib/games/modes/types";
 import { caseProgressAt, groupQuestionsByCase } from "@/lib/games/case-groups";
@@ -60,6 +64,8 @@ export type HostShellProps = {
   initialTeams: GameTeamRecord[];
   poolName: string;
   gameStartedAt: string | null;
+  initialCombat?: unknown;
+  templateId?: string | null;
 };
 
 const HOST_PANELS = {
@@ -91,6 +97,8 @@ export function HostShell({
   initialTeams,
   poolName,
   gameStartedAt,
+  initialCombat,
+  templateId,
 }: HostShellProps) {
   const router = useRouter();
   const mode = getMode(modeId);
@@ -98,6 +106,7 @@ export function HostShell({
   const isTeam = mode.id === "team_battle";
   const isCase = mode.id === "case_study";
   const isAdaptive = mode.id === "adaptive";
+  const isBoss = mode.id === "boss_battle";
   const caseGroups = useMemo(() => groupQuestionsByCase(questions), [questions]);
   const totalTime = Number(modeConfig.total_time_seconds ?? (isRapid ? timePerQ : timePerQ));
   const startedFromSettings = initialQuestionStartedAt ? Date.parse(initialQuestionStartedAt) : NaN;
@@ -128,6 +137,8 @@ export function HostShell({
   const [boardOpen, setBoardOpen] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [confirmEnd, setConfirmEnd] = useState(false);
+  const [combat, setCombat] = useState<BossCombatView | null>(() => parseBossCombat(initialCombat));
+  const [bossOverlay, setBossOverlay] = useState<{ phase: number; taunt: string } | null>(null);
   const lastEventRef = useRef<QuizEvent | null>(null);
   const revealingRef = useRef(false);
   const lastSeenRef = useRef(new Map<string, number>());
@@ -168,22 +179,35 @@ export function HostShell({
     if (!correct) return null;
     const player = players.find((item) => item.id === correct.participant_id);
     const priorStreak = Math.max(0, (player?.streak ?? 1) - 1);
-    const scored = mode.scoreResponse({
-      isCorrect: true,
-      msTaken: correct.ms_taken ?? timePerQ * 1000,
-      timeLimitMs: timePerQ * 1000,
-      basePoints: Number(modeConfig.base_points ?? 100),
-      priorCorrect: priorStreak,
-      timeBonusEnabled: modeConfig.time_bonus !== false,
-      streakBonusEnabled: modeConfig.streak_bonus !== false,
-    });
+    const scored = isBoss
+      ? mode.scoreResponse({
+          isCorrect: true,
+          msTaken: correct.ms_taken ?? timePerQ * 1000,
+          timeLimitMs: timePerQ * 1000,
+          basePoints: Number(modeConfig.base_damage ?? 40),
+          priorCorrect: priorStreak,
+          difficulty: question.difficulty,
+          baseDamage: Number(modeConfig.base_damage ?? 40),
+          timeBonusDamage: Number(modeConfig.time_bonus_damage ?? 20),
+          wrongAnswerPenalty: modeConfig.wrong_answer_penalty === "party_damage" ? "party_damage" : "boss_heal",
+          streakDamageMultiplier: modeConfig.streak_damage_multiplier !== false,
+        })
+      : mode.scoreResponse({
+          isCorrect: true,
+          msTaken: correct.ms_taken ?? timePerQ * 1000,
+          timeLimitMs: timePerQ * 1000,
+          basePoints: Number(modeConfig.base_points ?? 100),
+          priorCorrect: priorStreak,
+          timeBonusEnabled: modeConfig.time_bonus !== false,
+          streakBonusEnabled: modeConfig.streak_bonus !== false,
+        });
     return {
       display_name: player?.display_name ?? "Player",
       avatar_color: player?.avatar_color ?? null,
       ms_taken: correct.ms_taken ?? 0,
       points: scored.points,
     };
-  }, [mode, modeConfig, phase, players, question, questionResponses, timePerQ]);
+  }, [isBoss, mode, modeConfig, phase, players, question, questionResponses, timePerQ]);
 
   const currentQuestionEvent = useCallback((): QuizEvent | null => {
     if (isAdaptive && phaseRef.current !== "ready" && phaseRef.current !== "ended") {
@@ -372,6 +396,64 @@ export function HostShell({
     [clockStart, ctx, isRapid, mode, questions, sessionId, timePerQ, totalTime],
   );
 
+  const publishCombat = useCallback(
+    (next: BossCombatView | null, previous: BossCombatView | null) => {
+      if (!next) return;
+      setCombat(next);
+      const hpDelta = (next.boss_hp ?? 0) - (previous?.boss_hp ?? next.boss_max_hp);
+      if (hpDelta !== 0) {
+        const event: QuizEvent = {
+          type: "BOSS_HP",
+          boss_hp: next.boss_hp,
+          boss_max_hp: next.boss_max_hp,
+          delta: hpDelta,
+          source: hpDelta < 0 ? "correct" : "heal",
+        };
+        lastEventRef.current = event;
+        dispatch(event);
+      }
+      if (next.play_mode === "co-op" && next.party_hp != null) {
+        const partyDelta = next.party_hp - (previous?.party_hp ?? next.party_max_hp);
+        if (partyDelta !== 0) {
+          const event: QuizEvent = {
+            type: "PARTY_HP",
+            party_hp: next.party_hp,
+            party_max_hp: next.party_max_hp,
+            delta: partyDelta,
+          };
+          lastEventRef.current = event;
+          dispatch(event);
+        }
+      }
+      if (previous && next.phase !== previous.phase && next.taunt) {
+        const event: QuizEvent = { type: "BOSS_PHASE", phase: next.phase, taunt: next.taunt };
+        lastEventRef.current = event;
+        dispatch(event);
+        setBossOverlay({ phase: next.phase, taunt: next.taunt });
+        window.setTimeout(() => setBossOverlay(null), 3000);
+      }
+      if (next.outcome === "victory" && previous?.outcome !== "victory") {
+        const event: QuizEvent = {
+          type: "BOSS_VICTORY",
+          final_score: players.reduce((sum, player) => sum + player.score, 0),
+          summary: next.boss?.victory_line ?? "The boss falls.",
+        };
+        lastEventRef.current = event;
+        dispatch(event);
+      }
+      if (next.outcome === "defeat" && previous?.outcome !== "defeat") {
+        const event: QuizEvent = {
+          type: "BOSS_DEFEAT",
+          reason: next.defeat_reason === "questions_exhausted" ? "questions_exhausted" : "party_hp_zero",
+          remaining_hp: next.boss_hp,
+        };
+        lastEventRef.current = event;
+        dispatch(event);
+      }
+    },
+    [players],
+  );
+
   const publishReveal = useCallback(async () => {
     if (isRapid || isAdaptive || !question || revealingRef.current || phaseRef.current === "reveal") return;
     revealingRef.current = true;
@@ -403,7 +485,14 @@ export function HostShell({
       setChangedIds(changed);
       window.setTimeout(() => setChangedIds(new Set()), 2800);
     }
-  }, [ctx, index, isAdaptive, isRapid, mode, players, question, sessionId]);
+    if (isBoss && "combat" in result) {
+      const next = parseBossCombat(result.combat);
+      publishCombat(next, combat);
+      if (next?.outcome === "victory" || next?.outcome === "defeat") {
+        setPhase("ended");
+      }
+    }
+  }, [combat, ctx, index, isAdaptive, isBoss, isRapid, mode, players, publishCombat, question, sessionId]);
 
   const publishIntro = useCallback(
     async (nextIndex: number) => {
@@ -456,17 +545,29 @@ export function HostShell({
         return;
       }
       await mode.onSessionEnd?.(ctx);
+      if (isBoss && "combat" in result) {
+        publishCombat(parseBossCombat(result.combat), combat);
+        const event: QuizEvent = { type: "END", early };
+        lastEventRef.current = event;
+        dispatch(event);
+        setPhase("ended");
+        return;
+      }
       const event: QuizEvent = { type: "END", early };
       lastEventRef.current = event;
       dispatch(event);
       setPhase("ended");
       router.push(`/quiz/host/${sessionId}/summary`);
     },
-    [ctx, mode, router, sessionId],
+    [combat, ctx, isBoss, mode, publishCombat, router, sessionId],
   );
 
   const goNext = useCallback(() => {
     if (isAdaptive) return;
+    if (isBoss && combat && combat.outcome !== "ongoing") {
+      void publishEnd(false);
+      return;
+    }
     if (phaseRef.current === "intro") {
       void publishQuestion(indexRef.current);
       return;
@@ -517,6 +618,8 @@ export function HostShell({
     caseProgress.isLastInCase,
     index,
     isAdaptive,
+    isBoss,
+    combat,
     isCase,
     modeConfig.show_scenario_before_each_question,
     players,
@@ -591,6 +694,11 @@ export function HostShell({
     if (phase !== "countdown") return;
     if (countdown <= 0) {
       void mode.onSessionStart?.(ctx);
+      if (isBoss) {
+        void initBossCombatAction(sessionId).then((result) => {
+          if (result.ok) setCombat(parseBossCombat(result.combat));
+        });
+      }
       if (isAdaptive) void startAdaptive();
       else if (isCase) void publishIntro(0);
       else void publishQuestion(0);
@@ -598,7 +706,7 @@ export function HostShell({
     }
     const timer = window.setTimeout(() => setCountdown((value) => value - 1), 1000);
     return () => window.clearTimeout(timer);
-  }, [phase, countdown, publishQuestion, publishIntro, startAdaptive, isAdaptive, isCase, mode, ctx]);
+  }, [phase, countdown, publishQuestion, publishIntro, startAdaptive, isAdaptive, isBoss, isCase, mode, ctx, sessionId]);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -639,6 +747,21 @@ export function HostShell({
     onSkip: () => void skip(),
   };
 
+  async function forceOutcome(victory: boolean) {
+    const result = await forceBossOutcomeAction(sessionId, victory);
+    if (!result.ok) {
+      setMessage(result.error);
+      return;
+    }
+    const next = parseBossCombat(result.combat);
+    publishCombat(next, combat);
+    await quizEndAction(sessionId);
+    setPhase("ended");
+    const event: QuizEvent = { type: "END", early: true };
+    lastEventRef.current = event;
+    dispatch(event);
+  }
+
   if (phase === "ready" || phase === "countdown") {
     return (
       <div className="min-h-screen bg-navy px-6 py-8 text-ivory">
@@ -661,6 +784,61 @@ export function HostShell({
           </div>
           <AudienceQr url={url} label="Player QR" />
         </div>
+      </div>
+    );
+  }
+
+  if (isBoss) {
+    return (
+      <div className="flex min-h-screen flex-col bg-navy text-ivory">
+        <header className="flex flex-wrap items-center gap-4 border-b border-white/10 px-4 py-3">
+          <p className="font-mono text-3xl tracking-[0.2em] text-gold">{joinCode}</p>
+          <p className="text-sm text-ivory/70">
+            {players.length} players · Question {index + 1} of {questions.length} · {remaining}s
+          </p>
+        </header>
+        <BossBattleHost
+          sessionId={sessionId}
+          questions={questions}
+          index={index}
+          phase={phase}
+          remaining={remaining}
+          timePerQ={timePerQ}
+          paused={paused}
+          counts={counts}
+          players={players}
+          changedIds={changedIds}
+          joins={joins}
+          best={best}
+          combat={combat}
+          overlay={bossOverlay}
+          templateId={templateId}
+          onPrev={() => goPrev()}
+          onNext={() => goNext()}
+          onReveal={() => void publishReveal()}
+          onEnd={() => setConfirmEnd(true)}
+          onForceVictory={() => void forceOutcome(true)}
+          onForceDefeat={() => void forceOutcome(false)}
+          message={message}
+        />
+        {confirmEnd ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy/80 p-4">
+            <div className="w-full max-w-sm space-y-3 border border-border bg-card p-4">
+              <p className="text-ivory">End this session now?</p>
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" onClick={() => setConfirmEnd(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  className="bg-gold text-navy hover:bg-gold/90"
+                  onClick={() => void publishEnd(!(index === questions.length - 1 && phase === "reveal"))}
+                >
+                  End session
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     );
   }

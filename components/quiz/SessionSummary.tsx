@@ -157,6 +157,16 @@ export function SessionSummary({
         </section>
       ) : null}
 
+      {modeId === "boss_battle" ? (
+        <section className="border border-[#E63946]/40 bg-[#E63946]/10 p-4">
+          <p className="text-xs uppercase tracking-[0.14em] text-[#E63946]">Boss Battle</p>
+          <p className="mt-1 font-display text-2xl">Damage dealt</p>
+          <p className="mt-1 text-sm text-ivory/65">
+            {participants.reduce((sum, player) => sum + player.score, 0)} total · {responses.length} answers
+          </p>
+        </section>
+      ) : null}
+
       {modeId === "team_battle" && teams.length > 0 ? (
         <section className="space-y-3">
           {(() => {

@@ -3,11 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AdaptivePlayer } from "@/app/quiz/play/[sessionId]/modes/AdaptivePlayer";
+import { BossBattlePlayer } from "@/app/quiz/play/[sessionId]/modes/BossBattlePlayer";
 import { CaseStudyPlayer } from "@/app/quiz/play/[sessionId]/modes/CaseStudyPlayer";
 import { JeopardyPlayer } from "@/app/quiz/play/[sessionId]/modes/JeopardyPlayer";
 import { RapidFirePlayer } from "@/app/quiz/play/[sessionId]/modes/RapidFirePlayer";
 import { TeamBattlePlayer } from "@/app/quiz/play/[sessionId]/modes/TeamBattlePlayer";
 import { finalLeaderboardAction, myParticipantAction, submitAnswerAction } from "@/app/quiz/_actions/player.actions";
+import { parseBossCombat, type BossCombatView } from "@/lib/data/bosses";
 import { getMode } from "@/lib/games/modes/registry";
 import type { GameTeamRecord } from "@/lib/games/modes/types";
 import { playerConnect } from "@/lib/quiz/realtime";
@@ -29,6 +31,7 @@ export function PlayerShell({
   modeConfig,
   gameStartedAt,
   timePerQ,
+  initialCombat,
 }: {
   sessionId: string;
   joinCode: string;
@@ -41,12 +44,14 @@ export function PlayerShell({
   modeConfig: Record<string, unknown>;
   gameStartedAt: string | null;
   timePerQ: number;
+  initialCombat?: unknown;
 }) {
   const router = useRouter();
   const mode = getMode(modeId);
   const isRapid = mode.id === "rapid_fire";
   const isCase = mode.id === "case_study";
   const isAdaptive = mode.id === "adaptive";
+  const isBoss = mode.id === "boss_battle";
   const identity = useMemo(() => readPlayerIdentity(sessionId), [sessionId]);
   const team = teams.find((item) => item.team_key === identity?.team_id) ?? null;
   const [phase, setPhase] = useState<Phase>(initialStatus === "ended" ? "ended" : "waiting");
@@ -81,6 +86,9 @@ export function PlayerShell({
   const [caseComplete, setCaseComplete] = useState(false);
   const [caseTitle, setCaseTitle] = useState<string | null>(null);
   const [adaptiveStarted, setAdaptiveStarted] = useState(Boolean(gameStartedAt));
+  const [combat, setCombat] = useState<BossCombatView | null>(() => parseBossCombat(initialCombat));
+  const [bossOverlay, setBossOverlay] = useState<{ phase: number; taunt: string } | null>(null);
+  const [bossFlash, setBossFlash] = useState<{ kind: "damage" | "heal" | "party"; amount: number; streak?: number } | null>(null);
   const submitted = useRef(false);
   const choiceRef = useRef<string | null>(null);
   const questionIdRef = useRef<string | null>(null);
@@ -251,6 +259,22 @@ export function PlayerShell({
           scoreRef.current = nextScore;
           if (!picked) setLastDelta("missed");
           else setLastDelta(Math.max(0, earned));
+          if (isBoss) {
+            if (earned > 0) {
+              const multiplier = result.participant.streak >= 4 ? 2 : result.participant.streak >= 3 ? 1.5 : 1;
+              setBossFlash({ kind: "damage", amount: earned, streak: multiplier > 1 ? multiplier : undefined });
+            } else if (picked) {
+              setBossFlash({
+                kind: modeConfig.wrong_answer_penalty === "party_damage" ? "party" : "heal",
+                amount: Number(
+                  modeConfig.wrong_answer_penalty === "party_damage"
+                    ? modeConfig.party_damage_amount ?? 20
+                    : modeConfig.boss_heal_amount ?? 15,
+                ),
+              });
+            }
+            window.setTimeout(() => setBossFlash(null), 1600);
+          }
           if (earned > 0) {
             setTeamDelta(teamBonus);
             setTeamScore((value) => value + teamBonus);
@@ -296,6 +320,67 @@ export function PlayerShell({
       });
       return;
     }
+    if (event.type === "BOSS_HP") {
+      setCombat((current) =>
+        current
+          ? { ...current, boss_hp: event.boss_hp, boss_max_hp: event.boss_max_hp }
+          : parseBossCombat({
+              boss_hp: event.boss_hp,
+              boss_max_hp: event.boss_max_hp,
+              party_hp: null,
+              party_max_hp: 300,
+              phase: 1,
+              play_mode: "co-op",
+              outcome: "ongoing",
+              log: [],
+              boss: null,
+            }),
+      );
+      if (event.source === "correct" && event.delta < 0) {
+        setBossFlash({ kind: "damage", amount: Math.abs(event.delta), streak: streak > 1 ? undefined : undefined });
+        window.setTimeout(() => setBossFlash(null), 1600);
+      } else if (event.source === "heal") {
+        setBossFlash({ kind: "heal", amount: Math.abs(event.delta) });
+        window.setTimeout(() => setBossFlash(null), 1600);
+      }
+      return;
+    }
+    if (event.type === "PARTY_HP") {
+      setCombat((current) => (current ? { ...current, party_hp: event.party_hp, party_max_hp: event.party_max_hp } : current));
+      if (event.delta < 0) {
+        setBossFlash({ kind: "party", amount: Math.abs(event.delta) });
+        window.setTimeout(() => setBossFlash(null), 1600);
+      }
+      return;
+    }
+    if (event.type === "BOSS_PHASE") {
+      setCombat((current) => (current ? { ...current, phase: event.phase, taunt: event.taunt } : current));
+      setBossOverlay({ phase: event.phase, taunt: event.taunt });
+      window.setTimeout(() => setBossOverlay(null), 3000);
+      return;
+    }
+    if (event.type === "BOSS_VICTORY") {
+      setCombat((current) => (current ? { ...current, outcome: "victory", boss_hp: 0 } : current));
+      setPhase("ended");
+      void finalLeaderboardAction(sessionId).then((result) => {
+        if (result.ok) setBoard(result.rows as LeaderboardRow[]);
+      });
+      return;
+    }
+    if (event.type === "BOSS_DEFEAT") {
+      setCombat((current) =>
+        current
+          ? {
+              ...current,
+              outcome: "defeat",
+              defeat_reason: event.reason,
+              boss_hp: event.remaining_hp ?? current.boss_hp,
+            }
+          : current,
+      );
+      setPhase("ended");
+      return;
+    }
     if (event.type === "END") {
       setEndedEarly(Boolean(event.early));
       setPhase("ended");
@@ -325,7 +410,7 @@ export function PlayerShell({
     );
   }
 
-  if (phase === "ended") {
+  if (phase === "ended" && !(isBoss && combat && combat.outcome !== "ongoing")) {
     const mine = board.find((row) => row.participant_id === identity.participant_id);
     return (
       <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-navy px-6 text-center text-ivory">
@@ -414,6 +499,30 @@ export function PlayerShell({
           team={team ?? (identity.team_id ? { id: identity.team_id, instance_id: "", team_key: identity.team_id, name: identity.team_name ?? "Team", color: identity.team_color ?? "#9B5DE5" } : null)}
           teamScore={teamScore}
           teamDelta={teamDelta}
+          question={question}
+          questionIndex={questionIndex}
+          questionCount={questionCount}
+          remaining={remaining}
+          phase={phase}
+          paused={paused}
+          choice={choice}
+          correctKey={correctKey}
+          explanation={explanation}
+          lastDelta={lastDelta}
+          score={score}
+          streak={streak}
+          submitError={submitError}
+          highlight={highlight}
+          onLock={(key) => void lockIn(key)}
+        />
+      ) : isBoss ? (
+        <BossBattlePlayer
+          combat={combat}
+          overlay={bossOverlay}
+          flash={bossFlash}
+          sessionId={sessionId}
+          players={board.map((row) => ({ id: row.participant_id, display_name: row.display_name, score: row.score }))}
+          responses={[]}
           question={question}
           questionIndex={questionIndex}
           questionCount={questionCount}
