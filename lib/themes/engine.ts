@@ -61,7 +61,7 @@ export async function listClassSlides(classId: string): Promise<ClassSlide[]> {
     .is("deleted_at", null);
   if (error) throw new Error(error.message);
 
-  const rows = (data ?? []) as Array<
+  const rows = (data ?? []) as unknown as Array<
     Slide & {
       materials: {
         concept_id: string | null;
