@@ -405,6 +405,7 @@ export function GameWizard({
       {store.step === 4 ? (
         <section className="mt-8 space-y-3">
           <h1 className="font-display text-3xl">Rules</h1>
+          <p className="text-sm text-ivory/60">You can rehearse this game before going live.</p>
           {store.mode === "boss_battle" ? (
             <BossRules bosses={bosses} />
           ) : (

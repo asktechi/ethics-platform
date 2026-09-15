@@ -19,6 +19,14 @@ import {
   type SettingsSnapshot,
   type WizardState,
 } from "@/lib/games/types";
+import { filterInstances } from "@/lib/games/queries";
+import { insertRehearsalBots } from "@/lib/games/rehearsal/bots";
+import {
+  rehearsalRapidTotal,
+  rehearsalTimePerQ,
+  sliceQuestionIds,
+  type RehearsalLaunchInput,
+} from "@/lib/games/rehearsal/types";
 import type { Json } from "@/types/db";
 
 function asSettings(value: Json | null | undefined): GameSettings {
@@ -110,6 +118,8 @@ export type GameInstanceRow = {
   created_at: string;
   template_name?: string;
   top_scorer?: string | null;
+  is_rehearsal?: boolean;
+  rehearsal_config?: Record<string, unknown>;
 };
 
 function mapTemplate(row: Record<string, unknown>): GameTemplateRow {
@@ -476,12 +486,14 @@ export async function previewGameSource(input: {
 
 export async function listTemplateInstances(templateId: string) {
   const { supabase, user } = await requireUser();
-  const { data, error } = await supabase
-    .from("game_instances")
-    .select("*")
-    .eq("template_id", templateId)
-    .eq("host_id", user.id)
-    .is("deleted_at", null)
+  const { data, error } = await filterInstances(
+    supabase
+      .from("game_instances")
+      .select("*")
+      .eq("template_id", templateId)
+      .eq("host_id", user.id)
+      .is("deleted_at", null),
+  )
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
   const sessionIds = (data ?? [])
@@ -527,12 +539,14 @@ export async function getGameInstance(id: string) {
 
 export async function listRecentEndedInstances(limit = 5) {
   const { supabase, user } = await requireUser();
-  const { data, error } = await supabase
-    .from("game_instances")
-    .select("*, template:game_templates(name)")
-    .eq("host_id", user.id)
-    .eq("status", "ended")
-    .is("deleted_at", null)
+  const { data, error } = await filterInstances(
+    supabase
+      .from("game_instances")
+      .select("*, template:game_templates(name)")
+      .eq("host_id", user.id)
+      .eq("status", "ended")
+      .is("deleted_at", null),
+  )
     .order("ended_at", { ascending: false })
     .limit(limit);
   if (error) throw new Error(error.message);
@@ -545,13 +559,15 @@ export async function listRecentEndedInstances(limit = 5) {
 
 export async function listUpcomingInstances() {
   const { supabase, user } = await requireUser();
-  const { data, error } = await supabase
-    .from("game_instances")
-    .select("*, template:game_templates(name)")
-    .eq("host_id", user.id)
-    .eq("status", "scheduled")
-    .is("deleted_at", null)
-    .gt("scheduled_for", new Date().toISOString())
+  const { data, error } = await filterInstances(
+    supabase
+      .from("game_instances")
+      .select("*, template:game_templates(name)")
+      .eq("host_id", user.id)
+      .eq("status", "scheduled")
+      .is("deleted_at", null)
+      .gt("scheduled_for", new Date().toISOString()),
+  )
     .order("scheduled_for", { ascending: true })
     .limit(3);
   if (error) throw new Error(error.message);
@@ -601,7 +617,7 @@ export async function scheduleGameInstance(templateId: string, when: string) {
   throw new Error("Could not schedule the game.");
 }
 
-export async function launchGameFromTemplate(templateId: string) {
+export async function launchGameFromTemplate(templateId: string, rehearsal?: RehearsalLaunchInput) {
   const template = await getGameTemplate(templateId);
   const { supabase, user } = await requireUser();
   await validateTemplateSource(supabase, template);
@@ -626,11 +642,26 @@ export async function launchGameFromTemplate(templateId: string) {
   if (template.mode === "rapid_fire" && modeConfig.questions_unlimited === false) {
     questionIds = questionIds.slice(0, Number(modeConfig.questions_max ?? 30));
   }
+  if (rehearsal) {
+    questionIds = sliceQuestionIds(questionIds, rehearsal.question_scope);
+    if (questionIds.length === 0) {
+      throw new Error("That rehearsal range has no questions.");
+    }
+  }
 
-  const timePerQ =
+  const rawTime =
     template.mode === "rapid_fire"
       ? Number(modeConfig.total_time_seconds ?? 60)
       : settings.time_per_q;
+  const timePerQ =
+    rehearsal && rehearsal.fast_forward
+      ? template.mode === "rapid_fire"
+        ? rehearsalRapidTotal(rawTime, true)
+        : rehearsalTimePerQ(rawTime, true)
+      : rawTime;
+  if (rehearsal && template.mode === "rapid_fire") {
+    modeConfig.total_time_seconds = timePerQ;
+  }
 
   const hostToken = crypto.randomUUID();
   const snapshot: SettingsSnapshot = {
@@ -660,7 +691,7 @@ export async function launchGameFromTemplate(templateId: string) {
     streak_bonus: Boolean(modeConfig.streak_bonus ?? settings.streak_bonus),
     allow_audience_advance: settings.allow_audience_advance === true,
     allow_replay: settings.allow_replay !== false,
-    rehearsal_mode: settings.rehearsal_mode === true,
+    rehearsal_mode: Boolean(rehearsal) ? false : settings.rehearsal_mode === true,
     auto_reveal_chime: settings.auto_reveal_chime === true,
   };
 
@@ -704,6 +735,17 @@ export async function launchGameFromTemplate(templateId: string) {
           started_at: new Date().toISOString(),
           settings_snapshot: snapshot as unknown as Json,
           team_assignment_mode: assignment,
+          is_rehearsal: Boolean(rehearsal),
+          rehearsal_config: rehearsal
+            ? {
+                bot_count: rehearsal.bot_count,
+                bot_profiles: rehearsal.bot_profiles,
+                fast_forward: rehearsal.fast_forward,
+                time_multiplier: 1,
+                question_scope: rehearsal.question_scope,
+                bots: [],
+              }
+            : {},
         })
         .select("id")
         .single();
@@ -726,6 +768,17 @@ export async function launchGameFromTemplate(templateId: string) {
           p_session_id: session.id,
         });
         if (initError) throw new Error(initError.message);
+      }
+      if (rehearsal && instance) {
+        const { createAdminClient } = await import("@/lib/supabase/admin");
+        await insertRehearsalBots(createAdminClient(), session.id, instance.id, {
+          bot_count: rehearsal.bot_count,
+          bot_profiles: rehearsal.bot_profiles,
+          fast_forward: rehearsal.fast_forward,
+          time_multiplier: 1,
+          question_scope: rehearsal.question_scope,
+          bots: [],
+        });
       }
       break;
     }

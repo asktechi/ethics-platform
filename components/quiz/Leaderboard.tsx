@@ -14,6 +14,7 @@ export type LivePlayer = {
   connected?: boolean;
   last_correct_at?: string | null;
   team_id?: string | null;
+  is_bot?: boolean;
 };
 
 export function Leaderboard({

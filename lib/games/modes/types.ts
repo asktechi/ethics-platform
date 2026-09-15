@@ -74,6 +74,7 @@ export type HostExtraPanelProps = {
   teams: GameTeamRecord[];
   modeConfig: Record<string, unknown>;
   onSkip?: () => void;
+  onAddBot?: () => void;
 };
 
 export type PlayerExtraPanelProps = {

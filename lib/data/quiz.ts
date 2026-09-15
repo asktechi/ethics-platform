@@ -292,7 +292,7 @@ export async function listSessionParticipants(sessionId: string) {
   const { supabase } = await requireUser();
   const { data, error } = await supabase
     .from("quiz_participants")
-    .select("id, display_name, score, streak, avatar_color, connected, last_correct_at, joined_at, team_id, team_role")
+    .select("id, display_name, score, streak, avatar_color, connected, last_correct_at, joined_at, team_id, team_role, is_bot")
     .eq("session_id", sessionId)
     .is("deleted_at", null)
     .order("score", { ascending: false });

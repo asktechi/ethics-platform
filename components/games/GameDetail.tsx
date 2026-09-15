@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
@@ -10,6 +10,7 @@ import {
   scheduleGameAction,
   startGameAction,
 } from "@/app/(app)/_actions/game.actions";
+import { RehearseModal } from "@/components/games/RehearseModal";
 import { ModeBadge } from "@/components/games/ModeBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,6 +41,8 @@ export function GameDetail({
   const [error, setError] = useState<string | null>(null);
   const [when, setWhen] = useState("");
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [rehearseOpen, setRehearseOpen] = useState(false);
+  const [showTip, setShowTip] = useState(false);
   const [blockOpen, setBlockOpen] = useState(false);
   const [blockMessage, setBlockMessage] = useState("");
   const playableMode = MODE_META[template.mode].playable;
@@ -54,6 +57,14 @@ export function GameDetail({
   const avgDuration =
     instances.filter((row) => row.duration_seconds != null).reduce((sum, row) => sum + (row.duration_seconds ?? 0), 0) /
     Math.max(1, instances.filter((row) => row.duration_seconds != null).length);
+
+  useEffect(() => {
+    try {
+      if (!window.localStorage.getItem("rehearsal_tip_dismissed")) setShowTip(true);
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   function handleStart() {
     if (!canStart) {
@@ -138,6 +149,9 @@ export function GameDetail({
               ) : null}
             </Tooltip>
           </TooltipProvider>
+          <Button variant="outline" disabled={!canStart || pending} onClick={() => (canStart ? setRehearseOpen(true) : handleStart())}>
+            Rehearse
+          </Button>
           <Button variant="outline" onClick={() => setScheduleOpen(true)}>
             Schedule
           </Button>
@@ -172,6 +186,27 @@ export function GameDetail({
         </TabsList>
 
         <TabsContent value="overview" className="mt-6 space-y-6">
+          {showTip ? (
+            <div className="flex flex-wrap items-start justify-between gap-3 border border-gold/40 bg-gold/10 px-3 py-3 text-sm">
+              <p>
+                Tip: click Rehearse to practice this game with simulated students before your class.
+              </p>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  try {
+                    window.localStorage.setItem("rehearsal_tip_dismissed", "1");
+                  } catch {
+                    /* ignore */
+                  }
+                  setShowTip(false);
+                }}
+              >
+                Got it
+              </Button>
+            </div>
+          ) : null}
           <div className="grid gap-3 sm:grid-cols-4 text-sm">
             <Stat label="Plays" value={String(template.play_count)} />
             <Stat
@@ -260,6 +295,7 @@ export function GameDetail({
               Weak-standard heatmaps, CFA band overlays, and cohort comparison will land here. Coverage below is the same
               resolved question set used at launch.
             </p>
+            {/* TODO(Phase 6E): never include is_rehearsal game_instances or bot quiz_participants in analytics / student_performance. */}
             <div className="mt-6 grid h-40 grid-cols-4 gap-2">
               {["I(A)", "I(B)", "I(C)", "II"].map((label, index) => (
                 <div key={label} className="flex flex-col justify-end bg-white/5 p-2">
@@ -330,6 +366,17 @@ export function GameDetail({
           </div>
         </div>
       ) : null}
+
+      <RehearseModal
+        open={rehearseOpen}
+        onOpenChange={setRehearseOpen}
+        templateId={template.id}
+        questionCount={playableCount}
+        onBlocked={(message) => {
+          setBlockMessage(message);
+          setBlockOpen(true);
+        }}
+      />
     </div>
   );
 }

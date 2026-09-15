@@ -12,6 +12,7 @@ export function RapidFireHost({
   players,
   responses,
   onSkip,
+  onAddBot,
 }: HostExtraPanelProps) {
   const top5 = [...players].sort((a, b) => b.score - a.score).slice(0, 5) as LivePlayer[];
   const correctByPlayer = new Map<string, number>();
@@ -30,7 +31,7 @@ export function RapidFireHost({
           <div className="mb-3 flex items-center justify-between">
             <p className="text-[11px] uppercase tracking-[0.14em] text-gold">Question queue</p>
             <Button size="sm" variant="outline" onClick={() => onSkip?.()}>
-              Skip
+              Skip →
             </Button>
           </div>
           <ol className="max-h-[52vh] space-y-2 overflow-auto">
@@ -56,7 +57,14 @@ export function RapidFireHost({
           </ol>
         </div>
         <div className="border border-white/10 bg-card p-3">
-          <p className="mb-2 text-[11px] uppercase tracking-[0.14em] text-gold">Live top 5</p>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-[11px] uppercase tracking-[0.14em] text-gold">Live top 5</p>
+            {onAddBot ? (
+              <Button size="sm" variant="outline" onClick={onAddBot}>
+                Add bot
+              </Button>
+            ) : null}
+          </div>
           <Leaderboard players={top5} compact />
           <ul className="mt-3 space-y-1 text-xs text-ivory/55">
             {top5.map((player) => (

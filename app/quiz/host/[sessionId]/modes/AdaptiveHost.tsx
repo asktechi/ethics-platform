@@ -14,7 +14,7 @@ type AdaptivePart = {
   question_index?: number;
 };
 
-export function AdaptiveHost({ sessionId, players, responses, modeConfig }: HostExtraPanelProps) {
+export function AdaptiveHost({ sessionId, players, responses, modeConfig, onAddBot }: HostExtraPanelProps) {
   const total = Number(modeConfig.total_questions ?? 15);
   const [state, setState] = useState<Record<string, AdaptivePart>>({});
   const [labels, setLabels] = useState<Record<string, string>>({});
@@ -87,6 +87,14 @@ export function AdaptiveHost({ sessionId, players, responses, modeConfig }: Host
         <p className="mt-2 text-sm text-ivory/70">
           Players move independently. There is no shared question. End the session when the room is done.
         </p>
+      </div>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm text-ivory/70">{players.length} in the room</p>
+        {onAddBot ? (
+          <Button size="sm" variant="outline" onClick={onAddBot}>
+            Add bot
+          </Button>
+        ) : null}
       </div>
       <ul className="space-y-2">
         {players.map((player) => {

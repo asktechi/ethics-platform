@@ -3,6 +3,7 @@
 import { BestAnswerPanel, type BestAnswer } from "@/components/quiz/BestAnswerPanel";
 import { Leaderboard, type LivePlayer } from "@/components/quiz/Leaderboard";
 import { ResponseDistribution } from "@/components/quiz/ResponseDistribution";
+import { Button } from "@/components/ui/button";
 import type { QuizHostQuestion } from "@/lib/quiz/types";
 import type { ReactNode } from "react";
 
@@ -17,6 +18,7 @@ export function HostSidePanel({
   onHighlight,
   extra,
   footer,
+  onAddBot,
 }: {
   players: LivePlayer[];
   changedIds: Set<string>;
@@ -28,10 +30,18 @@ export function HostSidePanel({
   onHighlight: () => void;
   extra?: ReactNode;
   footer?: ReactNode;
+  onAddBot?: () => void;
 }) {
   return (
     <aside className="space-y-4 border border-white/10 bg-card p-3">
-      <p className="text-[11px] uppercase tracking-[0.14em] text-gold">Live</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[11px] uppercase tracking-[0.14em] text-gold">Live</p>
+        {onAddBot ? (
+          <Button size="sm" variant="outline" onClick={onAddBot}>
+            Add bot
+          </Button>
+        ) : null}
+      </div>
       {extra}
       <Leaderboard players={players} changedIds={changedIds} compact />
       <div>

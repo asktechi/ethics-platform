@@ -3,10 +3,17 @@ import { HostShell } from "@/app/quiz/host/[sessionId]/HostShell";
 import { loadQuestionsByIds } from "@/lib/data/games";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getHostSession, listSessionParticipants, listSessionResponses, listSessionTeams, loadHostQuestions } from "@/lib/data/quiz";
+import { parseRehearsalConfig } from "@/lib/games/rehearsal/types";
 import type { QuizSettings } from "@/lib/quiz/types";
 import { headers } from "next/headers";
 
-export default async function QuizHostPage({ params }: { params: { sessionId: string } }) {
+export default async function QuizHostPage({
+  params,
+  searchParams,
+}: {
+  params: { sessionId: string };
+  searchParams: { rehearsal?: string };
+}) {
   let session;
   try {
     session = await getHostSession(params.sessionId);
@@ -14,7 +21,22 @@ export default async function QuizHostPage({ params }: { params: { sessionId: st
     redirect("/login");
   }
 
-  if (session.status === "ended") {
+  const admin = createAdminClient();
+  const [{ data: combat }, { data: instance }] = await Promise.all([
+    session.mode === "boss_battle"
+      ? admin.rpc("get_boss_combat", { p_session_id: session.id })
+      : Promise.resolve({ data: null }),
+    admin
+      .from("game_instances")
+      .select("id, template_id, is_rehearsal, rehearsal_config")
+      .eq("quiz_session_id", session.id)
+      .is("deleted_at", null)
+      .maybeSingle(),
+  ]);
+  const rehearsalConfig = parseRehearsalConfig(instance?.rehearsal_config);
+  const isRehearsal = Boolean(instance?.is_rehearsal) || searchParams.rehearsal === "1";
+
+  if (session.status === "ended" && !isRehearsal) {
     redirect(`/quiz/host/${params.sessionId}/summary`);
   }
 
@@ -37,19 +59,6 @@ export default async function QuizHostPage({ params }: { params: { sessionId: st
   const proto = headerList.get("x-forwarded-proto") ?? "http";
   const joinUrl = `${proto}://${host}/quiz/join/${session.join_code}`;
   const modeConfig = (settings.mode_config ?? {}) as Record<string, unknown>;
-
-  const admin = createAdminClient();
-  const [{ data: combat }, { data: instance }] = await Promise.all([
-    session.mode === "boss_battle"
-      ? admin.rpc("get_boss_combat", { p_session_id: session.id })
-      : Promise.resolve({ data: null }),
-    admin
-      .from("game_instances")
-      .select("id, template_id")
-      .eq("quiz_session_id", session.id)
-      .is("deleted_at", null)
-      .maybeSingle(),
-  ]);
 
   return (
     <HostShell
@@ -78,6 +87,8 @@ export default async function QuizHostPage({ params }: { params: { sessionId: st
       instanceId={instance?.id ?? null}
       allowAudienceAdvance={settings.allow_audience_advance === true}
       rehearsalMode={settings.rehearsal_mode === true}
+      isRehearsal={isRehearsal}
+      initialSpeed={rehearsalConfig.time_multiplier}
       autoRevealChime={settings.auto_reveal_chime === true}
     />
   );

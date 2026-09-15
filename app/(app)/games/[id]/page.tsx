@@ -11,7 +11,7 @@ export default async function GamePage({
   searchParams,
 }: {
   params: { id: string };
-  searchParams: { saved?: string; version?: string };
+  searchParams: { saved?: string; version?: string; rehearsal_done?: string };
 }) {
   let template;
   try {
@@ -34,9 +34,11 @@ export default async function GamePage({
   }));
   const coverage = await coverageForQuestions(questions, template.class_id);
   const toast =
-    searchParams.saved === "1"
-      ? `Template updated (v${searchParams.version ?? template.version})`
-      : undefined;
+    searchParams.rehearsal_done === "1"
+      ? "Rehearsal complete — nothing was saved."
+      : searchParams.saved === "1"
+        ? `Template updated (v${searchParams.version ?? template.version})`
+        : undefined;
 
   return (
     <div className="mx-auto max-w-6xl">

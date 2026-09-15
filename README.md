@@ -2,7 +2,7 @@
 
 Personal teaching platform for CFA Institute ethics instruction (Levels I–III). The owner is the sole instructor-author. Students join live quizzes with an open link and a display name.
 
-This repository is at **Phase 7.1**: live quiz pacing matches Kahoot-style auto-reveal when everyone has answered, students can optionally tap Ready for next, and every end screen has a way home.
+This repository is at **Phase 7.2**: every game can be rehearsed end-to-end with simulated students before going live. Rehearsal data is never saved to Sessions, analytics, or `student_performance`.
 
 Never commit `.env.local`, `SUPABASE_SERVICE_ROLE_KEY`, or `SUPABASE_DB_URL`.
 
@@ -65,9 +65,24 @@ Phase 6: from a pool, **Launch live quiz** → `/quiz/host/{sessionId}` (ready r
 
 Host keys: Space / → / PageDown next, ← / PageUp previous, **R** reveal, **P** pause, **E** end (confirm), **F** fullscreen, **G** leaderboard overlay.
 
-Pacing (Phase 7.1): when the last expected player submits (or has been disconnected for 3s), the host auto-reveals within 500ms instead of waiting out the timer. The top bar shows `3 of 5 answered`, then `All answered — revealing…`. Rapid Fire and Adaptive are unchanged. Rehearsal mode disables auto-reveal. Wizard Step 4 → **Pacing** exposes **Allow students to advance the question** (`allow_audience_advance`, default off). When ON, players get **Ready for next** after answering; if ≥51% press it, the host reveals (still does not skip the reveal step).
+Pacing (Phase 7.1): when the last expected player submits (or has been disconnected for 3s), the host auto-reveals within 500ms instead of waiting out the timer. The top bar shows `3 of 5 answered`, then `All answered — revealing…`. Rapid Fire and Adaptive are unchanged. Wizard **Rehearsal mode** (manual pacing, no auto-reveal) is separate from **Rehearse** (Phase 7.2 bots). Wizard Step 4 → **Pacing** exposes **Allow students to advance the question** (`allow_audience_advance`, default off). When ON, players get **Ready for next** after answering; if ≥51% press it, the host reveals (still does not skip the reveal step).
 
 End screens: host summary, player final, session detail, Boss victory/defeat, and case-complete all have navy/gold return-home buttons. Players never see Dashboard.
+
+## Rehearse a game (instructor)
+
+Practice any of the six modes with simulated students before class. Rehearsal never writes Sessions, play counts, or `student_performance`.
+
+1. Open a saved game → Overview.
+2. Click **Rehearse** (outline button between Start Game and Schedule).
+3. Choose 1 / 3 / 5 / 10 simulated students (default 3), bot behavior (Perfect / Mixed / Struggler / Random), fast-forward timers (on by default), and which questions to run.
+4. Click **Start rehearsal**. The host dashboard shows a persistent amber banner: **REHEARSAL MODE — no data will be saved.**
+5. Bots join automatically and answer after a delay. Watch the leaderboard and reveal.
+6. Use **⏩ Speed: 1x → 4x** on the banner to speed timers, bot delays, and reveal pauses. **Add bot** (top-right of the participant list) adds a mixed-profile bot mid-session. **Skip →** advances without scoring.
+7. **Restart** discards this rehearsal and opens a fresh one with the same settings.
+8. **End rehearsal** → confirm. The instance is hard-deleted and you return to the game with the toast **Rehearsal complete — nothing was saved.**
+
+Verify locally: `npm run test:phase72`.
 
 Scoring: 100 base + time bonus (max 100) + 20 per consecutive correct after the first. Wrong or skipped = 0.
 
@@ -80,6 +95,7 @@ Open **Games** in the sidebar (`/games`). Save a template once, then launch or s
 - A game cannot be saved or launched with 0 playable (approved) questions. Overview, wizard preview, and launch all call `resolveGameQuestions`.
 - Troubleshoot a template at `/games/{id}/diagnose`.
 - **Start Game** — creates a `game_instances` row with a frozen settings snapshot, then opens the existing host dashboard.
+- **Rehearse** — outline button next to Start Game. Opens a practice session with simulated students (`is_rehearsal`). Nothing is written to Sessions, play counts, or student analytics. Click **End rehearsal** to hard-delete the instance.
 - **Sessions** — `/sessions/{instanceId}` replays the snapshot (not the current template). Export CSV responses, CSV scores, or a PDF report.
 - Players may enter an optional **student code** (`AX7-9K2`) on join. It is remembered in `localStorage` and linked to `student_profiles`.
 
@@ -124,6 +140,7 @@ Next.js 14 App Router, TypeScript, Tailwind, shadcn/ui, Framer Motion, dnd-kit, 
 6D. **Additional game modes** — Rapid Fire, Case Study, Team Battle, Adaptive, Boss Battle
 6E. **Student analytics + CFA linkage**
 7.1 **Quiz UX** — auto-reveal when all answered, audience advance, end-screen navigation
+7.2 **Rehearsal mode** — practice any of the six games with bots before class; data is discarded
 7. **Polish** — shortcuts, offline cache, expand beyond CFA
 
 Work phase by phase. Do not start the next phase until the instructor confirms.

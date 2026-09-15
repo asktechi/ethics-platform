@@ -40,9 +40,11 @@ export function BossBattleHost({
   onReveal,
   onSkip,
   onEnd,
+  onAddBot,
   onForceVictory,
   onForceDefeat,
   message,
+  endLabel = "End",
 }: {
   sessionId: string;
   questions: QuizHostQuestion[];
@@ -67,9 +69,11 @@ export function BossBattleHost({
   onReveal: () => void;
   onSkip: () => void;
   onEnd: () => void;
+  onAddBot?: () => void;
   onForceVictory: () => void;
   onForceDefeat: () => void;
   message?: string | null;
+  endLabel?: string;
 }) {
   const question = questions[index];
   const boss = combat?.boss;
@@ -152,6 +156,7 @@ export function BossBattleHost({
           revealed={phase === "reveal"}
           best={best}
           extra={<CombatLog entries={combat?.log ?? []} />}
+          onAddBot={onAddBot}
           onHighlight={() => undefined}
         />
       </div>
@@ -164,7 +169,7 @@ export function BossBattleHost({
           Reveal
         </Button>
         <Button variant="outline" disabled={ended} onClick={onSkip}>
-          Skip
+          Skip →
         </Button>
         <Button
           className="bg-gold text-navy hover:bg-gold/90"
@@ -174,7 +179,7 @@ export function BossBattleHost({
           Next
         </Button>
         <Button variant="ghost" onClick={onEnd}>
-          End
+          {endLabel}
         </Button>
         <Button variant="outline" onClick={onForceVictory}>
           Force victory

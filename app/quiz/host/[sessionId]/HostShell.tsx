@@ -13,6 +13,12 @@ import {
   quizSetQuestionAction,
   quizSkipAction,
 } from "@/app/(app)/_actions/quiz.actions";
+import {
+  addRehearsalBotAction,
+  endRehearsalAction,
+  restartRehearsalAction,
+  setRehearsalSpeedAction,
+} from "@/app/(app)/_actions/rehearsal.actions";
 import { HostQuestionView } from "@/app/quiz/host/[sessionId]/HostQuestionView";
 import { HostSidePanel } from "@/app/quiz/host/[sessionId]/HostSidePanel";
 import { AdaptiveHost } from "@/app/quiz/host/[sessionId]/modes/AdaptiveHost";
@@ -25,6 +31,7 @@ import { AudienceQr } from "@/components/presentation/AudienceQr";
 import type { BestAnswer } from "@/components/quiz/BestAnswerPanel";
 import { CaseStudyHostEndLinks } from "@/components/quiz/EndNavBar";
 import { Leaderboard, type LivePlayer } from "@/components/quiz/Leaderboard";
+import { RehearsalBanner } from "@/components/quiz/RehearsalBanner";
 import { Button } from "@/components/ui/button";
 import { parseBossCombat, type BossCombatView } from "@/lib/games/boss-view";
 import { getMode } from "@/lib/games/modes/registry";
@@ -96,6 +103,8 @@ export type HostShellProps = {
   instanceId?: string | null;
   allowAudienceAdvance?: boolean;
   rehearsalMode?: boolean;
+  isRehearsal?: boolean;
+  initialSpeed?: 1 | 2 | 4;
   autoRevealChime?: boolean;
 };
 
@@ -133,6 +142,8 @@ export function HostShell({
   instanceId,
   allowAudienceAdvance = false,
   rehearsalMode = false,
+  isRehearsal = false,
+  initialSpeed = 1,
   autoRevealChime = false,
 }: HostShellProps) {
   const router = useRouter();
@@ -172,6 +183,8 @@ export function HostShell({
   const [boardOpen, setBoardOpen] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [confirmEnd, setConfirmEnd] = useState(false);
+  const [ending, setEnding] = useState(false);
+  const [speed, setSpeed] = useState<1 | 2 | 4>(initialSpeed);
   const [combat, setCombat] = useState<BossCombatView | null>(() => parseBossCombat(initialCombat));
   const [bossOverlay, setBossOverlay] = useState<{ phase: number; taunt: string } | null>(null);
   const lastEventRef = useRef<QuizEvent | null>(null);
@@ -211,14 +224,15 @@ export function HostShell({
   const allAnswered = pacing.allAnswered;
   const majorityAdvance = allowAudienceAdvance && majorityHasAdvanced(advanceVotes.size, pacing.expectedCount);
 
+  const speedFactor = isRehearsal ? speed : 1;
   const remaining = isRapid
     ? clockStart
-      ? Math.max(0, totalTime - Math.floor((now - clockStart) / 1000))
+      ? Math.max(0, totalTime - Math.floor(((now - clockStart) * speedFactor) / 1000))
       : totalTime
     : paused
       ? Math.ceil(remainingMs / 1000)
       : startedAt
-        ? Math.max(0, timePerQ - Math.floor((now - startedAt) / 1000))
+        ? Math.max(0, timePerQ - Math.floor(((now - startedAt) * speedFactor) / 1000))
         : Math.ceil(remainingMs / 1000);
 
   const best = useMemo<BestAnswer | null>(() => {
@@ -322,8 +336,10 @@ export function HostShell({
       });
       setPlayers((current) =>
         current.map((player) => {
-          const online = present.includes(player.id);
-          if (!online && !disconnectedSinceRef.current.has(player.id)) {
+          const bot = Boolean(player.is_bot);
+          const online = present.includes(player.id) || bot;
+          if (bot || online) disconnectedSinceRef.current.delete(player.id);
+          else if (!disconnectedSinceRef.current.has(player.id)) {
             disconnectedSinceRef.current.set(player.id, seenAt);
           }
           return { ...player, connected: online };
@@ -431,6 +447,18 @@ export function HostShell({
     const timer = window.setInterval(() => setNow(Date.now()), 200);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (!isRehearsal) return;
+    const pulse = window.setInterval(() => {
+      void fetch("/api/quiz/rehearsal/tick", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId }),
+      });
+    }, 1000);
+    return () => window.clearInterval(pulse);
+  }, [isRehearsal, sessionId]);
 
   const ctx = useMemo(
     () => ({ sessionId, modeId: mode.id, questionCount: questions.length, settings: modeConfig }),
@@ -637,9 +665,10 @@ export function HostShell({
       lastEventRef.current = event;
       dispatch(event);
       setPhase("ended");
+      if (isRehearsal) return;
       router.push(`/quiz/host/${sessionId}/summary`);
     },
-    [combat, ctx, isBoss, mode, publishCombat, router, sessionId],
+    [combat, ctx, isBoss, isRehearsal, mode, publishCombat, router, sessionId],
   );
 
   const goNext = useCallback(() => {
@@ -728,7 +757,7 @@ export function HostShell({
       const event: QuizEvent = { type: "RESUME", started_at: new Date().toISOString(), remaining_ms: left };
       lastEventRef.current = event;
       dispatch(event);
-      setStartedAt(Date.now() - (timePerQ * 1000 - left));
+      setStartedAt(Date.now() - (timePerQ * 1000 - left) / speedFactor);
       setPaused(false);
     } else {
       const event: QuizEvent = { type: "PAUSE", remaining_ms: left };
@@ -737,6 +766,17 @@ export function HostShell({
       setRemainingMs(left);
       setPaused(true);
     }
+  }
+
+  async function addBot() {
+    const result = await addRehearsalBotAction(sessionId);
+    if (!result.ok) setMessage(result.error);
+  }
+
+  async function changeSpeed(next: 1 | 2 | 4) {
+    setSpeed(next);
+    const result = await setRehearsalSpeedAction(sessionId, next);
+    if (!result.ok) setMessage(result.error);
   }
 
   async function skip() {
@@ -756,26 +796,48 @@ export function HostShell({
     await publishQuestion(index + 1);
   }
 
+  async function finishRehearsal() {
+    setEnding(true);
+    const result = await endRehearsalAction(sessionId);
+    if (!result.ok) {
+      setEnding(false);
+      setMessage(result.error);
+      return;
+    }
+    router.push(`/games/${result.templateId}?rehearsal_done=1`);
+  }
+
+  async function restartRehearsal() {
+    setEnding(true);
+    const result = await restartRehearsalAction(sessionId);
+    if (!result.ok) {
+      setEnding(false);
+      setMessage(result.error);
+      return;
+    }
+    router.push(`/quiz/host/${result.sessionId}?rehearsal=1`);
+  }
+
   useEffect(() => {
     if (isRapid || isAdaptive) return;
     if (phase !== "question" || paused) return;
     const timeUp =
-      remaining === 0 && startedAt != null && Date.now() >= startedAt + timePerQ * 1000 - 50;
+      remaining === 0 && startedAt != null && Date.now() >= startedAt + timePerQ * 1000 / speedFactor - 50;
     const auto = shouldAutoReveal({
       modeId: mode.id,
-      rehearsal: rehearsalMode,
+      rehearsal: rehearsalMode && !isRehearsal,
       phase,
       paused,
       timeUp,
       allAnswered,
     });
-    const fromMajority = allowAudienceAdvance && !rehearsalMode && majorityAdvance;
+    const fromMajority = allowAudienceAdvance && !(rehearsalMode && !isRehearsal) && majorityAdvance;
     if (!auto && !fromMajority) return;
     if (allAnswered && autoRevealChime && question?.question_id && chimedQuestionRef.current !== question.question_id) {
       chimedQuestionRef.current = question.question_id;
       playAllAnsweredChime();
     }
-    const delay = auto ? revealDelayMs(allAnswered, timeUp) : 0;
+    const delay = auto ? Math.round(revealDelayMs(allAnswered, timeUp) / speedFactor) : 0;
     const timer = window.setTimeout(() => void publishReveal(), delay);
     return () => window.clearTimeout(timer);
   }, [
@@ -794,6 +856,8 @@ export function HostShell({
     rehearsalMode,
     startedAt,
     timePerQ,
+    isRehearsal,
+    speedFactor,
   ]);
 
   useEffect(() => {
@@ -815,7 +879,7 @@ export function HostShell({
       else void publishQuestion(0);
       return;
     }
-    const timer = window.setTimeout(() => setCountdown((value) => value - 1), 1000);
+    const timer = window.setTimeout(() => setCountdown((value) => value - 1), Math.max(80, Math.round(1000 / speedFactor)));
     return () => window.clearTimeout(timer);
   }, [phase, countdown, publishQuestion, publishIntro, startAdaptive, isAdaptive, isBoss, isCase, mode, ctx, sessionId]);
 
@@ -856,6 +920,7 @@ export function HostShell({
     teams,
     modeConfig,
     onSkip: () => void skip(),
+    onAddBot: isRehearsal ? () => void addBot() : undefined,
   };
 
   async function forceOutcome(victory: boolean) {
@@ -873,28 +938,71 @@ export function HostShell({
     dispatch(event);
   }
 
+  const banner = isRehearsal ? (
+    <RehearsalBanner
+      speed={speed}
+      ending={ending}
+      onEnd={() => setConfirmEnd(true)}
+      onRestart={() => void restartRehearsal()}
+      onSpeed={(next) => void changeSpeed(next)}
+    />
+  ) : null;
+
+  const confirmDialog = confirmEnd ? (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy/80 p-4">
+      <div className="w-full max-w-sm space-y-3 border border-border bg-card p-4">
+        <p className="text-ivory">
+          {isRehearsal ? "End this rehearsal? All rehearsal data will be discarded." : "End this session now?"}
+        </p>
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" disabled={ending} onClick={() => setConfirmEnd(false)}>
+            Cancel
+          </Button>
+          <Button
+            className="bg-gold text-navy hover:bg-gold/90"
+            disabled={ending}
+            onClick={() => (isRehearsal ? void finishRehearsal() : void publishEnd(!(index === questions.length - 1 && phase === "reveal")))}
+          >
+            {isRehearsal ? "End rehearsal" : "End session"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   if (phase === "ready" || phase === "countdown") {
     return (
-      <div className="min-h-screen bg-navy px-6 py-8 text-ivory">
-        <div className="mx-auto grid max-w-5xl gap-6 lg:grid-cols-[1fr_auto]">
-          <div>
-            <p className="text-xs uppercase tracking-[0.18em] text-gold">
-              {poolName} · {mode.name}
-            </p>
-            <h1 className="mt-2 font-display text-4xl">Ready room</h1>
-            <p className="mt-4 font-mono text-6xl tracking-[0.28em] text-gold">{joinCode}</p>
-            <p className="mt-3 text-ivory/60">{players.length} joined</p>
-            {isTeam ? <div className="mt-6"><TeamBattleHost {...extraProps} /></div> : null}
-            {phase === "countdown" ? (
-              <p className="mt-10 font-display text-8xl text-gold">{countdown || "Go"}</p>
-            ) : (
-              <Button className="mt-8 bg-gold text-navy hover:bg-gold/90" onClick={() => setPhase("countdown")}>
-                Start 3-2-1
-              </Button>
-            )}
+      <div className="flex min-h-screen flex-col bg-navy text-ivory">
+        {banner}
+        <div className="flex-1 px-6 py-8">
+          <div className="mx-auto grid max-w-5xl gap-6 lg:grid-cols-[1fr_auto]">
+            <div>
+              <p className="text-xs uppercase tracking-[0.18em] text-gold">
+                {poolName} · {mode.name}
+              </p>
+              <h1 className="mt-2 font-display text-4xl">Ready room</h1>
+              <p className="mt-4 font-mono text-6xl tracking-[0.28em] text-gold">{joinCode}</p>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <p className="text-ivory/60">{players.length} joined</p>
+                {isRehearsal ? (
+                  <Button size="sm" variant="outline" onClick={() => void addBot()}>
+                    Add bot
+                  </Button>
+                ) : null}
+              </div>
+              {isTeam ? <div className="mt-6"><TeamBattleHost {...extraProps} /></div> : null}
+              {phase === "countdown" ? (
+                <p className="mt-10 font-display text-8xl text-gold">{countdown || "Go"}</p>
+              ) : (
+                <Button className="mt-8 bg-gold text-navy hover:bg-gold/90" onClick={() => setPhase("countdown")}>
+                  Start 3-2-1
+                </Button>
+              )}
+            </div>
+            <AudienceQr url={url} label="Player QR" />
           </div>
-          <AudienceQr url={url} label="Player QR" />
         </div>
+        {confirmDialog}
       </div>
     );
   }
@@ -902,6 +1010,7 @@ export function HostShell({
   if (isBoss) {
     return (
       <div className="flex min-h-screen flex-col bg-navy text-ivory">
+        {banner}
         <header className="flex flex-wrap items-center gap-4 border-b border-white/10 px-4 py-3">
           <p className="font-mono text-3xl tracking-[0.2em] text-gold">{joinCode}</p>
           <p className="text-sm text-ivory/70">
@@ -937,34 +1046,20 @@ export function HostShell({
           onReveal={() => void publishReveal()}
           onSkip={() => void skip()}
           onEnd={() => setConfirmEnd(true)}
+          onAddBot={isRehearsal ? () => void addBot() : undefined}
           onForceVictory={() => void forceOutcome(true)}
           onForceDefeat={() => void forceOutcome(false)}
           message={message}
+          endLabel={isRehearsal ? "End rehearsal" : "End"}
         />
-        {confirmEnd ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy/80 p-4">
-            <div className="w-full max-w-sm space-y-3 border border-border bg-card p-4">
-              <p className="text-ivory">End this session now?</p>
-              <div className="flex justify-end gap-2">
-                <Button variant="ghost" onClick={() => setConfirmEnd(false)}>
-                  Cancel
-                </Button>
-                <Button
-                  className="bg-gold text-navy hover:bg-gold/90"
-                  onClick={() => void publishEnd(!(index === questions.length - 1 && phase === "reveal"))}
-                >
-                  End session
-                </Button>
-              </div>
-            </div>
-          </div>
-        ) : null}
+        {confirmDialog}
       </div>
     );
   }
 
   return (
     <div className="flex min-h-screen flex-col bg-navy text-ivory">
+      {banner}
       <header className="flex flex-wrap items-center gap-4 border-b border-white/10 px-4 py-3">
         <p className="font-mono text-3xl tracking-[0.2em] text-gold">{joinCode}</p>
         <p className="text-sm text-ivory/70">{players.length} players</p>
@@ -997,11 +1092,11 @@ export function HostShell({
           )}
           {isAdaptive ? null : (
             <Button size="sm" variant="outline" onClick={() => void skip()}>
-              Skip
+              Skip →
             </Button>
           )}
           <Button size="sm" variant="ghost" onClick={() => setConfirmEnd(true)}>
-            End session
+            {isRehearsal ? "End rehearsal" : "End session"}
           </Button>
         </div>
       </header>
@@ -1050,6 +1145,7 @@ export function HostShell({
               revealed={phase === "reveal"}
               best={best}
               extra={isTeam ? <TeamBattleHost {...extraProps} /> : <Extra {...extraProps} />}
+              onAddBot={isRehearsal ? () => void addBot() : undefined}
               onHighlight={() => {
                 if (!best) return;
                 const event: QuizEvent = {
@@ -1080,8 +1176,11 @@ export function HostShell({
           <Button className="bg-gold text-navy hover:bg-gold/90" onClick={() => goNext()}>
             {phase === "intro" ? "Next" : phase === "case_complete" ? "Next case" : "Next question"}
           </Button>
+          <Button variant="outline" onClick={() => void skip()}>
+            Skip →
+          </Button>
           <Button variant="ghost" onClick={() => setConfirmEnd(true)}>
-            End session
+            {isRehearsal ? "End rehearsal" : "End session"}
           </Button>
           {message ? <p className="ml-auto text-sm text-ivory/60">{message}</p> : null}
         </footer>
@@ -1101,24 +1200,7 @@ export function HostShell({
         </div>
       ) : null}
 
-      {confirmEnd ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy/80 p-4">
-          <div className="w-full max-w-sm space-y-3 border border-border bg-card p-4">
-            <p className="text-ivory">End this session now?</p>
-            <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setConfirmEnd(false)}>
-                Cancel
-              </Button>
-              <Button
-                className="bg-gold text-navy hover:bg-gold/90"
-                onClick={() => void publishEnd(!(index === questions.length - 1 && phase === "reveal"))}
-              >
-                End session
-              </Button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      {confirmDialog}
     </div>
   );
 }
