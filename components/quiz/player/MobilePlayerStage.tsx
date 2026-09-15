@@ -100,7 +100,7 @@ export function MobilePlayerStage({
           debug && "shadow-[inset_0_0_0_2px_#a3e635]",
         )}
       >
-        <AnimatePresence mode="wait">
+        <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={questionKey ?? "q"}
             initial={{ opacity: 0, y: 8 }}
