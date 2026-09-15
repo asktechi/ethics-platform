@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import type { CSSProperties, RefObject } from "react";
+import type { CSSProperties, MutableRefObject } from "react";
 
 export type RollingDepth = 0 | 1 | 2 | "older" | "upcoming";
 
@@ -83,7 +83,7 @@ export function RollingBar({
   title: string;
   accent: string;
   text: string;
-  currentLineRef: RefObject<HTMLDivElement | null>;
+  currentLineRef: MutableRefObject<HTMLDivElement | null>;
   hostCurrentLine: number;
   align: "left" | "center";
 }) {
@@ -129,7 +129,9 @@ export function RollingBar({
               <motion.div
                 layout
                 key={line.id}
-                ref={isCurrent ? currentLineRef : undefined}
+                ref={(node) => {
+                  if (isCurrent) currentLineRef.current = node;
+                }}
                 data-reveal-line={line.index}
                 data-rolling-depth={String(line.depth)}
                 data-host-current={hostCurrentLine === line.index ? "true" : "false"}
@@ -146,7 +148,14 @@ export function RollingBar({
                 exit={{ opacity: 0, y: -12, transition: { duration: 0.3, ease: "easeOut" } }}
                 className="relative"
               >
-                <p className="relative m-0" style={style}>
+                <p
+                  className="relative m-0"
+                  style={{
+                    ...style,
+                    transition:
+                      "font-size 500ms ease-out, opacity 500ms ease-out, transform 500ms ease-out, filter 500ms ease-out",
+                  }}
+                >
                   {line.text}
                   {isCurrent ? (
                     <span
@@ -165,8 +174,11 @@ export function RollingBar({
         {hasUpcoming ? (
           <p
             data-rolling-upcoming="true"
-            className="m-0 select-none"
-            style={depthStyle("upcoming", text, accent)}
+            className="m-0 inline-flex select-none items-center rounded-full px-4 py-1"
+            style={{
+              ...depthStyle("upcoming", text, accent),
+              backgroundColor: `${text}14`,
+            }}
             aria-hidden
           >
             …

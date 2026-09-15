@@ -130,7 +130,8 @@ export function AudienceMirror({
   useEffect(() => {
     const key = `${slide.slideId}:${beatIndex}`;
     if (prevBeatKey.current === key) return;
-    const slideChanged = !prevBeatKey.current.startsWith(`${slide.slideId}:`);
+    const hadPrior = prevBeatKey.current.length > 0;
+    const slideChanged = hadPrior && !prevBeatKey.current.startsWith(`${slide.slideId}:`);
     prevBeatKey.current = key;
     if (slideChanged) {
       setBridge(`Slide ${slideIndex + 1} of ${Math.max(1, getPresentationState().assignments.length)}`);
