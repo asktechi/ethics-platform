@@ -881,7 +881,7 @@ export function HostShell({
     }
     const timer = window.setTimeout(() => setCountdown((value) => value - 1), Math.max(80, Math.round(1000 / speedFactor)));
     return () => window.clearTimeout(timer);
-  }, [phase, countdown, publishQuestion, publishIntro, startAdaptive, isAdaptive, isBoss, isCase, mode, ctx, sessionId]);
+  }, [phase, countdown, publishQuestion, publishIntro, startAdaptive, isAdaptive, isBoss, isCase, mode, ctx, sessionId, speedFactor]);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
