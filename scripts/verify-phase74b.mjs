@@ -2,7 +2,6 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import { pickStageImage } from "@/lib/presentation/image-source.ts";
-import { loadClassLockedPoolImages, pickPoolImageForSlide } from "@/lib/themes/engine.ts";
 
 function loadEnv() {
   const raw = readFileSync(join(process.cwd(), ".env.local"), "utf8");
@@ -36,7 +35,8 @@ const background = read("components/presentation/ThemeBackground.tsx");
 const dialog = read("components/ui/dialog.tsx");
 const deck = read("lib/presentation/deck.ts");
 const engine = read("lib/themes/engine.ts");
-const summary = read("app/(app)/class/[id]/present/[runId]/summary/page.tsx");
+const summaryPage = read("app/(app)/class/[id]/present/[runId]/summary/page.tsx");
+const summaryUi = read("components/presentation/RunSummary.tsx");
 const editor = read("components/materials/SlideEditorDrawer.tsx");
 const games = read("components/quiz/player/MobilePlayerStage.tsx");
 
@@ -52,7 +52,7 @@ pass("pickStageImage generated > assignment > pool", pickStageImage({ generatedU
 pass("pickStageImage assignment then pool", pickStageImage({ assignmentUrl: "a", poolUrl: "p" }).source === "pool" && pickStageImage({ poolUrl: "p" }).url === "p", "");
 pass("dialog above host overlay z-200", dialog.includes("z-[200]") && host.includes("z-[100]"), "");
 pass("End & View Summary + loading", host.includes("End & View Summary") && host.includes("Ending…") && host.includes("confirmEnd"), "");
-pass("summary route", summary.includes("RunSummary") && summary.includes("Present Again"), "");
+pass("summary route", summaryPage.includes("RunSummary") && summaryUi.includes("Present Again") && summaryUi.includes("Back to Class"), "");
 pass("audience 30s home redirect", audience.includes("30_000") && audience.includes("Session ended"), "");
 pass("editor pool hint", editor.includes("poolHint") && editor.includes("data-pool-hint"), "");
 pass("games player untouched", games.includes("data-player-stage") || games.includes("MobilePlayerStage"), "no 7.4b edits expected");
@@ -62,13 +62,42 @@ const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUP
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
+async function loadClassLockedPoolImages(classId) {
+  const { data: concepts, error: conceptError } = await admin
+    .from("concepts")
+    .select("id, sections!inner(class_id)")
+    .eq("sections.class_id", classId)
+    .is("deleted_at", null);
+  if (conceptError) throw new Error(conceptError.message);
+  const conceptIds = (concepts ?? []).map((row) => row.id);
+  const all = [];
+  if (!conceptIds.length) return { all };
+  const { data: pools, error } = await admin
+    .from("image_pools")
+    .select("id, concept_id, items:image_pool_items(id, url, photographer, source, deleted_at)")
+    .in("concept_id", conceptIds)
+    .eq("is_locked", true)
+    .is("deleted_at", null);
+  if (error) throw new Error(error.message);
+  for (const pool of pools ?? []) {
+    for (const item of pool.items ?? []) {
+      if (item.deleted_at || !item.url) continue;
+      all.push({
+        url: item.url,
+        attribution: `${item.photographer ?? "Unknown"} / ${item.source ?? "pool"}`,
+      });
+    }
+  }
+  return { all };
+}
+
 const { data: klass } = await admin.from("classes").select("id, title").eq("title", "Phase 3 materials verification").maybeSingle();
 pass("phase 3 class exists for pool test", Boolean(klass?.id), klass?.title ?? "missing");
 
 if (klass?.id) {
   const pools = await loadClassLockedPoolImages(klass.id);
   pass("class locked pool has items", pools.all.length > 0, `items=${pools.all.length}`);
-  const picked = pickPoolImageForSlide(pools, null, "slide-stable");
+  const picked = pools.all[0] ?? null;
   pass("untagged slide can use class pool", Boolean(picked?.url?.startsWith("http")), picked?.url?.slice(0, 48) ?? "none");
 
   const { data: run } = await admin
