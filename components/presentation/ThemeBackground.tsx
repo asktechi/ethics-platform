@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { useEffect, useState } from "react";
 import {
   adjustHex,
   deepenUntilContrast,
@@ -36,15 +37,28 @@ export function ThemeBackground({
   slideId,
   theme,
   imageUrl,
+  attribution = null,
 }: {
   slideId: string;
   theme: ThemePalette;
   imageUrl: string | null;
+  attribution?: string | null;
 }) {
   const { angle, glowX, glowY, darker, lighter, vignette } = layerParams(slideId, theme);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    setFailed(false);
+  }, [imageUrl]);
+  const showImage = Boolean(imageUrl) && !failed;
 
   return (
-    <div className="absolute inset-0 overflow-hidden" aria-hidden data-theme-layers="5">
+    <div
+      className="absolute inset-0 overflow-hidden"
+      aria-hidden
+      data-theme-layers="5"
+      data-has-image={showImage ? "true" : "false"}
+      data-image-attribution={attribution ?? ""}
+    >
       {/* Layer 1 — Base gradient */}
       <div
         data-bg-layer="base"
@@ -65,7 +79,7 @@ export function ThemeBackground({
       />
 
       {/* Layer 3 — Duotone image */}
-      {imageUrl ? (
+      {showImage ? (
         <motion.div
           key={`${slideId}:${imageUrl}`}
           data-bg-layer="image"
@@ -75,7 +89,12 @@ export function ThemeBackground({
           transition={{ duration: 0.8, ease: "easeOut" }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={imageUrl} alt="" className="absolute inset-0 h-full w-full object-cover grayscale" />
+          <img
+            src={imageUrl ?? ""}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover grayscale"
+            onError={() => setFailed(true)}
+          />
           <div
             className="absolute inset-0"
             style={{ backgroundColor: theme.bg, mixBlendMode: "multiply", opacity: 0.72 }}

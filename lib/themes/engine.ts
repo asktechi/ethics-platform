@@ -6,7 +6,7 @@ import {
   type ThemePalette,
   type ThemeReelItem,
 } from "@/lib/themes/types";
-import type { ImagePool, ImagePoolItem, PresentationRun, Slide, Theme } from "@/types/db.helpers";
+import type { PresentationRun, Slide, Theme } from "@/types/db.helpers";
 import type { Json } from "@/types/db";
 
 export type ClassSlide = Slide & {
@@ -46,6 +46,149 @@ function shuffle<T>(items: T[]): T[] {
 function pickRandom<T>(items: T[]): T | null {
   if (items.length === 0) return null;
   return items[Math.floor(Math.random() * items.length)] ?? null;
+}
+
+export type PoolImage = {
+  url: string;
+  attribution: string;
+  conceptId: string;
+};
+
+export async function loadClassLockedPoolImages(classId: string): Promise<{
+  byConcept: Map<string, PoolImage[]>;
+  all: PoolImage[];
+}> {
+  const admin = createAdminClient();
+  const { data: concepts, error: conceptError } = await admin
+    .from("concepts")
+    .select("id, sections!inner(class_id)")
+    .eq("sections.class_id", classId)
+    .is("deleted_at", null);
+  if (conceptError) throw new Error(conceptError.message);
+  const conceptIds = (concepts ?? []).map((row) => row.id);
+  const byConcept = new Map<string, PoolImage[]>();
+  const all: PoolImage[] = [];
+  if (conceptIds.length === 0) return { byConcept, all };
+
+  const { data: pools, error } = await admin
+    .from("image_pools")
+    .select("id, concept_id, items:image_pool_items(id, url, photographer, source, deleted_at)")
+    .in("concept_id", conceptIds)
+    .eq("is_locked", true)
+    .is("deleted_at", null);
+  if (error) throw new Error(error.message);
+
+  for (const pool of (pools ?? []) as Array<{
+    concept_id: string;
+    items?: Array<{
+      url: string;
+      photographer: string | null;
+      source: string | null;
+      deleted_at: string | null;
+    }>;
+  }>) {
+    const mapped = (pool.items ?? [])
+      .filter((item) => !item.deleted_at && item.url)
+      .map((item) => ({
+        url: item.url,
+        attribution: `${item.photographer ?? "Unknown"} / ${item.source ?? "pool"}`,
+        conceptId: pool.concept_id,
+      }));
+    if (!mapped.length) continue;
+    byConcept.set(pool.concept_id, [...(byConcept.get(pool.concept_id) ?? []), ...mapped]);
+    all.push(...mapped);
+  }
+  return { byConcept, all };
+}
+
+export function pickPoolImageForSlide(
+  pools: { byConcept: Map<string, PoolImage[]>; all: PoolImage[] },
+  conceptId: string | null,
+  slideId: string,
+): PoolImage | null {
+  const conceptList = conceptId ? (pools.byConcept.get(conceptId) ?? []) : [];
+  const list = conceptList.length ? conceptList : pools.all;
+  if (list.length === 0) return null;
+  let hash = 0;
+  for (let i = 0; i < slideId.length; i += 1) hash = (hash + slideId.charCodeAt(i) * (i + 1)) % 997;
+  return list[hash % list.length] ?? null;
+}
+
+export async function slidePoolHint(slideId: string): Promise<string | null> {
+  const admin = createAdminClient();
+  const { data: slide } = await admin
+    .from("slides")
+    .select("id, concept_id, material_id")
+    .eq("id", slideId)
+    .maybeSingle();
+  if (!slide) return "No image pool for this concept";
+
+  let conceptId = slide.concept_id as string | null;
+  if (!conceptId) {
+    const { data: material } = await admin
+      .from("materials")
+      .select("concept_id, class_id")
+      .eq("id", slide.material_id)
+      .maybeSingle();
+    conceptId = material?.concept_id ?? null;
+    if (!conceptId && material?.class_id) {
+      const pools = await loadClassLockedPoolImages(material.class_id);
+      if (pools.all.length === 0) {
+        return "No image pool for this concept";
+      }
+    }
+    if (!conceptId) {
+      return "This slide is not tagged with a concept — attach one, or curate a class pool in the Theme tab.";
+    }
+  }
+
+  const { data: pool } = await admin
+    .from("image_pools")
+    .select("id, items:image_pool_items(id, deleted_at)")
+    .eq("concept_id", conceptId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  const items = ((pool as { items?: Array<{ deleted_at: string | null }> } | null)?.items ?? []).filter(
+    (item) => !item.deleted_at,
+  );
+  if (!pool || items.length === 0) return "No image pool for this concept";
+  return null;
+}
+
+export async function fillMissingAssignmentImages(runId: string): Promise<number> {
+  const { getRunByPk } = await import("@/lib/data/presentation-runs");
+  const run = await getRunByPk(runId);
+  const admin = createAdminClient();
+  const pools = await loadClassLockedPoolImages(run.class_id);
+  if (pools.all.length === 0) return 0;
+  const slides = await listClassSlides(run.class_id);
+  const { data: rows, error } = await admin
+    .from("theme_assignments")
+    .select("id, slide_id, image_url")
+    .eq("run_id", run.run_id)
+    .is("deleted_at", null);
+  if (error) throw new Error(error.message);
+  let updated = 0;
+  for (const row of rows ?? []) {
+    if (row.image_url || !row.slide_id) continue;
+    const slide = slides.find((item) => item.id === row.slide_id);
+    const picked = pickPoolImageForSlide(
+      pools,
+      conceptForSlide(slide ?? { concept_id: null, material_concept_id: null }),
+      row.slide_id,
+    );
+    if (!picked) continue;
+    const { error: updateError } = await admin
+      .from("theme_assignments")
+      .update({
+        image_url: picked.url,
+        image_attribution: picked.attribution,
+      })
+      .eq("id", row.id);
+    if (updateError) throw new Error(updateError.message);
+    updated += 1;
+  }
+  return updated;
 }
 
 export async function listClassSlides(classId: string): Promise<ClassSlide[]> {
@@ -144,26 +287,7 @@ async function exclusionSet(classId: string, current: PresentationRun): Promise<
   return new Set(lastSlots);
 }
 
-async function loadLockedPoolMap(conceptIds: string[]) {
-  const unique = [...new Set(conceptIds.filter(Boolean))];
-  const map = new Map<string, ImagePoolItem[]>();
-  if (unique.length === 0) return map;
-  const admin = createAdminClient();
-  const { data, error } = await admin
-    .from("image_pools")
-    .select("*, items:image_pool_items(*)")
-    .in("concept_id", unique)
-    .eq("is_locked", true)
-    .is("deleted_at", null);
-  if (error) throw new Error(error.message);
-  for (const row of (data ?? []) as Array<ImagePool & { items?: ImagePoolItem[] }>) {
-    const items = (row.items ?? []).filter((item) => !item.deleted_at);
-    if (items.length) map.set(row.concept_id, items);
-  }
-  return map;
-}
-
-function conceptFor(slide: ClassSlide): string | null {
+export function conceptForSlide(slide: Pick<ClassSlide, "concept_id" | "material_concept_id">): string | null {
   return slide.concept_id ?? slide.material_concept_id;
 }
 
@@ -192,8 +316,8 @@ async function buildAssignments(
   }
 
   const pools = settings.use_image_pools
-    ? await loadLockedPoolMap(slides.map((slide) => conceptFor(slide) ?? ""))
-    : new Map<string, ImagePoolItem[]>();
+    ? await loadClassLockedPoolImages(run.class_id)
+    : { byConcept: new Map<string, PoolImage[]>(), all: [] as PoolImage[] };
 
   const byId = new Map(themes.map((theme) => [theme.id, theme]));
   const used: string[] = [];
@@ -205,8 +329,9 @@ async function buildAssignments(
       (overrideId ? byId.get(overrideId) : undefined) ??
       deck[index % deck.length];
     const palette = varyPalette(chosen.palette, index);
-    const conceptId = conceptFor(slide);
-    const image = conceptId ? pickRandom(pools.get(conceptId) ?? []) : null;
+    const conceptId = conceptForSlide(slide);
+    const conceptImages = conceptId ? (pools.byConcept.get(conceptId) ?? []) : [];
+    const image = pickRandom(conceptImages) ?? pickPoolImageForSlide(pools, conceptId, slide.id);
     if (!used.includes(chosen.id)) used.push(chosen.id);
 
     items.push({
@@ -218,9 +343,7 @@ async function buildAssignments(
       theme_name: chosen.name,
       theme_json: palette,
       image_url: image?.url ?? null,
-      image_attribution: image
-        ? `${image.photographer ?? "Unknown"} / ${image.source ?? "pool"}`
-        : null,
+      image_attribution: image?.attribution ?? null,
       override: Boolean(overrideId),
     });
   }

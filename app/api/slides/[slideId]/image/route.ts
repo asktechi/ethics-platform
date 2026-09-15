@@ -29,11 +29,14 @@ export async function GET(
     const current = await listCurrentGeneratedForSlides([params.slideId]);
     const row = current.get(params.slideId);
     const url = row ? await signedGeneratedUrl(row.storagePath) : null;
+    const { slidePoolHint } = await import("@/lib/themes/engine");
+    const poolHint = await slidePoolHint(params.slideId);
     return NextResponse.json({
       url,
       status: slide?.image_status ?? "none",
       preference: slide?.image_preference ?? "auto",
       prompt: slide?.image_prompt ?? "",
+      poolHint,
     });
   } catch (caught) {
     const message = caught instanceof Error ? caught.message : "Lookup failed";

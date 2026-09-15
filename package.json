@@ -27,6 +27,7 @@
     "test:phase72": "node --experimental-strip-types --import ./scripts/register-ts-alias.mjs scripts/verify-phase72.mjs",
     "test:phase73": "node scripts/verify-phase73.mjs",
     "test:phase74": "node --experimental-strip-types --import ./scripts/register-ts-alias.mjs scripts/verify-phase74.mjs",
+    "test:phase74b": "node --experimental-strip-types --import ./scripts/register-ts-alias.mjs --import ./scripts/stub-server-only.mjs scripts/verify-phase74b.mjs",
     "test:phase75": "node --experimental-strip-types --import ./scripts/register-ts-alias.mjs --import ./scripts/stub-server-only.mjs scripts/verify-phase75.mjs",
     "test:class-perf": "node scripts/verify-class-page-perf.mjs"
   },

@@ -20,6 +20,8 @@ export type RunSettings = {
   current_slide_index?: number;
   peak_audience?: number;
   slides_advanced?: number;
+  slide_seconds?: number[];
+  questions_asked?: number;
 };
 
 export const DEFAULT_RUN_SETTINGS: RunSettings = {
@@ -35,6 +37,8 @@ export const DEFAULT_RUN_SETTINGS: RunSettings = {
   current_slide_index: 0,
   peak_audience: 0,
   slides_advanced: 0,
+  slide_seconds: [],
+  questions_asked: 0,
 };
 
 export type ThemeReelItem = {
@@ -69,5 +73,9 @@ export function parseRunSettings(value: unknown): RunSettings {
     current_slide_index: Math.max(0, Number(raw.current_slide_index ?? 0) || 0),
     peak_audience: Math.max(0, Number(raw.peak_audience ?? 0) || 0),
     slides_advanced: Math.max(0, Number(raw.slides_advanced ?? 0) || 0),
+    slide_seconds: Array.isArray(raw.slide_seconds)
+      ? (raw.slide_seconds as unknown[]).map((value) => Math.max(0, Number(value) || 0))
+      : [],
+    questions_asked: Math.max(0, Number(raw.questions_asked ?? 0) || 0),
   };
 }

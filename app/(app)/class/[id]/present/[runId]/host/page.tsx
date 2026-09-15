@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { HostView } from "@/components/presentation/HostView";
 import { loadHostDeck } from "@/lib/presentation/deck";
 
@@ -17,6 +17,9 @@ export default async function HostPage({
   }
 
   if (!deck) notFound();
+  if (deck.status === "ended") {
+    redirect(`/class/${params.id}/present/${params.runId}/summary`);
+  }
 
   const origin = process.env.NEXT_PUBLIC_SITE_URL ?? "";
 

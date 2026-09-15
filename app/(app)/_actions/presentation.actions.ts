@@ -18,6 +18,7 @@ import { loadApprovedDeck } from "@/lib/presentation/deck";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   assignThemeForRun,
+  fillMissingAssignmentImages,
   getAssignmentsForRun,
   listClassSlides,
   reshuffleRun,
@@ -147,6 +148,7 @@ export async function startPresentationAction(input: unknown) {
     if (assignments.length === 0) {
       await assignThemeForRun(parsed.data.runId);
     }
+    await fillMissingAssignmentImages(parsed.data.runId);
     const run = await startRun(parsed.data.runId);
     revalidatePresent(parsed.data.classId);
     return { ok: true as const, publicRunId: run.run_id };
@@ -184,6 +186,7 @@ export async function endPresentationAction(input: unknown) {
       peakAudience: z.number().int().min(0).optional(),
       slidesAdvanced: z.number().int().min(0).optional(),
       slideIndex: z.number().int().min(0).optional(),
+      slideSeconds: z.array(z.number().min(0)).optional(),
     })
     .safeParse(input);
   if (!parsed.success) return { ok: false as const, error: "Invalid run" };
@@ -192,6 +195,7 @@ export async function endPresentationAction(input: unknown) {
       peak_audience: parsed.data.peakAudience,
       slides_advanced: parsed.data.slidesAdvanced,
       current_slide_index: parsed.data.slideIndex,
+      slide_seconds: parsed.data.slideSeconds,
     });
     revalidatePresent(parsed.data.classId);
     return { ok: true as const };

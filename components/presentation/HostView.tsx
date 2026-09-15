@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   endPresentationAction,
@@ -8,7 +9,6 @@ import {
   syncRunProgressAction,
 } from "@/app/(app)/_actions/presentation.actions";
 import { AudienceMirror } from "@/components/presentation/AudienceMirror";
-import { HostSummary } from "@/components/presentation/HostSummary";
 import { SyncDebugDot } from "@/components/presentation/SyncDebugDot";
 import { NextUpPanel } from "@/components/presentation/NextUpPanel";
 import { SlideGrid } from "@/components/presentation/SlideGrid";
@@ -55,9 +55,12 @@ export type HostViewProps = {
 };
 
 export function HostView(props: HostViewProps) {
+  const router = useRouter();
   const [widths, setWidths] = useState([35, 45, 20]);
   const [gridOpen, setGridOpen] = useState(false);
   const [endOpen, setEndOpen] = useState(false);
+  const [ending, setEnding] = useState(false);
+  const [endError, setEndError] = useState<string | null>(null);
   const [connection, setConnection] = useState<ConnectionStatus>("connecting");
   const [audienceCount, setAudienceCount] = useState(0);
   const [totalElapsed, setTotalElapsed] = useState(0);
@@ -68,6 +71,13 @@ export function HostView(props: HostViewProps) {
   const [prep, setPrep] = useState<{ ready: number; total: number } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const slideClock = useRef(Date.now());
+  const realtimeRef = useRef<{ disconnect: () => void } | null>(null);
+  const slideTimesRef = useRef<number[]>(
+    props.settings.slide_seconds?.length
+      ? [...props.settings.slide_seconds]
+      : props.slides.map(() => 0),
+  );
+  const prevIndexRef = useRef<number | null>(null);
   const startedMs = useMemo(
     () => (props.startedAt ? new Date(props.startedAt).getTime() : Date.now()),
     [props.startedAt],
@@ -119,6 +129,12 @@ export function HostView(props: HostViewProps) {
       },
     });
   }, [props]);
+
+  useLayoutEffect(() => {
+    if (props.status === "ended") {
+      router.replace(`/class/${props.classId}/present/${props.publicRunId}/summary`);
+    }
+  }, [props.classId, props.publicRunId, props.status, router]);
 
   useEffect(() => {
     const urls = assignments.map((slide) => slideStageImage(slide));
@@ -188,10 +204,18 @@ export function HostView(props: HostViewProps) {
         dispatch({ type: "SET_PEAK_AUDIENCE", count: audience });
       },
     });
+    realtimeRef.current = handle;
     return () => handle.disconnect();
   }, [props.publicRunId, props.status, props.slides.length]);
 
   useEffect(() => {
+    if (prevIndexRef.current !== null && prevIndexRef.current !== index) {
+      const elapsed = Math.max(0, Math.floor((Date.now() - slideClock.current) / 1000));
+      const times = [...slideTimesRef.current];
+      times[prevIndexRef.current] = (times[prevIndexRef.current] ?? 0) + elapsed;
+      slideTimesRef.current = times;
+    }
+    prevIndexRef.current = index;
     slideClock.current = Date.now();
     setSlideElapsed(0);
     if (props.status !== "live" || ended) return;
@@ -210,6 +234,56 @@ export function HostView(props: HostViewProps) {
     }, 500);
     return () => window.clearInterval(timer);
   }, [startedMs]);
+
+  const confirmEnd = useCallback(async () => {
+    if (ending) return;
+    setEnding(true);
+    setEndError(null);
+    const times = [...slideTimesRef.current];
+    times[index] = (times[index] ?? 0) + slideElapsed;
+    slideTimesRef.current = times;
+    dispatch({ type: "END" });
+    const timeout = new Promise<{ ok: false; error: string }>((resolve) => {
+      window.setTimeout(() => resolve({ ok: false, error: "Timed out ending the session." }), 10_000);
+    });
+    try {
+      const result = await Promise.race([
+        endPresentationAction({
+          classId: props.classId,
+          runId: props.runPk,
+          peakAudience,
+          slidesAdvanced,
+          slideIndex: index,
+          slideSeconds: times,
+        }),
+        timeout,
+      ]);
+      if (!result.ok) {
+        setEndError(result.error);
+        setEnding(false);
+        return;
+      }
+      await Promise.race([
+        Promise.resolve(realtimeRef.current?.disconnect()),
+        new Promise((resolve) => window.setTimeout(resolve, 2000)),
+      ]);
+      setEndOpen(false);
+      router.push(`/class/${props.classId}/present/${props.publicRunId}/summary`);
+    } catch (caught) {
+      setEndError(caught instanceof Error ? caught.message : "Could not end the session.");
+      setEnding(false);
+    }
+  }, [
+    ending,
+    index,
+    peakAudience,
+    props.classId,
+    props.publicRunId,
+    props.runPk,
+    router,
+    slideElapsed,
+    slidesAdvanced,
+  ]);
 
   const generateCurrentImage = useCallback(async () => {
     if (!current || imageBusy) return;
@@ -326,16 +400,9 @@ export function HostView(props: HostViewProps) {
   }
 
   if (ended || props.status === "ended") {
-    const endedMs = props.endedAt ? new Date(props.endedAt).getTime() : Date.now();
     return (
-      <div className="fixed inset-0 z-[100]">
-        <HostSummary
-          classId={props.classId}
-          totalSeconds={Math.floor((endedMs - startedMs) / 1000)}
-          slidesAdvanced={slidesAdvanced}
-          peakAudience={peakAudience}
-          slideCount={assignments.length}
-        />
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-navy px-6">
+        <p className="text-sm text-ivory/70">Opening summary…</p>
       </div>
     );
   }
@@ -474,8 +541,15 @@ export function HostView(props: HostViewProps) {
             Shuffle theme
           </Button>
         ) : null}
-        <Button type="button" size="sm" variant="destructive" onClick={() => setEndOpen(true)}>
-          End
+        <Button
+          type="button"
+          size="sm"
+          variant="destructive"
+          data-end-session="true"
+          disabled={ending}
+          onClick={() => setEndOpen(true)}
+        >
+          {ending ? "Ending…" : "End & View Summary"}
         </Button>
         <span className="ml-auto truncate text-[11px] text-ivory/40">{props.classTitle}</span>
         <a
@@ -490,35 +564,24 @@ export function HostView(props: HostViewProps) {
       {reshuffleError ? (
         <p className="bg-red-500/15 px-3 py-1 text-xs text-red-200">{reshuffleError}</p>
       ) : null}
+      {endError ? (
+        <p className="bg-red-500/15 px-3 py-1 text-xs text-red-200">{endError}</p>
+      ) : null}
 
-      <Dialog open={endOpen} onOpenChange={setEndOpen}>
-        <DialogContent>
+      <Dialog open={endOpen} onOpenChange={(open) => !ending && setEndOpen(open)}>
+        <DialogContent className="z-[200] pointer-events-auto">
           <DialogHeader>
             <DialogTitle>End this run?</DialogTitle>
             <DialogDescription>
-              The audience will see a thank-you screen. You can start a new run from Present setup.
+              The audience will see a thank-you screen. You will land on the session summary.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setEndOpen(false)}>
+            <Button type="button" variant="outline" disabled={ending} onClick={() => setEndOpen(false)}>
               Keep presenting
             </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              onClick={() => {
-                dispatch({ type: "END" });
-                void endPresentationAction({
-                  classId: props.classId,
-                  runId: props.runPk,
-                  peakAudience,
-                  slidesAdvanced,
-                  slideIndex: index,
-                });
-                setEndOpen(false);
-              }}
-            >
-              End run
+            <Button type="button" variant="destructive" disabled={ending} onClick={() => void confirmEnd()}>
+              {ending ? "Ending…" : "End & View Summary"}
             </Button>
           </DialogFooter>
         </DialogContent>

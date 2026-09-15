@@ -140,7 +140,12 @@ export function AudienceMirror({
       style={{ color: text }}
     >
       {nextUrl ? <link rel="preload" as="image" href={nextUrl} /> : null}
-      <ThemeBackground slideId={slide.slideId} theme={theme} imageUrl={stageImage} />
+      <ThemeBackground
+        slideId={slide.slideId}
+        theme={theme}
+        imageUrl={stageImage}
+        attribution={imageAttribution}
+      />
       {showChrome ? (
         <p className="relative z-20 shrink-0 py-1.5 text-center text-[10px] font-semibold uppercase tracking-[0.22em] text-ivory/55">
           Audience view

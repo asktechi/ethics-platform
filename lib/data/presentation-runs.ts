@@ -100,7 +100,10 @@ export async function startRun(id: string): Promise<PresentationRun> {
 
 export async function endRun(
   id: string,
-  extras: Pick<RunSettings, "peak_audience" | "slides_advanced" | "current_slide_index"> = {},
+  extras: Pick<
+    RunSettings,
+    "peak_audience" | "slides_advanced" | "current_slide_index" | "slide_seconds" | "questions_asked"
+  > = {},
 ): Promise<PresentationRun> {
   const current = await getRunByPk(id);
   const settings: RunSettings = {

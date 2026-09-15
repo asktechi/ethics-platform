@@ -1,11 +1,19 @@
 import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getAssignmentsForRun, listClassSlides, type ClassSlide } from "@/lib/themes/engine";
+import {
+  conceptForSlide,
+  getAssignmentsForRun,
+  listClassSlides,
+  loadClassLockedPoolImages,
+  pickPoolImageForSlide,
+  type ClassSlide,
+} from "@/lib/themes/engine";
 import { parseRunSettings, type ThemePalette } from "@/lib/themes/types";
 import type { Json } from "@/types/db";
 import type { PresentationRun } from "@/types/db.helpers";
 import { signedUrlMap } from "@/lib/ai/images";
+import { pickStageImage } from "@/lib/presentation/image-source";
 import { normalizeLayout, type SlideAssignment } from "@/lib/presentation/types";
 
 const FALLBACK_THEME: ThemePalette = {
@@ -69,15 +77,17 @@ function toAssignment(
     | undefined,
   includeInstructorFields: boolean,
   generatedUrl: string | null,
+  poolUrl: string | null,
+  poolAttribution: string | null,
 ): SlideAssignment {
   const layout = normalizeLayout(slide.layout);
   const isCue = layout === "cue";
-  const preference = slide.image_preference ?? "auto";
-  const readyAi = Boolean(generatedUrl) && (slide.image_status === "ready" || Boolean(slide.generated_image_id));
-  const useAi =
-    preference === "ai" || (preference === "auto" && readyAi);
-  const usePool = preference === "pool" || (preference === "auto" && !useAi);
-  const useNone = preference === "none";
+  const picked = pickStageImage({
+    preference: slide.image_preference,
+    generatedUrl,
+    assignmentUrl: assignment?.imageUrl,
+    poolUrl,
+  });
   return {
     slideId: slide.id,
     title: includeInstructorFields || !isCue ? (slide.title ?? "Untitled slide") : "Break",
@@ -86,11 +96,13 @@ function toAssignment(
     speakerNote: includeInstructorFields ? slide.speaker_note : null,
     layout,
     theme: assignment?.theme ?? FALLBACK_THEME,
-    imageUrl: useNone || !usePool ? null : assignment?.imageUrl ?? null,
-    imageAttribution: includeInstructorFields ? (assignment?.imageAttribution ?? null) : null,
-    generatedImageUrl: useNone || !useAi ? null : generatedUrl,
+    imageUrl: picked.source === "pool" ? picked.url : null,
+    imageAttribution: includeInstructorFields
+      ? (assignment?.imageAttribution ?? poolAttribution)
+      : null,
+    generatedImageUrl: picked.source === "ai" ? picked.url : null,
     imageStatus: slide.image_status ?? "none",
-    imagePreference: preference,
+    imagePreference: slide.image_preference ?? "auto",
   };
 }
 
@@ -100,16 +112,22 @@ export async function loadApprovedDeck(
   options: { includeInstructorFields: boolean },
 ): Promise<SlideAssignment[]> {
   const slides = (await listClassSlides(classId)).filter((slide) => slide.status === "approved");
-  const assignments = await loadAssignmentsByPublicRunId(publicRunId);
-  const generated = await signedUrlMap(slides.map((slide) => slide.id));
-  return slides.map((slide) =>
-    toAssignment(
+  const [assignments, generated, pools] = await Promise.all([
+    loadAssignmentsByPublicRunId(publicRunId),
+    signedUrlMap(slides.map((slide) => slide.id)),
+    loadClassLockedPoolImages(classId),
+  ]);
+  return slides.map((slide) => {
+    const pool = pickPoolImageForSlide(pools, conceptForSlide(slide), slide.id);
+    return toAssignment(
       slide,
       assignments.get(slide.id),
       options.includeInstructorFields,
       generated.get(slide.id) ?? null,
-    ),
-  );
+      pool?.url ?? null,
+      pool?.attribution ?? null,
+    );
+  });
 }
 
 export async function loadHostAssignmentsByPk(runPk: string) {

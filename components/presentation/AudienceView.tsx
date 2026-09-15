@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AudienceMirror } from "@/components/presentation/AudienceMirror";
 import { PresentationSkeleton, SessionStatusScreen } from "@/components/presentation/SessionStatusScreen";
 import { SyncDebugDot } from "@/components/presentation/SyncDebugDot";
@@ -18,6 +19,7 @@ import type { AudienceDeckResponse, ConnectionStatus } from "@/lib/presentation/
 import { createClient } from "@/lib/supabase/client";
 
 export function AudienceView({ runId }: { runId: string }) {
+  const router = useRouter();
   const [payload, setPayload] = useState<AudienceDeckResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [connection, setConnection] = useState<ConnectionStatus>("connecting");
@@ -96,6 +98,13 @@ export function AudienceView({ runId }: { runId: string }) {
     injectPreloadLink(urls[index + 1] ?? null);
   }, [assignments, index]);
 
+  const sessionEnded = payload?.status === "ended" || ended;
+  useEffect(() => {
+    if (!sessionEnded) return;
+    const timer = window.setTimeout(() => router.replace("/"), 30_000);
+    return () => window.clearTimeout(timer);
+  }, [router, sessionEnded]);
+
   if (error) {
     return (
       <SessionStatusScreen
@@ -135,7 +144,7 @@ export function AudienceView({ runId }: { runId: string }) {
       <SessionStatusScreen
         tone="ended"
         title="Session ended — thank you"
-        body="This session has ended. You can close the tab."
+        body="This session has ended. You can close the tab — this page returns home in 30 seconds."
       />
     );
   }

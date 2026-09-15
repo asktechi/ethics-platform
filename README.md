@@ -27,7 +27,7 @@ From a class, open **Present**, review the reel, then **Start presentation**.
 - Audience (open): `/present/{runId}/audience`
 - Join QR: `/present/{runId}/audience/join`
 
-Keyboard on the host: Space / → / PageDown next slide (skips leftover beats), ← / PageUp previous beat then previous slide, **B** next beat, **I** generate an AI image for the current slide, G jump grid, P teleprompter pause, F fullscreen, R rehearsal (does not broadcast), Cmd/Ctrl+E end. Voice input should call `dispatch({ type: "NEXT" })` from `lib/presentation/bus.ts`.
+Keyboard on the host: Space / → / PageDown next slide (skips leftover beats), ← / PageUp previous beat then previous slide, **B** next beat, **I** generate an AI image for the current slide, G jump grid, P teleprompter pause, F fullscreen, R rehearsal (does not broadcast), Cmd/Ctrl+E or **End & View Summary** to confirm and open the run summary. Voice input should call `dispatch({ type: "NEXT" })` from `lib/presentation/bus.ts`.
 
 On Present setup, the **Slide visuals** card can generate backgrounds for slides without a curated pool photo (default off; ~$0.04 per 1536×1024 image, 100/class/day cap). The audience stage uses the generated image when present, then the pool image, then the gradient.
 

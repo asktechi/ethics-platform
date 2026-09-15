@@ -51,6 +51,7 @@ export function SlideEditorDrawer({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [preference, setPreference] = useState<"auto" | "pool" | "ai" | "none">("auto");
   const [imageBusy, setImageBusy] = useState(false);
+  const [poolHint, setPoolHint] = useState<string | null>(null);
 
   useEffect(() => {
     if (!slide) return;
@@ -62,12 +63,14 @@ export function SlideEditorDrawer({
     setImagePrompt(slide.image_prompt ?? "");
     setPreference((slide.image_preference as typeof preference | undefined) ?? "auto");
     setPreviewUrl(null);
+    setPoolHint(null);
     setError(null);
     void fetch(`/api/slides/${slide.id}/image`)
       .then((response) => response.json())
-      .then((json: { url?: string | null; preference?: typeof preference }) => {
+      .then((json: { url?: string | null; preference?: typeof preference; poolHint?: string | null }) => {
         if (json.url) setPreviewUrl(json.url);
         if (json.preference) setPreference(json.preference);
+        setPoolHint(json.poolHint ?? null);
       })
       .catch(() => undefined);
   }, [slide]);
@@ -175,6 +178,11 @@ export function SlideEditorDrawer({
                 </p>
               )}
             </div>
+            {poolHint ? (
+              <p className="text-xs text-ivory/50" data-pool-hint="true">
+                {poolHint}
+              </p>
+            ) : null}
             <div className="flex flex-wrap gap-2">
               {(["auto", "pool", "ai", "none"] as const).map((value) => (
                 <Button
