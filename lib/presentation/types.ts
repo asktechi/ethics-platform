@@ -21,6 +21,11 @@ export type SlideAssignment = {
   theme: ThemePalette;
   imageUrl: string | null;
   imageAttribution: string | null;
+  /**
+   * Phase 7.5 hook. When a generated image exists, it overrides the curated
+   * `imageUrl` on the audience stage. Do not populate this in 7.4.
+   */
+  generatedImageUrl?: string | null;
 };
 
 export type BusEventType =
@@ -31,7 +36,8 @@ export type BusEventType =
   | "RESUME"
   | "END"
   | "TELEPROMPTER_LINE"
-  | "BEAT";
+  | "BEAT"
+  | "RESYNC";
 
 export type BusEvent =
   | { type: "NEXT" }
@@ -51,6 +57,16 @@ export type BusEvent =
       slideIndex?: number;
       beatIndex?: number;
       direction?: 1 | -1;
+    }
+  | {
+      type: "RESYNC";
+      slideIndex: number;
+      beatIndex: number;
+      lineIndex: number;
+      isPaused: boolean;
+      ended?: boolean;
+      teleprompterScrolling?: boolean;
+      revealAll?: boolean;
     }
   | {
       type: "HYDRATE";
@@ -76,7 +92,7 @@ export type PresentationBusState = {
 };
 
 export type RealtimeEnvelope = {
-  type: BusEventType | "SNAPSHOT";
+  type: BusEventType | "SNAPSHOT" | "RESYNC";
   slideIndex: number;
   ts: number;
   lineIndex?: number;
@@ -85,6 +101,14 @@ export type RealtimeEnvelope = {
   isPaused?: boolean;
   teleprompterScrolling?: boolean;
   revealAll?: boolean;
+};
+
+/** Host ↔ audience lock fields used by RESYNC and ?sync=debug. */
+export type SyncFingerprint = {
+  slideIndex: number;
+  beatIndex: number;
+  lineIndex: number;
+  isPaused: boolean;
 };
 
 export type ConnectionStatus = "connecting" | "connected" | "disconnected";

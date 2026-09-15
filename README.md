@@ -2,7 +2,7 @@
 
 Personal teaching platform for CFA Institute ethics instruction (Levels I–III). The owner is the sole instructor-author. Students join live quizzes with an open link and a display name.
 
-This repository is at **Phase 7.3**: the mobile player fills the phone stage — question text uses the leftover space and scrolls if needed, while answers stay pinned at the bottom. Desktop player layout is unchanged.
+This repository is at **Phase 7.4**: the audience view and host audience-mirror fill the viewport, type uses CSS clamp (and scrolls when long), and host ↔ audience stay locked on slide / beat / line / pause. Desktop class tabs and the Phase 7.3 mobile games player are unchanged.
 
 Never commit `.env.local`, `SUPABASE_SERVICE_ROLE_KEY`, or `SUPABASE_DB_URL`.
 
@@ -29,7 +29,8 @@ From a class, open **Present**, review the reel, then **Start presentation**.
 
 Keyboard on the host: Space / → / PageDown next slide (skips leftover beats), ← / PageUp previous beat then previous slide, **B** next beat, G jump grid, P teleprompter pause, F fullscreen, R rehearsal (does not broadcast), Cmd/Ctrl+E end. Voice input should call `dispatch({ type: "NEXT" })` from `lib/presentation/bus.ts`.
 
-Typography fixtures (Phase 4.6): open `/dev/phase46`.
+Typography fixtures (Phase 4.6): open `/dev/phase46`.  
+Audience stage fixtures (Phase 7.4): open `/dev/phase74` (`?view=short|long|host`, `?aspect=16x9|21x9|4x3|9x16|3x2`, `?scroll=mid`, `?sync=debug`).
 
 `npm` works the same way (`npm install`, `npm run dev`) if you prefer it over pnpm.
 

@@ -27,6 +27,11 @@ function layerParams(slideId: string, theme: ThemePalette) {
   return { angle, glowX, glowY, darker, lighter, vignette };
 }
 
+/**
+ * Stage backdrop. Curated `imageUrl` is full-bleed duotone; otherwise the
+ * theme gradient. Phase 7.5: callers pass `slide.generatedImageUrl` as
+ * `imageUrl` when present — that override is the only hook this layer needs.
+ */
 export function ThemeBackground({
   slideId,
   theme,

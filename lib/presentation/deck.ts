@@ -80,6 +80,8 @@ function toAssignment(
     theme: assignment?.theme ?? FALLBACK_THEME,
     imageUrl: assignment?.imageUrl ?? null,
     imageAttribution: includeInstructorFields ? (assignment?.imageAttribution ?? null) : null,
+    // Phase 7.5: populate generatedImageUrl when AI images exist; it overrides imageUrl on stage.
+    generatedImageUrl: null,
   };
 }
 

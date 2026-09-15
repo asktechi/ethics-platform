@@ -40,6 +40,7 @@ export default function Phase46PreviewPage() {
         imageAttribution={null}
         revealLineCount={-1}
         showChrome={false}
+        fillViewport
       />
     </main>
   );

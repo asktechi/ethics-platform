@@ -91,3 +91,66 @@
 .player-question-scroll::-webkit-scrollbar {
   display: none;
 }
+
+/* Phase 7.4: audience / host-mirror stage fills the viewport and scrolls long copy. */
+.audience-stage {
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.audience-stage-embedded {
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.slide-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  padding: clamp(24px, 4vw, 80px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.slide-content.is-overflowing {
+  justify-content: flex-start;
+}
+
+.slide-content > * {
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: 1400px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.slide-headline {
+  font-family: var(--font-playfair), Georgia, serif;
+  font-weight: 600;
+  font-size: clamp(32px, 6vw, 96px);
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.slide-body {
+  font-family: var(--font-inter), system-ui, sans-serif;
+  font-weight: 400;
+  font-size: clamp(16px, 2.4vw, 32px);
+  line-height: 1.5;
+}
+
+.teleprompter-copy {
+  font-size: clamp(16px, 1.6vw, 22px);
+  line-height: 1.45;
+}

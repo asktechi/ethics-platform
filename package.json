@@ -26,6 +26,7 @@
     "test:phase71": "node --experimental-strip-types --import ./scripts/register-ts-alias.mjs scripts/verify-phase71.mjs",
     "test:phase72": "node --experimental-strip-types --import ./scripts/register-ts-alias.mjs scripts/verify-phase72.mjs",
     "test:phase73": "node scripts/verify-phase73.mjs",
+    "test:phase74": "node --experimental-strip-types --import ./scripts/register-ts-alias.mjs scripts/verify-phase74.mjs",
     "test:class-perf": "node scripts/verify-class-page-perf.mjs"
   },
   "dependencies": {

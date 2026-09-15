@@ -11,7 +11,6 @@ import {
   wordCountOf,
 } from "@/lib/presentation/speaker-notes";
 
-const FONT_STEPS = ["text-sm", "text-base", "text-lg", "text-xl"] as const;
 const LINE_DEBOUNCE_MS = 200;
 
 export function Teleprompter({
@@ -25,7 +24,6 @@ export function Teleprompter({
   const busLine = usePresentationBus((s) => s.teleprompterLineIndex);
   const busBeat = usePresentationBus((s) => s.currentBeatIndex);
   const [wpm, setWpm] = useState(initialWpm);
-  const [font, setFont] = useState(1);
   const [markers, setMarkers] = useState<Set<string>>(new Set());
   const [elapsedMs, setElapsedMs] = useState(0);
   const accumulated = useRef(0);
@@ -131,24 +129,17 @@ export function Teleprompter({
           />
           <span className="w-8 font-mono text-ivory">{wpm}</span>
         </label>
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          onClick={() => setFont((value) => (value + 1) % FONT_STEPS.length)}
-        >
-          Aa
-        </Button>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
-        <section className="mb-8">
+        <section className="mb-6">
           <p className="mb-2 text-[10px] uppercase tracking-[0.16em] text-ivory/35">Now</p>
           {notes.lines.length === 0 ? (
-            <p className={`italic text-ivory/40 ${FONT_STEPS[font]}`}>No speaker notes on this slide.</p>
+            <p className="teleprompter-copy italic text-ivory/40">No speaker notes on this slide.</p>
           ) : (
             notes.lines.map((line, lineNumber) => {
               const active = lineNumber === displayLine;
+              const next = lineNumber === displayLine + 1;
               const passed = lineNumber < displayLine;
               return (
                 <p
@@ -157,12 +148,13 @@ export function Teleprompter({
                     lineRefs.current[lineNumber] = node;
                   }}
                   data-prompter-line={lineNumber}
-                  className={`mb-3 border-l-2 pl-3 leading-8 text-ivory ${FONT_STEPS[font]} ${
+                  data-prompter-state={active ? "current" : next ? "next" : passed ? "older" : "later"}
+                  className={`teleprompter-copy mb-3 text-ivory ${
                     active
-                      ? "border-gold bg-gold/15"
-                      : passed
-                        ? "border-transparent text-ivory/55"
-                        : "border-transparent text-ivory/35"
+                      ? "underline decoration-[#C9A227] decoration-2 underline-offset-4"
+                      : next
+                        ? "opacity-60"
+                        : "opacity-40"
                   }`}
                 >
                   {line.split(/\s+/).map((word, wordIndex) => {
@@ -174,10 +166,10 @@ export function Teleprompter({
                         tabIndex={0}
                         onClick={() =>
                           setMarkers((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(key)) next.delete(key);
-                            else next.add(key);
-                            return next;
+                            const nextSet = new Set(prev);
+                            if (nextSet.has(key)) nextSet.delete(key);
+                            else nextSet.add(key);
+                            return nextSet;
                           })
                         }
                         onKeyDown={(event) => {
@@ -185,10 +177,10 @@ export function Teleprompter({
                             event.preventDefault();
                             event.stopPropagation();
                             setMarkers((prev) => {
-                              const next = new Set(prev);
-                              if (next.has(key)) next.delete(key);
-                              else next.add(key);
-                              return next;
+                              const nextSet = new Set(prev);
+                              if (nextSet.has(key)) nextSet.delete(key);
+                              else nextSet.add(key);
+                              return nextSet;
                             });
                           }
                         }}
@@ -208,9 +200,11 @@ export function Teleprompter({
         {upcoming.map((slide) => {
           const nextNotes = deriveSpeakerNotes(slide, wpm);
           return (
-            <section key={slide.slideId} className="mb-8 opacity-40">
-              <p className="mb-2 text-[10px] uppercase tracking-[0.16em] text-ivory/35">Up next</p>
-              <p className={`leading-8 text-ivory ${FONT_STEPS[font]}`}>{nextNotes.teleprompterText}</p>
+            <section key={slide.slideId} className="mb-4 opacity-40">
+              <p className="mb-1 text-[10px] uppercase tracking-[0.16em] text-ivory/35">Up next</p>
+              <p className="teleprompter-copy line-clamp-3 leading-6 text-ivory">
+                {nextNotes.teleprompterText}
+              </p>
             </section>
           );
         })}

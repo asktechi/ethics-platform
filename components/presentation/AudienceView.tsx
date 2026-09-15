@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { AudienceMirror } from "@/components/presentation/AudienceMirror";
 import { PresentationSkeleton, SessionStatusScreen } from "@/components/presentation/SessionStatusScreen";
+import { SyncDebugDot } from "@/components/presentation/SyncDebugDot";
 import { audienceMirrorModel } from "@/lib/presentation/mirror";
 import {
   applyRemoteEvent,
@@ -156,7 +157,7 @@ export function AudienceView({ runId }: { runId: string }) {
 
   return (
     <main
-      className="relative h-screen w-screen overflow-hidden bg-navy"
+      className="relative h-[100dvh] max-h-[100dvh] w-screen overflow-hidden bg-navy"
       onClick={() => {
         if (allowAdvance) dispatch({ type: "NEXT" });
       }}
@@ -175,10 +176,11 @@ export function AudienceView({ runId }: { runId: string }) {
               slide={current}
               beat={mirror.beatIndex}
               theme={current.theme}
-              imageUrl={current.imageUrl}
+              imageUrl={current.generatedImageUrl || current.imageUrl}
               imageAttribution={current.imageAttribution}
               revealLineCount={mirror.revealLineCount}
               showChrome={false}
+              fillViewport
             />
           </motion.div>
         ) : (
@@ -199,6 +201,7 @@ export function AudienceView({ runId }: { runId: string }) {
           Reconnecting…
         </div>
       ) : null}
+      <SyncDebugDot role="audience" />
     </main>
   );
 }

@@ -9,6 +9,7 @@ import {
 } from "@/app/(app)/_actions/presentation.actions";
 import { AudienceMirror } from "@/components/presentation/AudienceMirror";
 import { HostSummary } from "@/components/presentation/HostSummary";
+import { SyncDebugDot } from "@/components/presentation/SyncDebugDot";
 import { NextUpPanel } from "@/components/presentation/NextUpPanel";
 import { SlideGrid } from "@/components/presentation/SlideGrid";
 import { Teleprompter } from "@/components/presentation/Teleprompter";
@@ -259,15 +260,18 @@ export function HostView(props: HostViewProps) {
         />
         <div className="relative min-h-0 flex-1" style={{ flexBasis: `${widths[1]}%` }}>
           {current && mirror ? (
-            <AudienceMirror
-              slide={current}
-              beat={mirror.beatIndex}
-              theme={current.theme}
-              imageUrl={current.imageUrl}
-              imageAttribution={current.imageAttribution}
-              revealLineCount={mirror.revealLineCount}
-              showChrome
-            />
+            <>
+              <AudienceMirror
+                slide={current}
+                beat={mirror.beatIndex}
+                theme={current.theme}
+                imageUrl={current.generatedImageUrl || current.imageUrl}
+                imageAttribution={current.imageAttribution}
+                revealLineCount={mirror.revealLineCount}
+                showChrome
+              />
+              <SyncDebugDot role="host" />
+            </>
           ) : null}
           <div className="pointer-events-none absolute left-4 top-4 text-[11px] uppercase tracking-[0.16em] text-ivory/70">
             Slide {index + 1} / {assignments.length}

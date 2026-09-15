@@ -1,7 +1,6 @@
 import {
   beatIndexForLine,
-  getPaginationViewport,
-  paginateSlide,
+  paginateAssignment,
   type PaginationResult,
 } from "@/lib/presentation/beats";
 import { deriveSpeakerNotes } from "@/lib/presentation/speaker-notes";
@@ -28,16 +27,7 @@ export function audienceMirrorModel(options: {
   revealMode: AudienceRevealMode;
 }): AudienceMirrorModel {
   const revealLines = deriveSpeakerNotes(options.slide).revealLines;
-  const pagination = paginateSlide({
-    slide: {
-      id: options.slide.slideId,
-      title: options.slide.title,
-      body: options.slide.body,
-    },
-    lines: revealLines,
-    viewport: getPaginationViewport(),
-    layout: options.slide.layout,
-  });
+  const pagination = paginateAssignment(options.slide);
   const beatIndex = Math.min(
     Math.max(0, options.currentBeatIndex),
     Math.max(0, pagination.beats.length - 1),

@@ -3,15 +3,18 @@
 /**
  * Only AudienceMirror renders audience-facing slide content. Do not
  * fork this component.
+ *
+ * Phase 7.4: the stage fills the viewport (or the host center pane).
+ * Type uses CSS clamp and never shrinks below 16px body / 32px head.
+ * Overflow scrolls. Beat pagination stays on CANONICAL_VIEWPORT.
  */
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useMemo, useRef, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { ThemeBackground } from "@/components/presentation/ThemeBackground";
-import { beatIndexForLine, paginateSlide } from "@/lib/presentation/beats";
+import { beatIndexForLine, paginateAssignment } from "@/lib/presentation/beats";
 import { dispatch, usePresentationBus } from "@/lib/presentation/bus";
 import { ensureAaText } from "@/lib/presentation/contrast";
-import { deriveSpeakerNotes } from "@/lib/presentation/speaker-notes";
 import type { SlideAssignment } from "@/lib/presentation/types";
 import { useViewport } from "@/lib/presentation/useViewport";
 import type { ThemePalette } from "@/lib/themes/types";
@@ -25,7 +28,11 @@ export type AudienceMirrorProps = {
   /** -1 = reveal all, else reveal lines 0..N of the current beat. < -1 = none. */
   revealLineCount: number;
   showChrome: boolean;
+  /** Full viewport stage (standalone audience). Host preview leaves this false. */
+  fillViewport?: boolean;
 };
+
+const HINT_MS = 3000;
 
 export function AudienceMirror({
   slide,
@@ -35,76 +42,25 @@ export function AudienceMirror({
   imageAttribution,
   revealLineCount,
   showChrome,
+  fillViewport = false,
 }: AudienceMirrorProps) {
   const viewport = useViewport();
   const slideIndex = usePresentationBus((s) => s.currentSlideIndex);
   const lineIndex = usePresentationBus((s) => s.teleprompterLineIndex);
   const lastBeatCount = useRef(0);
-  const logged = useRef<string>("");
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [overflowing, setOverflowing] = useState(false);
+  const [showHint, setShowHint] = useState(false);
 
-  const revealLines = useMemo(() => deriveSpeakerNotes(slide).revealLines, [slide]);
-  const ready = viewport.width > 0 && viewport.height > 0;
-  const pagination = useMemo(() => {
-    if (!ready) return null;
-    return paginateSlide({
-      slide: { id: slide.slideId, title: slide.title, body: slide.body },
-      lines: revealLines,
-      viewport,
-      layout: slide.layout,
-    });
-  }, [ready, revealLines, slide, viewport]);
+  const pagination = useMemo(() => paginateAssignment(slide), [slide]);
 
-  const beatCount = pagination?.beats.length ?? 1;
+  const beatCount = pagination.beats.length;
   const beatIndex = Math.min(Math.max(0, beat), Math.max(0, beatCount - 1));
-  const currentBeat = pagination?.beats[beatIndex] ?? pagination?.beats[0];
-  const headlineSize = pagination?.fontSize ?? 96;
-  const bodySize = headlineSize * 0.72;
-  const safe = useMemo(
-    () =>
-      pagination?.safeArea ?? {
-        horizontal: 0,
-        vertical: 0,
-        width: 0,
-        height: 0,
-      },
-    [pagination],
-  );
+  const currentBeat = pagination.beats[beatIndex] ?? pagination.beats[0];
+  const hostLineInBeat =
+    currentBeat && lineIndex >= 0 ? lineIndex - currentBeat.startLineIndex : -1;
 
   useEffect(() => {
-    if (!pagination || !ready) return;
-    const key = `${slide.slideId}:${viewport.width}x${viewport.height}:${headlineSize}`;
-    if (logged.current === key) return;
-    logged.current = key;
-    const applied = {
-      fontSize: `${headlineSize}px`,
-      lineHeight: 1.2,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      maxWidth: safe.width,
-      maxHeight: safe.height,
-      padding: 0,
-    };
-    console.log("[phase46g] diagnostic", {
-      a_useViewport: viewport,
-      b_safeArea: {
-        horizontalMargin: safe.horizontal,
-        verticalMargin: safe.vertical,
-        safeWidth: safe.width,
-        safeHeight: safe.height,
-      },
-      c_paginateSlide: {
-        beats: pagination.beats.length,
-        fontSize: pagination.fontSize,
-        lineHeight: pagination.lineHeight,
-        maxLineChars: pagination.maxLineChars,
-      },
-      d_headlineContainer: applied,
-    });
-  }, [headlineSize, pagination, ready, safe, slide.slideId, viewport]);
-
-  useEffect(() => {
-    if (!pagination) return;
     if (lastBeatCount.current > 0 && lastBeatCount.current !== beatCount) {
       const snapped = beatIndexForLine(pagination.beats, lineIndex);
       if (snapped !== beatIndex) {
@@ -114,11 +70,57 @@ export function AudienceMirror({
     lastBeatCount.current = beatCount;
   }, [beatCount, beatIndex, lineIndex, pagination, slideIndex]);
 
+  useEffect(() => {
+    const node = contentRef.current;
+    if (!node) return;
+    node.scrollTo({ top: 0, behavior: "smooth" });
+  }, [slide.slideId, beatIndex]);
+
+  useEffect(() => {
+    const node = contentRef.current;
+    if (!node) return;
+    let hintTimer: number | null = null;
+    const measure = () => {
+      const next = node.scrollHeight > node.clientHeight + 8;
+      setOverflowing(next);
+      if (next && node.scrollTop < 12) {
+        setShowHint(true);
+        if (hintTimer) window.clearTimeout(hintTimer);
+        hintTimer = window.setTimeout(() => setShowHint(false), HINT_MS);
+      } else {
+        setShowHint(false);
+      }
+    };
+    const onScroll = () => {
+      if (hintTimer) window.clearTimeout(hintTimer);
+      setShowHint(false);
+      hintTimer = window.setTimeout(() => {
+        if (node.scrollHeight > node.clientHeight + 8 && node.scrollTop < 12) {
+          setShowHint(true);
+          hintTimer = window.setTimeout(() => setShowHint(false), HINT_MS);
+        }
+      }, HINT_MS);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    node.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      observer.disconnect();
+      node.removeEventListener("scroll", onScroll);
+      if (hintTimer) window.clearTimeout(hintTimer);
+    };
+  }, [slide.slideId, beatIndex, revealLineCount]);
+
   const text = ensureAaText(theme.text ?? "#F5F1E8", theme.bg ?? "#0B1B2B");
   const align =
     slide.layout === "hook" || slide.layout === "question" || slide.layout === "cue"
       ? "center"
       : "left";
+  const stageImage = slide.generatedImageUrl || imageUrl;
+  const assignments = usePresentationBus((s) => s.assignments);
+  const progress =
+    assignments.length > 0 ? ((slideIndex + (beatIndex + 1) / Math.max(1, beatCount)) / assignments.length) * 100 : 0;
 
   return (
     <article
@@ -126,63 +128,56 @@ export function AudienceMirror({
       data-slide-id={slide.slideId}
       data-beat-index={beatIndex}
       data-beat-count={beatCount}
-      data-font-size={headlineSize}
       data-reveal-count={revealLineCount}
       data-show-chrome={showChrome ? "true" : "false"}
+      data-overflowing={overflowing ? "true" : "false"}
       data-viewport={`${viewport.width}x${viewport.height}`}
-      className="relative isolate h-full w-full overflow-hidden"
+      className={`relative isolate w-full ${fillViewport ? "audience-stage" : "audience-stage-embedded"}`}
       style={{ color: text }}
     >
-      <ThemeBackground slideId={slide.slideId} theme={theme} imageUrl={imageUrl} />
+      <ThemeBackground slideId={slide.slideId} theme={theme} imageUrl={stageImage} />
+      {showChrome ? (
+        <p className="relative z-20 shrink-0 py-1.5 text-center text-[10px] font-semibold uppercase tracking-[0.22em] text-ivory/55">
+          Audience view
+        </p>
+      ) : null}
       <div
-        className="absolute inset-0 z-10"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
+        ref={contentRef}
+        className={`slide-content relative z-10 ${overflowing ? "is-overflowing" : ""}`}
+        data-slide-content="true"
       >
-        {ready && pagination && currentBeat ? (
-          <div
-            style={{
-              maxWidth: safe.width,
-              maxHeight: safe.height,
-              width: "100%",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={`${slide.slideId}:${beatIndex}`}
-                className="w-full"
-                style={{ textAlign: align }}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0, transition: { duration: 0.3, ease: "easeOut" } }}
-                exit={{ opacity: 0, y: 0, transition: { duration: 0.2 } }}
-              >
-                {slide.layout === "cue" ? (
-                  <CueCard accent={theme.accent} text={text} fontSize={headlineSize} />
-                ) : (
-                  <BeatBody
-                    slide={slide}
-                    beat={currentBeat}
-                    revealLineCount={revealLineCount}
-                    headlineSize={headlineSize}
-                    bodySize={bodySize}
-                    accent={theme.accent}
-                    text={text}
-                  />
-                )}
-              </motion.div>
-            </AnimatePresence>
-          </div>
+        {currentBeat ? (
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={`${slide.slideId}:${beatIndex}`}
+              className="w-full"
+              style={{ textAlign: align }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1, transition: { duration: 0.3, ease: "easeOut" } }}
+              exit={{ opacity: 0, transition: { duration: 0.2 } }}
+            >
+              {slide.layout === "cue" ? (
+                <CueCard accent={theme.accent} text={text} />
+              ) : (
+                <BeatBody
+                  slide={slide}
+                  beat={currentBeat}
+                  revealLineCount={revealLineCount}
+                  accent={theme.accent}
+                  text={text}
+                  hostCurrentLine={showChrome ? hostLineInBeat : -1}
+                />
+              )}
+            </motion.div>
+          </AnimatePresence>
         ) : null}
       </div>
-      {showChrome ? (
-        <p className="pointer-events-none absolute left-1/2 top-3 z-20 -translate-x-1/2 text-[10px] font-semibold uppercase tracking-[0.22em] text-ivory/55">
-          Audience view
+      {overflowing && showHint ? (
+        <p
+          data-scroll-hint="true"
+          className="pointer-events-none absolute bottom-8 left-1/2 z-20 -translate-x-1/2 rounded-full bg-black/45 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-ivory/80"
+        >
+          ↓
         </p>
       ) : null}
       {showChrome && imageAttribution ? (
@@ -190,6 +185,13 @@ export function AudienceMirror({
           {imageAttribution}
         </p>
       ) : null}
+      <div
+        data-brand-bar="true"
+        className="relative z-20 h-[4px] w-full shrink-0"
+        style={{
+          background: `linear-gradient(90deg, ${theme.accent} 0%, ${theme.accent} ${Math.min(100, progress)}%, ${theme.accent}33 ${Math.min(100, progress)}%)`,
+        }}
+      />
     </article>
   );
 }
@@ -198,56 +200,42 @@ function BeatBody({
   slide,
   beat,
   revealLineCount,
-  headlineSize,
-  bodySize,
   accent,
   text,
+  hostCurrentLine,
 }: {
   slide: SlideAssignment;
   beat: { lines: string[]; leftLines?: string[]; rightLines?: string[] };
   revealLineCount: number;
-  headlineSize: number;
-  bodySize: number;
   accent: string;
   text: string;
+  hostCurrentLine: number;
 }) {
   const title = slide.title.trim();
   const showAll = revealLineCount === -1;
   const visibleThrough = showAll ? beat.lines.length - 1 : revealLineCount;
-  const visible = visibleThrough < 0 ? [] : beat.lines.filter((_, index) => index <= visibleThrough);
-  const headlineStyle: CSSProperties = {
-    fontFamily: "var(--font-playfair), Georgia, serif",
-    fontWeight: 600,
-    fontSize: `${headlineSize}px`,
-    letterSpacing: "-0.02em",
-    lineHeight: 1.2,
-    margin: 0,
-  };
-  const bodyStyle: CSSProperties = {
-    fontFamily: "var(--font-inter), system-ui, sans-serif",
-    fontWeight: 400,
-    fontSize: `${bodySize}px`,
-    lineHeight: 1.5,
-  };
 
   if (slide.layout === "contrast") {
-    const left = beat.leftLines ?? visible;
+    const left = beat.leftLines ?? beat.lines;
     const right = beat.rightLines ?? [];
-    const leftVisible = showAll || visibleThrough < 0 ? left : left.filter((_, i) => i <= visibleThrough);
-    const rightVisible =
-      showAll || visibleThrough < 0 ? right : right.filter((_, i) => i <= visibleThrough);
     return (
       <div>
-        {title ? <h1 style={headlineStyle}>{title}</h1> : null}
-        <div className="mt-8 grid grid-cols-2 gap-0">
-          <div className="pr-8" style={{ borderRight: `1px solid ${accent}66` }}>
-            <RevealStack lines={leftVisible} visibleThrough={leftVisible.length - 1} style={bodyStyle} />
-          </div>
-          <div className="pl-8">
+        {title ? <h1 className="slide-headline">{title}</h1> : null}
+        <div className="mt-8 grid min-w-0 grid-cols-2 gap-0">
+          <div className="min-w-0 pr-4 sm:pr-8" style={{ borderRight: `1px solid ${accent}66` }}>
             <RevealStack
-              lines={rightVisible}
-              visibleThrough={rightVisible.length - 1}
-              style={bodyStyle}
+              lines={left}
+              visibleThrough={showAll ? left.length - 1 : visibleThrough}
+              hostCurrentLine={hostCurrentLine}
+              accent={accent}
+            />
+          </div>
+          <div className="min-w-0 pl-4 sm:pl-8">
+            <RevealStack
+              lines={right}
+              visibleThrough={showAll ? right.length - 1 : visibleThrough}
+              hostCurrentLine={-1}
+              accent={accent}
             />
           </div>
         </div>
@@ -257,7 +245,7 @@ function BeatBody({
 
   return (
     <div
-      className={slide.layout === "scenario" ? "px-10 py-8" : undefined}
+      className={slide.layout === "scenario" ? "px-6 py-6 sm:px-10 sm:py-8" : undefined}
       style={
         slide.layout === "scenario"
           ? { border: `1px solid ${accent}80`, backgroundColor: "rgba(0,0,0,0.28)" }
@@ -272,23 +260,21 @@ function BeatBody({
           Scenario
         </p>
       ) : null}
-      {title ? <h1 style={headlineStyle}>{title}</h1> : null}
+      {title ? <h1 className="slide-headline">{title}</h1> : null}
       {slide.layout === "question" ? (
-        <p
-          className="mt-6 font-display leading-none opacity-80"
-          style={{ color: accent, fontSize: `${headlineSize * 1.15}px` }}
-        >
+        <p className="slide-headline mt-6 opacity-80" style={{ color: accent }}>
           ?
         </p>
       ) : null}
-      {slide.layout === "hook" && title && visible.length > 0 ? (
+      {slide.layout === "hook" && title && visibleThrough >= 0 ? (
         <div className="mx-auto my-6 h-px w-24" style={{ backgroundColor: accent }} />
       ) : null}
       <RevealStack
-        lines={visible}
-        visibleThrough={visible.length - 1}
+        lines={beat.lines}
+        visibleThrough={visibleThrough}
+        hostCurrentLine={hostCurrentLine}
+        accent={accent}
         style={{
-          ...bodyStyle,
           marginTop: title ? 28 : 0,
           textShadow: slide.layout === "reveal" ? `0 0 42px ${accent}99` : undefined,
           color: text,
@@ -301,25 +287,37 @@ function BeatBody({
 function RevealStack({
   lines,
   visibleThrough,
+  hostCurrentLine,
+  accent,
   style,
 }: {
   lines: string[];
   visibleThrough: number;
-  style: CSSProperties;
+  hostCurrentLine: number;
+  accent: string;
+  style?: CSSProperties;
 }) {
   if (lines.length === 0) return null;
   return (
-    <div>
+    <div className="slide-body" style={style}>
       {lines.map((line, index) => {
+        if (index > visibleThrough) return null;
         const older = index < visibleThrough - 2;
+        const isHostCurrent = hostCurrentLine === index;
         return (
           <motion.p
             key={`${index}:${line}`}
             data-reveal-line={index}
+            data-host-current={isHostCurrent ? "true" : "false"}
             initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: older ? 0.7 : 1, y: 0 }}
+            animate={{ opacity: older ? 0.75 : 1, y: 0 }}
             transition={{ duration: 0.4, ease: "easeOut" }}
-            style={{ ...style, margin: 0, marginBottom: 10 }}
+            className={isHostCurrent ? "border-l-2 pl-3" : undefined}
+            style={{
+              margin: 0,
+              marginBottom: 10,
+              borderColor: isHostCurrent ? accent : "transparent",
+            }}
           >
             {line}
           </motion.p>
@@ -332,29 +330,19 @@ function RevealStack({
 function CueCard({
   accent,
   text,
-  fontSize,
 }: {
   accent: string;
   text: string;
-  fontSize: number;
 }) {
   return (
-    <div className="mx-auto max-w-3xl border px-16 py-14 text-center" style={{ borderColor: `${accent}55`, color: text }}>
+    <div
+      className="mx-auto max-w-3xl border px-8 py-10 text-center sm:px-16 sm:py-14"
+      style={{ borderColor: `${accent}55`, color: text }}
+    >
       <p className="text-[14px] font-semibold uppercase tracking-[0.28em]" style={{ color: accent }}>
         Brief pause
       </p>
-      <p
-        className="mt-6"
-        style={{
-          fontFamily: "var(--font-playfair), Georgia, serif",
-          fontWeight: 600,
-          fontSize: `${Math.min(fontSize, 72)}px`,
-          letterSpacing: "-0.02em",
-          lineHeight: 1.2,
-        }}
-      >
-        Hold this thought
-      </p>
+      <p className="slide-headline mt-6">Hold this thought</p>
     </div>
   );
 }

@@ -47,7 +47,6 @@ export type SafeArea = {
 
 const cache = new Map<string, PaginationResult>();
 
-let liveViewport: ViewportSize = { width: CANONICAL_VIEWPORT.width, height: CANONICAL_VIEWPORT.height };
 export const lastFontSteps: Array<{
   size: number;
   fits: boolean;
@@ -56,17 +55,18 @@ export const lastFontSteps: Array<{
   width: number;
 }> = [];
 
+/**
+ * Beat pagination is locked to a shared 16:9 stage so a host preview pane
+ * and a phone audience view never disagree on beat counts. Visual overflow
+ * scrolls inside `.slide-content`; type does not shrink below CSS clamp mins.
+ */
 export function getPaginationViewport(): ViewportSize {
-  return liveViewport;
+  return { width: CANONICAL_VIEWPORT.width, height: CANONICAL_VIEWPORT.height };
 }
 
-/** Keep host + audience on the same pagination numbers; drop cache if the window moved >10px. */
-export function setPaginationViewport(next: ViewportSize) {
-  if (next.width <= 0 || next.height <= 0) return;
-  const changed =
-    Math.abs(next.width - liveViewport.width) > 10 || Math.abs(next.height - liveViewport.height) > 10;
-  liveViewport = { width: next.width, height: next.height };
-  if (changed) clearPaginationCache();
+/** No-op. Phase 7.4 ignores window size for beats; kept for older callers. */
+export function setPaginationViewport(_next: ViewportSize) {
+  /* intentionally unused */
 }
 
 export function horizontalMargin(width: number) {
@@ -113,13 +113,13 @@ export function beatIndexForLine(beats: Beat[], lineIndex: number) {
 
 export function paginateAssignment(
   slide: Pick<SlideAssignment, "slideId" | "title" | "body" | "cue" | "speakerNote" | "layout">,
-  viewport: ViewportSize = getPaginationViewport(),
+  _viewport: ViewportSize = getPaginationViewport(),
 ) {
   const lines = deriveSpeakerNotes(slide).revealLines;
   return paginateSlide({
     slide: { id: slide.slideId, title: slide.title, body: slide.body },
     lines,
-    viewport,
+    viewport: { width: CANONICAL_VIEWPORT.width, height: CANONICAL_VIEWPORT.height },
     layout: slide.layout,
   });
 }
@@ -231,7 +231,6 @@ function pickFontSize(options: {
     width: startMeasured.width,
   });
   if (fill <= 0.7 && startFits) {
-    console.log("[phase46g] font-loop stop at start", { start, fill, startFits });
     return start;
   }
 
@@ -246,7 +245,6 @@ function pickFontSize(options: {
       height: measured.height,
       width: measured.width,
     });
-    console.log("[phase46g] font-loop step", { fontSize, fits, fill: stepFill });
     if (fits) return fontSize;
   }
   return steps[steps.length - 1] ?? MIN_FONT_SIZE;

@@ -211,6 +211,20 @@ function reduce(state: PresentationBusState, event: BusEvent): PresentationBusSt
         ),
         currentBeatIndex: event.state.currentBeatIndex ?? state.currentBeatIndex,
       };
+    case "RESYNC": {
+      const slideIndex = clampIndex(event.slideIndex, state.slideCount || event.slideIndex + 1);
+      return {
+        ...state,
+        currentSlideIndex: slideIndex,
+        currentBeatIndex: Math.max(0, event.beatIndex),
+        teleprompterLineIndex: event.lineIndex,
+        isPaused: event.isPaused,
+        teleprompterScrolling:
+          event.teleprompterScrolling ?? (event.isPaused ? false : state.teleprompterScrolling),
+        ended: event.ended ?? state.ended,
+        revealFlushed: event.revealAll ?? state.revealFlushed,
+      };
+    }
     default:
       return state;
   }
@@ -228,6 +242,7 @@ type RemoteIndexExtras = {
   lineIndex?: number;
   revealAll?: boolean;
   beatIndex?: number;
+  teleprompterScrolling?: boolean;
 };
 
 type BusStore = PresentationBusState & {
@@ -258,7 +273,9 @@ export const usePresentationBus = create<BusStore>((set, get) => ({
         extras?.beatIndex ?? (slideChanged ? 0 : current.currentBeatIndex),
       ended: extras?.ended ?? current.ended,
       isPaused: extras?.isPaused ?? current.isPaused,
-      teleprompterScrolling: extras?.isPaused === true ? false : current.teleprompterScrolling,
+      teleprompterScrolling:
+        extras?.teleprompterScrolling ??
+        (extras?.isPaused === true ? false : extras?.isPaused === false ? true : current.teleprompterScrolling),
       teleprompterLineIndex: extras?.lineIndex ?? (slideChanged ? -1 : current.teleprompterLineIndex),
       revealFlushed: extras?.revealAll ?? current.revealFlushed,
     };

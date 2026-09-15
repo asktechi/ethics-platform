@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { setPaginationViewport } from "@/lib/presentation/beats";
 
 export type Viewport = {
   width: number;
@@ -23,17 +22,17 @@ function readViewport(): Viewport {
   };
 }
 
-/** Window size for audience layout. Debounced 150ms; teleprompter does not use this. */
+/**
+ * Window size for audience chrome / overflow. Debounced 150ms.
+ * Beat pagination does not use this — it stays on CANONICAL_VIEWPORT.
+ */
 export function useViewport(): Viewport {
   const [viewport, setViewport] = useState<Viewport>(EMPTY);
 
   useEffect(() => {
     let timer: number | null = null;
     const publish = () => {
-      const next = readViewport();
-      setPaginationViewport(next);
-      setViewport(next);
-      console.log("[phase46g] useViewport", next);
+      setViewport(readViewport());
     };
     const onChange = () => {
       if (timer) window.clearTimeout(timer);
