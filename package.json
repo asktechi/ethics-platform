@@ -23,7 +23,8 @@
     "test:phase6d1": "node --experimental-strip-types --import ./scripts/register-ts-alias.mjs scripts/verify-phase6d1.mjs",
     "test:phase6d2": "node --experimental-strip-types --import ./scripts/register-ts-alias.mjs scripts/verify-phase6d2.mjs",
     "test:phase6d3": "node --experimental-strip-types --import ./scripts/register-ts-alias.mjs scripts/verify-phase6d3.mjs",
-    "test:phase71": "node --experimental-strip-types --import ./scripts/register-ts-alias.mjs scripts/verify-phase71.mjs"
+    "test:phase71": "node --experimental-strip-types --import ./scripts/register-ts-alias.mjs scripts/verify-phase71.mjs",
+    "test:phase72": "node --experimental-strip-types --import ./scripts/register-ts-alias.mjs scripts/verify-phase72.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
