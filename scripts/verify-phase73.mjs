@@ -45,7 +45,7 @@ pass("Team chip below header", team.includes("headerBelow") && team.includes("hi
 pass("Boss thin HP above header", boss.includes("headerAbove") && boss.includes("ThinHpBar") && boss.includes("h-1"), "");
 pass("Case scenario sticky ready", cases.includes("I&apos;m ready") && cases.includes("MobilePlayerStage"), "");
 pass("viewportFit cover on play", playLayout.includes("viewportFit: \"cover\"") && playLayout.includes("userScalable: false"), "");
-pass("debug overlay ?layout=debug", playPage.includes('searchParams.layout === "debug"') && stage.includes("outline-cyan-400"), "");
+pass("debug overlay ?layout=debug", playPage.includes('searchParams.layout === "debug"') && stage.includes("22d3ee") && stage.includes("a3e635") && stage.includes("e879f9"), "");
 pass("shell desktop padding preserved", shell.includes("md:px-4 md:py-4") && !shell.includes("px-4 py-4 text-ivory"), "");
 pass("fixture long vignette", fixtures.includes("This vignette is intentionally long"), "");
 pass("all six modes covered", [jeopardy, rapid, adaptive, team, boss, cases].every((src) => src.includes("MobilePlayerStage") || src.includes("JeopardyPlayer")), "");

@@ -81,7 +81,7 @@ export function MobilePlayerStage({
         data-player-zone="header"
         className={cn(
           "relative z-10 flex h-[52px] shrink-0 items-center justify-between gap-3 border-b border-gold/20 px-4",
-          debug && "outline outline-2 outline-cyan-400",
+          debug && "shadow-[inset_0_0_0_2px_#22d3ee]",
         )}
       >
         <div className="min-w-0 text-[11px] uppercase tracking-[0.14em] text-ivory/55">{headerLeft}</div>
@@ -97,7 +97,7 @@ export function MobilePlayerStage({
         data-player-zone="question"
         className={cn(
           "player-question-scroll min-h-0 flex-1 overflow-y-auto px-4 pb-2 pt-4",
-          debug && "outline outline-2 outline-lime-400",
+          debug && "shadow-[inset_0_0_0_2px_#a3e635]",
         )}
       >
         <AnimatePresence mode="wait">
@@ -129,7 +129,7 @@ export function MobilePlayerStage({
         data-player-zone="answers"
         className={cn(
           "relative z-10 shrink-0 px-3 pt-2",
-          debug && "outline outline-2 outline-fuchsia-400",
+          debug && "shadow-[inset_0_0_0_2px_#e879f9]",
         )}
         style={{
           paddingBottom: "calc(8px + env(safe-area-inset-bottom))",
