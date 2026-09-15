@@ -6,7 +6,8 @@ import { Suspense } from "react";
 import { AudienceMirror } from "@/components/presentation/AudienceMirror";
 import { SyncDebugDot } from "@/components/presentation/SyncDebugDot";
 import { Teleprompter } from "@/components/presentation/Teleprompter";
-import { dispatch, resetPresentationBus } from "@/lib/presentation/bus";
+import { dispatch, resetPresentationBus, usePresentationBus } from "@/lib/presentation/bus";
+import { audienceMirrorModel } from "@/lib/presentation/mirror";
 import {
   PHASE74_ASPECTS,
   PHASE74_HOOK,
@@ -14,10 +15,6 @@ import {
   PHASE74_SHORT,
   type Phase74Aspect,
 } from "@/lib/presentation/phase74-fixtures";
-import { audienceMirrorModel } from "@/lib/presentation/mirror";
-import { usePresentationBus } from "@/lib/presentation/bus";
-
-const ASPECT_KEYS = Object.keys(PHASE74_ASPECTS) as Phase74Aspect[];
 
 function Frame({
   aspect,
@@ -152,5 +149,3 @@ export default function Phase74PreviewPage() {
     </Suspense>
   );
 }
-
-export const PHASE74_ASPECT_LIST = ASPECT_KEYS;

@@ -44,7 +44,7 @@ pass("reveal 400ms translateY 8", mirror.includes("y: 8") && mirror.includes("du
 pass("older lines 0.75", mirror.includes("older ? 0.75"), "");
 pass("beat fade 200/300", mirror.includes("duration: 0.2") && mirror.includes("duration: 0.3"), "");
 pass("host gold bar only when chrome", mirror.includes("hostCurrentLine={showChrome ? hostLineInBeat : -1}"), "");
-pass("canonical viewport locked", beats.includes("Beat pagination is locked") && beats.includes("intentionally unused"), "");
+pass("canonical viewport locked", beats.includes("Beat pagination is locked") && beats.includes("void next"), "");
 pass("RESYNC type", types.includes('"RESYNC"') && realtime.includes('RESYNC_EVENT = "resync"') && realtime.includes("broadcastResync"), "");
 pass("rehearsal does not broadcast RESYNC", realtime.includes("rehearsal — not broadcasting RESYNC"), "");
 pass("generatedImageUrl hook", types.includes("generatedImageUrl") && mirror.includes("slide.generatedImageUrl") && background.includes("Phase 7.5"), "");

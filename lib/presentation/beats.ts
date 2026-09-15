@@ -65,8 +65,8 @@ export function getPaginationViewport(): ViewportSize {
 }
 
 /** No-op. Phase 7.4 ignores window size for beats; kept for older callers. */
-export function setPaginationViewport(_next: ViewportSize) {
-  /* intentionally unused */
+export function setPaginationViewport(next: ViewportSize) {
+  void next;
 }
 
 export function horizontalMargin(width: number) {
@@ -113,8 +113,9 @@ export function beatIndexForLine(beats: Beat[], lineIndex: number) {
 
 export function paginateAssignment(
   slide: Pick<SlideAssignment, "slideId" | "title" | "body" | "cue" | "speakerNote" | "layout">,
-  _viewport: ViewportSize = getPaginationViewport(),
+  viewport: ViewportSize = getPaginationViewport(),
 ) {
+  void viewport;
   const lines = deriveSpeakerNotes(slide).revealLines;
   return paginateSlide({
     slide: { id: slide.slideId, title: slide.title, body: slide.body },
