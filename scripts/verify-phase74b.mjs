@@ -28,6 +28,8 @@ function read(rel) {
 
 const css = read("app/globals.css");
 const mirror = read("components/presentation/AudienceMirror.tsx");
+const rolling = read("components/presentation/RollingBar.tsx");
+const audienceScroll = read("lib/presentation/useAudienceScroll.ts");
 const tele = read("components/presentation/Teleprompter.tsx");
 const host = read("components/presentation/HostView.tsx");
 const audience = read("components/presentation/AudienceView.tsx");
@@ -42,8 +44,8 @@ const games = read("components/quiz/player/MobilePlayerStage.tsx");
 
 pass("7.4 100dvh flex + slide-content overflow", css.includes("height: 100dvh") && css.includes("overflow-y: auto") && mirror.includes("slide-content"), "");
 pass("7.4 clamp headline + body", css.includes("clamp(32px, 6vw, 96px)") && css.includes("clamp(16px, 2.4vw, 32px)"), "");
-pass("7.4 reveal opacity + translateY", mirror.includes("y: 8") && mirror.includes("isNew"), "");
-pass("7.4 beat fade + scroll to top", mirror.includes("duration: 0.3") && mirror.includes("scrollTo"), "");
+pass("7.4 reveal is rolling bar", rolling.includes("clamp(28px, 5vw, 64px)") && rolling.includes("data-rolling-bar"), "");
+pass("7.4 beat fade + audience auto-scroll", mirror.includes("duration: 0.3") && audienceScroll.includes("scrollTo"), "");
 pass("7.4 teleprompter clamp + WPM highlight", tele.includes("teleprompter-copy") && tele.includes("decoration-[#C9A227]"), "");
 pass("7.4 RESYNC + debug dot", host.includes("SyncDebugDot") && audience.includes("SyncDebugDot"), "");
 pass("7.4 landscape aspect hooks", read("app/dev/phase74/page.tsx").includes("PHASE74_ASPECTS"), "");

@@ -21,6 +21,8 @@ function read(rel) {
 }
 
 const mirror = read("components/presentation/AudienceMirror.tsx");
+const rolling = read("components/presentation/RollingBar.tsx");
+const audienceScroll = read("lib/presentation/useAudienceScroll.ts");
 const audience = read("components/presentation/AudienceView.tsx");
 const tele = read("components/presentation/Teleprompter.tsx");
 const css = read("app/globals.css");
@@ -39,11 +41,12 @@ pass("headline clamp 32/6vw/96", css.includes("clamp(32px, 6vw, 96px)"), "");
 pass("body clamp 16/2.4vw/32", css.includes("clamp(16px, 2.4vw, 32px)"), "");
 pass("teleprompter clamp 16/1.6vw/22", css.includes("clamp(16px, 1.6vw, 22px)") && tele.includes("teleprompter-copy"), "");
 pass("gold 4px brand bar", mirror.includes("data-brand-bar") && mirror.includes("h-[4px]"), "");
-pass("scroll hint ↓", mirror.includes("data-scroll-hint") && mirror.includes("↓"), "");
-pass("reveal 400ms translateY 8", mirror.includes("y: 8") && mirror.includes("duration: 0.4"), "");
-pass("older lines 0.75", mirror.includes("older ? 0.75"), "");
-pass("beat fade 200/300", mirror.includes("duration: 0.2") && mirror.includes("duration: 0.3"), "");
-pass("host gold bar only when chrome", mirror.includes("hostCurrentLine={showChrome ? hostLineInBeat : -1}"), "");
+pass("jump to live pill", rolling.includes("data-jump-to-live") && rolling.includes("Live — tap to catch up"), "");
+pass("rolling current clamp 28/5vw/64", rolling.includes("clamp(28px, 5vw, 64px)") && rolling.includes("duration: 0.5"), "");
+pass("rolling receding depths", rolling.includes("translateZ(-40px)") && rolling.includes("opacity: 0.4"), "");
+pass("beat/slide fade 200/300/400", mirror.includes("duration: 0.2") && mirror.includes("duration: 0.3") && mirror.includes("duration: 0.4"), "");
+pass("host current line only when chrome", mirror.includes("hostCurrentLine={showChrome ? hostLineInBeat : -1}"), "");
+pass("audience scroll hook", audienceScroll.includes("userScrolledUp") && audienceScroll.includes("jumpToLive") && audienceScroll.includes("400"), "");
 pass("canonical viewport locked", beats.includes("Beat pagination is locked") && beats.includes("void next"), "");
 pass("RESYNC type", types.includes('"RESYNC"') && realtime.includes('RESYNC_EVENT = "resync"') && realtime.includes("broadcastResync"), "");
 pass("rehearsal does not broadcast RESYNC", realtime.includes("rehearsal — not broadcasting RESYNC"), "");
