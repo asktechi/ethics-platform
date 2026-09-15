@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getClass } from "@/lib/data/classes";
+import { countQuestions } from "@/lib/data/questions";
 import { cn } from "@/lib/utils";
 
 export default async function ClassLayout({
@@ -9,13 +9,7 @@ export default async function ClassLayout({
   children: React.ReactNode;
   params: { id: string };
 }) {
-  let questionCount = 0;
-  try {
-    const detail = await getClass(params.id);
-    questionCount = detail.questionCount;
-  } catch {
-    questionCount = 0;
-  }
+  const questionCount = await countQuestions(params.id).catch(() => 0);
 
   const links = [
     { href: `/class/${params.id}`, label: "Overview" },

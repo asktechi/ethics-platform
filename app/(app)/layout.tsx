@@ -1,22 +1,19 @@
 import { formatDistanceToNow } from "date-fns";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/shell/app-shell";
-import { getInstructorProfile } from "@/lib/data/auth";
-import { getClass, listRecentClasses } from "@/lib/data/classes";
+import { getInstructorProfile, requireUser } from "@/lib/data/auth";
+import { listRecentClasses } from "@/lib/data/classes";
 import { listLevels, levelCopy } from "@/lib/data/levels";
-import { createClient } from "@/lib/supabase/server";
+import { countQuestionsForClasses } from "@/lib/data/questions";
 
 export default async function AppLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  try {
+    await requireUser();
+  } catch {
     redirect("/login");
   }
 
@@ -25,6 +22,7 @@ export default async function AppLayout({
     listLevels(),
     listRecentClasses(5),
   ]);
+  const questionCounts = await countQuestionsForClasses(recent.map((item) => item.id));
 
   return (
     <AppShell
@@ -36,14 +34,12 @@ export default async function AppLayout({
           name: level.name,
           hint: levelCopy[level.slug]?.split("—")[0]?.trim() ?? "Ethics",
         })),
-        recentClasses: await Promise.all(
-          recent.map(async (item) => ({
-            id: item.id,
-            title: item.title,
-            meta: formatDistanceToNow(new Date(item.updated_at), { addSuffix: true }),
-            questionCount: (await getClass(item.id).catch(() => ({ questionCount: 0 }))).questionCount,
-          })),
-        ),
+        recentClasses: recent.map((item) => ({
+          id: item.id,
+          title: item.title,
+          meta: formatDistanceToNow(new Date(item.updated_at), { addSuffix: true }),
+          questionCount: questionCounts[item.id] ?? 0,
+        })),
       }}
     >
       {children}

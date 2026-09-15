@@ -52,14 +52,16 @@ export async function listClassSlides(classId: string): Promise<ClassSlide[]> {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("slides")
-    .select("*, materials!inner(id, class_id, concept_id, original_filename, is_current, deleted_at, list_order, created_at)")
+    .select(
+      "id, material_id, concept_id, order, title, body, cue, speaker_note, layout, status, deleted_at, materials!inner(id, class_id, concept_id, original_filename, is_current, deleted_at, list_order, created_at)",
+    )
     .eq("materials.class_id", classId)
     .eq("materials.is_current", true)
     .is("materials.deleted_at", null)
     .is("deleted_at", null);
   if (error) throw new Error(error.message);
 
-  const rows = (data ?? []) as Array<
+  const rows = (data ?? []) as unknown as Array<
     Slide & {
       materials: {
         concept_id: string | null;
