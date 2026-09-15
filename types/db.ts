@@ -322,6 +322,9 @@ export type Database = {
           status: "draft" | "approved";
           concept_id: string | null;
           image_id: string | null;
+          generated_image_id: string | null;
+          image_status: "none" | "queued" | "generating" | "ready" | "failed";
+          image_preference: "auto" | "pool" | "ai" | "none";
           created_at: string;
           updated_at: string;
           deleted_at: string | null;
@@ -347,6 +350,9 @@ export type Database = {
           status?: "draft" | "approved";
           concept_id?: string | null;
           image_id?: string | null;
+          generated_image_id?: string | null;
+          image_status?: "none" | "queued" | "generating" | "ready" | "failed";
+          image_preference?: "auto" | "pool" | "ai" | "none";
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
@@ -372,6 +378,54 @@ export type Database = {
           status?: "draft" | "approved";
           concept_id?: string | null;
           image_id?: string | null;
+          generated_image_id?: string | null;
+          image_status?: "none" | "queued" | "generating" | "ready" | "failed";
+          image_preference?: "auto" | "pool" | "ai" | "none";
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Relationships: [];
+      };
+      slide_generated_images: {
+        Row: {
+          id: string;
+          slide_id: string;
+          prompt: string;
+          storage_path: string;
+          width: number | null;
+          height: number | null;
+          model: string | null;
+          cost_usd: number | null;
+          is_current: boolean;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          slide_id: string;
+          prompt: string;
+          storage_path: string;
+          width?: number | null;
+          height?: number | null;
+          model?: string | null;
+          cost_usd?: number | null;
+          is_current?: boolean;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          slide_id?: string;
+          prompt?: string;
+          storage_path?: string;
+          width?: number | null;
+          height?: number | null;
+          model?: string | null;
+          cost_usd?: number | null;
+          is_current?: boolean;
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
@@ -701,7 +755,7 @@ export type Database = {
           id: string;
           user_id: string;
           class_id: string | null;
-          feature: "tagging" | "generation" | "hint";
+          feature: "tagging" | "generation" | "hint" | "image_generation";
           model: string;
           input_tokens: number;
           output_tokens: number;
@@ -712,7 +766,7 @@ export type Database = {
           id?: string;
           user_id: string;
           class_id?: string | null;
-          feature: "tagging" | "generation" | "hint";
+          feature: "tagging" | "generation" | "hint" | "image_generation";
           model: string;
           input_tokens?: number;
           output_tokens?: number;
@@ -723,7 +777,7 @@ export type Database = {
           id?: string;
           user_id?: string;
           class_id?: string | null;
-          feature?: "tagging" | "generation" | "hint";
+          feature?: "tagging" | "generation" | "hint" | "image_generation";
           model?: string;
           input_tokens?: number;
           output_tokens?: number;

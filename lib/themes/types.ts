@@ -16,6 +16,7 @@ export type RunSettings = {
   theme_overrides?: Record<string, string>;
   allow_audience_advance?: boolean;
   audience_reveal_mode?: "progressive" | "instant";
+  auto_generate_images?: boolean;
   current_slide_index?: number;
   peak_audience?: number;
   slides_advanced?: number;
@@ -30,6 +31,7 @@ export const DEFAULT_RUN_SETTINGS: RunSettings = {
   theme_overrides: {},
   allow_audience_advance: false,
   audience_reveal_mode: "progressive",
+  auto_generate_images: false,
   current_slide_index: 0,
   peak_audience: 0,
   slides_advanced: 0,
@@ -63,6 +65,7 @@ export function parseRunSettings(value: unknown): RunSettings {
     theme_overrides: overrides,
     allow_audience_advance: raw.allow_audience_advance === true,
     audience_reveal_mode: raw.audience_reveal_mode === "instant" ? "instant" : "progressive",
+    auto_generate_images: raw.auto_generate_images === true,
     current_slide_index: Math.max(0, Number(raw.current_slide_index ?? 0) || 0),
     peak_audience: Math.max(0, Number(raw.peak_audience ?? 0) || 0),
     slides_advanced: Math.max(0, Number(raw.slides_advanced ?? 0) || 0),

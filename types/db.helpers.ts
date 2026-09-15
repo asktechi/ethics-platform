@@ -37,6 +37,7 @@ export type QuestionPool = Tables<"question_pools">;
 export type QuestionPoolItem = Tables<"question_pool_items">;
 export type ImportBatch = Tables<"import_batches">;
 export type AiUsageLog = Tables<"ai_usage_log">;
+export type SlideGeneratedImage = Tables<"slide_generated_images">;
 export type QuizSession = Tables<"quiz_sessions">;
 export type QuizParticipant = Tables<"quiz_participants">;
 export type QuizResponse = Tables<"quiz_responses">;

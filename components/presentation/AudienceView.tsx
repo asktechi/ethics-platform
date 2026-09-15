@@ -12,7 +12,7 @@ import {
   resetPresentationBus,
   usePresentationBus,
 } from "@/lib/presentation/bus";
-import { prefetchUpcomingImages } from "@/lib/presentation/prefetch";
+import { injectPreloadLink, prefetchUpcomingImages, slideStageImage } from "@/lib/presentation/prefetch";
 import { connectPresentationRealtime } from "@/lib/presentation/realtime";
 import type { AudienceDeckResponse, ConnectionStatus } from "@/lib/presentation/types";
 import { createClient } from "@/lib/supabase/client";
@@ -91,11 +91,9 @@ export function AudienceView({ runId }: { runId: string }) {
   }, [payload?.status, runId]);
 
   useEffect(() => {
-    prefetchUpcomingImages(
-      assignments.map((slide) => slide.imageUrl),
-      index,
-      1,
-    );
+    const urls = assignments.map((slide) => slideStageImage(slide));
+    prefetchUpcomingImages(urls, index, 1);
+    injectPreloadLink(urls[index + 1] ?? null);
   }, [assignments, index]);
 
   if (error) {

@@ -2,7 +2,7 @@
 
 Personal teaching platform for CFA Institute ethics instruction (Levels I–III). The owner is the sole instructor-author. Students join live quizzes with an open link and a display name.
 
-This repository is at **Phase 7.4**: the audience view and host audience-mirror fill the viewport, type uses CSS clamp (and scrolls when long), and host ↔ audience stay locked on slide / beat / line / pause. Desktop class tabs and the Phase 7.3 mobile games player are unchanged.
+This repository is at **Phase 7.5**: slides can use a curated pool image, an AI-generated background (OpenAI Images, cached in Supabase Storage), or the theme gradient. Generation is opt-in from Present setup. The Phase 7.4 audience stage (viewport fill, clamp type, host ↔ audience lock) is unchanged.
 
 Never commit `.env.local`, `SUPABASE_SERVICE_ROLE_KEY`, or `SUPABASE_DB_URL`.
 
@@ -17,7 +17,7 @@ pnpm dev
 The default Next.js port is `3000`. In this environment the preview server uses a non-default port (see the preview card). Open `/` for the landing page, `/login` for the magic-link instructor sign-in, and `/dashboard` for the class builder.
 
 Health check: `GET /api/health` returns `{ "ok": true }`.  
-Database check: `GET /api/health/db` returns `{ "ok": true, "tables": 30 }`.
+Database check: `GET /api/health/db` returns `{ "ok": true, "tables": 31 }`.
 
 ## Present a class
 
@@ -27,7 +27,9 @@ From a class, open **Present**, review the reel, then **Start presentation**.
 - Audience (open): `/present/{runId}/audience`
 - Join QR: `/present/{runId}/audience/join`
 
-Keyboard on the host: Space / → / PageDown next slide (skips leftover beats), ← / PageUp previous beat then previous slide, **B** next beat, G jump grid, P teleprompter pause, F fullscreen, R rehearsal (does not broadcast), Cmd/Ctrl+E end. Voice input should call `dispatch({ type: "NEXT" })` from `lib/presentation/bus.ts`.
+Keyboard on the host: Space / → / PageDown next slide (skips leftover beats), ← / PageUp previous beat then previous slide, **B** next beat, **I** generate an AI image for the current slide, G jump grid, P teleprompter pause, F fullscreen, R rehearsal (does not broadcast), Cmd/Ctrl+E end. Voice input should call `dispatch({ type: "NEXT" })` from `lib/presentation/bus.ts`.
+
+On Present setup, the **Slide visuals** card can generate backgrounds for slides without a curated pool photo (default off; ~$0.04 per 1536×1024 image, 100/class/day cap). The audience stage uses the generated image when present, then the pool image, then the gradient.
 
 Typography fixtures (Phase 4.6): open `/dev/phase46`.  
 Audience stage fixtures (Phase 7.4): open `/dev/phase74` (`?view=short|long|host`, `?aspect=16x9|21x9|4x3|9x16|3x2`, `?scroll=mid`, `?sync=debug`).

@@ -5,6 +5,7 @@ import { getAssignmentsForRun, listClassSlides, type ClassSlide } from "@/lib/th
 import { parseRunSettings, type ThemePalette } from "@/lib/themes/types";
 import type { Json } from "@/types/db";
 import type { PresentationRun } from "@/types/db.helpers";
+import { signedUrlMap } from "@/lib/ai/images";
 import { normalizeLayout, type SlideAssignment } from "@/lib/presentation/types";
 
 const FALLBACK_THEME: ThemePalette = {
@@ -67,9 +68,16 @@ function toAssignment(
     | { theme: ThemePalette; imageUrl: string | null; imageAttribution: string | null }
     | undefined,
   includeInstructorFields: boolean,
+  generatedUrl: string | null,
 ): SlideAssignment {
   const layout = normalizeLayout(slide.layout);
   const isCue = layout === "cue";
+  const preference = slide.image_preference ?? "auto";
+  const readyAi = Boolean(generatedUrl) && (slide.image_status === "ready" || Boolean(slide.generated_image_id));
+  const useAi =
+    preference === "ai" || (preference === "auto" && readyAi);
+  const usePool = preference === "pool" || (preference === "auto" && !useAi);
+  const useNone = preference === "none";
   return {
     slideId: slide.id,
     title: includeInstructorFields || !isCue ? (slide.title ?? "Untitled slide") : "Break",
@@ -78,10 +86,11 @@ function toAssignment(
     speakerNote: includeInstructorFields ? slide.speaker_note : null,
     layout,
     theme: assignment?.theme ?? FALLBACK_THEME,
-    imageUrl: assignment?.imageUrl ?? null,
+    imageUrl: useNone || !usePool ? null : assignment?.imageUrl ?? null,
     imageAttribution: includeInstructorFields ? (assignment?.imageAttribution ?? null) : null,
-    // Phase 7.5: populate generatedImageUrl when AI images exist; it overrides imageUrl on stage.
-    generatedImageUrl: null,
+    generatedImageUrl: useNone || !useAi ? null : generatedUrl,
+    imageStatus: slide.image_status ?? "none",
+    imagePreference: preference,
   };
 }
 
@@ -92,8 +101,14 @@ export async function loadApprovedDeck(
 ): Promise<SlideAssignment[]> {
   const slides = (await listClassSlides(classId)).filter((slide) => slide.status === "approved");
   const assignments = await loadAssignmentsByPublicRunId(publicRunId);
+  const generated = await signedUrlMap(slides.map((slide) => slide.id));
   return slides.map((slide) =>
-    toAssignment(slide, assignments.get(slide.id), options.includeInstructorFields),
+    toAssignment(
+      slide,
+      assignments.get(slide.id),
+      options.includeInstructorFields,
+      generated.get(slide.id) ?? null,
+    ),
   );
 }
 

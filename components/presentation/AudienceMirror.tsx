@@ -15,6 +15,7 @@ import { ThemeBackground } from "@/components/presentation/ThemeBackground";
 import { beatIndexForLine, paginateAssignment } from "@/lib/presentation/beats";
 import { dispatch, usePresentationBus } from "@/lib/presentation/bus";
 import { ensureAaText } from "@/lib/presentation/contrast";
+import { slideStageImage } from "@/lib/presentation/prefetch";
 import type { SlideAssignment } from "@/lib/presentation/types";
 import { useViewport } from "@/lib/presentation/useViewport";
 import type { ThemePalette } from "@/lib/themes/types";
@@ -121,6 +122,7 @@ export function AudienceMirror({
       : "left";
   const stageImage = slide.generatedImageUrl || imageUrl;
   const assignments = usePresentationBus((s) => s.assignments);
+  const nextUrl = slideStageImage(assignments[slideIndex + 1] ?? null);
   const progress =
     assignments.length > 0 ? ((slideIndex + (beatIndex + 1) / Math.max(1, beatCount)) / assignments.length) * 100 : 0;
 
@@ -137,6 +139,7 @@ export function AudienceMirror({
       className={`relative isolate w-full ${fillViewport ? "audience-stage" : "audience-stage-embedded"}`}
       style={{ color: text }}
     >
+      {nextUrl ? <link rel="preload" as="image" href={nextUrl} /> : null}
       <ThemeBackground slideId={slide.slideId} theme={theme} imageUrl={stageImage} />
       {showChrome ? (
         <p className="relative z-20 shrink-0 py-1.5 text-center text-[10px] font-semibold uppercase tracking-[0.22em] text-ivory/55">

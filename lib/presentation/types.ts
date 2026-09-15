@@ -26,6 +26,8 @@ export type SlideAssignment = {
    * `imageUrl` on the audience stage. Do not populate this in 7.4.
    */
   generatedImageUrl?: string | null;
+  imageStatus?: "none" | "queued" | "generating" | "ready" | "failed";
+  imagePreference?: "auto" | "pool" | "ai" | "none";
 };
 
 export type BusEventType =

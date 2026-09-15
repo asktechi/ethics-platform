@@ -266,7 +266,9 @@ export async function createMaterialFromUpload(input: {
 
 export async function updateSlide(
   slideId: string,
-  patch: Partial<Pick<Slide, "title" | "body" | "cue" | "speaker_note" | "layout" | "image_prompt" | "status">>,
+  patch: Partial<
+    Pick<Slide, "title" | "body" | "cue" | "speaker_note" | "layout" | "image_prompt" | "image_preference" | "status">
+  >,
 ): Promise<Slide> {
   const { supabase } = await requireUser();
   const { data, error } = await supabase

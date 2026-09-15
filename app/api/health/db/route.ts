@@ -35,6 +35,7 @@ const PUBLIC_TABLES = [
   "game_teams",
   "case_studies",
   "bosses",
+  "slide_generated_images",
 ] as const;
 
 export async function GET() {
