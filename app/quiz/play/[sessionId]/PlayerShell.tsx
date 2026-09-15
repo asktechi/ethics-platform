@@ -35,6 +35,7 @@ export function PlayerShell({
   initialCombat,
   allowAudienceAdvance = false,
   allowReplay = true,
+  debug = false,
 }: {
   sessionId: string;
   joinCode: string;
@@ -50,6 +51,7 @@ export function PlayerShell({
   initialCombat?: unknown;
   allowAudienceAdvance?: boolean;
   allowReplay?: boolean;
+  debug?: boolean;
 }) {
   const router = useRouter();
   const mode = getMode(modeId);
@@ -469,7 +471,7 @@ export function PlayerShell({
   }
 
   return (
-    <div className="relative flex h-[100dvh] flex-col overflow-hidden bg-navy px-4 py-4 text-ivory">
+    <div className="relative flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden bg-navy text-ivory md:px-4 md:py-4">
       {isRapid ? (
         <RapidFirePlayer
           identity={identity}
@@ -484,6 +486,7 @@ export function PlayerShell({
               return next;
             });
           }}
+          debug={debug}
         />
       ) : isAdaptive ? (
         <AdaptivePlayer
@@ -498,6 +501,7 @@ export function PlayerShell({
               return next;
             });
           }}
+          debug={debug}
         />
       ) : isCase || caseIntro || caseComplete ? (
         <CaseStudyPlayer
@@ -524,6 +528,7 @@ export function PlayerShell({
           allowAdvance={allowAudienceAdvance}
           advancePressed={readyPressed}
           onAdvance={markReady}
+          debug={debug}
         />
       ) : mode.id === "team_battle" ? (
         <TeamBattlePlayer
@@ -548,6 +553,7 @@ export function PlayerShell({
           allowAdvance={allowAudienceAdvance}
           advancePressed={readyPressed}
           onAdvance={markReady}
+          debug={debug}
         />
       ) : isBoss ? (
         <BossBattlePlayer
@@ -577,6 +583,7 @@ export function PlayerShell({
           onAdvance={markReady}
           allowReplay={allowReplay}
           joinCode={joinCode}
+          debug={debug}
         />
       ) : (
         <JeopardyPlayer
@@ -598,6 +605,7 @@ export function PlayerShell({
           allowAdvance={allowAudienceAdvance}
           advancePressed={readyPressed}
           onAdvance={markReady}
+          debug={debug}
         />
       )}
     </div>

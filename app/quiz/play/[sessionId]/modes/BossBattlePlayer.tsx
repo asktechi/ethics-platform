@@ -11,6 +11,28 @@ import {
 import type { BossCombatView } from "@/lib/games/boss-view";
 import type { QuizPlayQuestion } from "@/lib/quiz/types";
 
+function ThinHpBar({
+  label,
+  current,
+  max,
+  color,
+}: {
+  label: string;
+  current: number;
+  max: number;
+  color: string;
+}) {
+  const ratio = max <= 0 ? 0 : Math.max(0, Math.min(1, current / max));
+  return (
+    <div className="flex items-center gap-2">
+      <span className="w-12 shrink-0 text-[9px] uppercase tracking-[0.12em] text-ivory/50">{label}</span>
+      <div className="h-1 min-w-0 flex-1 overflow-hidden bg-white/10">
+        <div className="h-full" style={{ width: `${ratio * 100}%`, background: color }} />
+      </div>
+    </div>
+  );
+}
+
 export function BossBattlePlayer({
   combat,
   overlay,
@@ -38,6 +60,7 @@ export function BossBattlePlayer({
   onAdvance,
   allowReplay = true,
   joinCode,
+  debug = false,
 }: {
   combat: BossCombatView | null;
   overlay: { phase: number; taunt: string } | null;
@@ -65,6 +88,7 @@ export function BossBattlePlayer({
   onAdvance?: () => void;
   allowReplay?: boolean;
   joinCode?: string | null;
+  debug?: boolean;
 }) {
   const boss = combat?.boss;
   const palette = boss?.palette_json ?? {};
@@ -107,7 +131,7 @@ export function BossBattlePlayer({
           }}
         />
       ) : null}
-      <div className="mb-3 shrink-0 space-y-2">
+      <div className="mb-3 hidden shrink-0 space-y-2 md:block">
         <HpBar label={boss?.name ?? "Boss"} current={hp} max={max} color={hpBarColor(ratio, palette.hpBar)} />
         {combat?.play_mode === "co-op" && combat.party_hp != null ? (
           <HpBar label="Party" current={combat.party_hp} max={combat.party_max_hp} color="#38BDF8" />
@@ -146,6 +170,16 @@ export function BossBattlePlayer({
         allowAdvance={allowAdvance}
         advancePressed={advancePressed}
         onAdvance={onAdvance}
+        debug={debug}
+        headerAbove={
+          <div className="space-y-1">
+            <ThinHpBar label="Boss" current={hp} max={max} color={hpBarColor(ratio, palette.hpBar)} />
+            {combat?.play_mode === "co-op" && combat.party_hp != null ? (
+              <ThinHpBar label="Party" current={combat.party_hp} max={combat.party_max_hp} color="#38BDF8" />
+            ) : null}
+          </div>
+        }
+        damageFlash={flash ? { amount: flash.amount, kind: flash.kind } : null}
       />
     </div>
   );

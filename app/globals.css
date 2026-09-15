@@ -82,3 +82,12 @@
     border: 1px solid rgba(201, 162, 39, 0.45);
   }
 }
+
+/* Phase 7.3: mobile player question zone scrolls without a visible bar. */
+.player-question-scroll {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.player-question-scroll::-webkit-scrollbar {
+  display: none;
+}

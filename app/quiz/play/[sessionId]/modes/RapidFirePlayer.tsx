@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { submitAnswerAction } from "@/app/quiz/_actions/player.actions";
+import { MobileAnswerButtons } from "@/components/quiz/player/MobileAnswerButtons";
+import { MobilePlayerStage } from "@/components/quiz/player/MobilePlayerStage";
 import type { PlayerIdentity, QuizPlayQuestion } from "@/lib/quiz/types";
 import { cn } from "@/lib/utils";
 
@@ -12,6 +14,7 @@ export function RapidFirePlayer({
   frozen,
   skipIndex,
   onDelta,
+  debug = false,
 }: {
   identity: PlayerIdentity;
   questions: QuizPlayQuestion[];
@@ -19,6 +22,7 @@ export function RapidFirePlayer({
   frozen: boolean;
   skipIndex: number;
   onDelta: (delta: number) => void;
+  debug?: boolean;
 }) {
   const [index, setIndex] = useState(0);
   const [choice, setChoice] = useState<string | null>(null);
@@ -88,7 +92,7 @@ export function RapidFirePlayer({
     );
   }
 
-  return (
+  const desktop = (
     <>
       <div className="flex shrink-0 items-center justify-between text-xs uppercase tracking-[0.14em] text-ivory/45">
         <span>
@@ -126,6 +130,34 @@ export function RapidFirePlayer({
         ) : (
           <p className="text-sm text-ivory/60">Tap as fast as you can. The clock never stops.</p>
         )}
+      </div>
+    </>
+  );
+
+  return (
+    <>
+      <div className="hidden min-h-0 flex-1 flex-col md:flex" data-player-stage="desktop">
+        {desktop}
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col md:hidden">
+        <MobilePlayerStage
+          debug={debug}
+          headerLeft={<span>Q {index + 1}{questions.length ? ` / ${questions.length}` : ""}</span>}
+          headerCenter={<span className="font-mono text-2xl tabular-nums text-gold">{remaining}s</span>}
+          headerRight={<span>{delta != null && delta > 0 ? `+${delta}` : ""}</span>}
+          questionKey={question.question_id}
+          question={<p>{question.stem}</p>}
+          answers={
+            <MobileAnswerButtons
+              choices={question.choices}
+              phase="question"
+              choice={choice}
+              correctKey={null}
+              onLock={(key) => void pick(key)}
+              disabled={busy || frozen}
+            />
+          }
+        />
       </div>
     </>
   );
