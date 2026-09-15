@@ -864,6 +864,7 @@ export type Database = {
           left_at: string | null;
           team_id: string | null;
           team_role: string | null;
+          is_bot: boolean;
           joined_at: string;
           created_at: string;
           updated_at: string;
@@ -883,6 +884,7 @@ export type Database = {
           left_at?: string | null;
           team_id?: string | null;
           team_role?: string | null;
+          is_bot?: boolean;
           joined_at?: string;
           created_at?: string;
           updated_at?: string;
@@ -902,6 +904,7 @@ export type Database = {
           left_at?: string | null;
           team_id?: string | null;
           team_role?: string | null;
+          is_bot?: boolean;
           joined_at?: string;
           created_at?: string;
           updated_at?: string;
@@ -1115,6 +1118,8 @@ export type Database = {
           party_hp_current: number | null;
           boss_phase: number;
           boss_state: Json;
+          is_rehearsal: boolean;
+          rehearsal_config: Json;
           created_at: string;
           updated_at: string;
           deleted_at: string | null;
@@ -1141,6 +1146,8 @@ export type Database = {
           party_hp_current?: number | null;
           boss_phase?: number;
           boss_state?: Json;
+          is_rehearsal?: boolean;
+          rehearsal_config?: Json;
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
@@ -1167,6 +1174,8 @@ export type Database = {
           party_hp_current?: number | null;
           boss_phase?: number;
           boss_state?: Json;
+          is_rehearsal?: boolean;
+          rehearsal_config?: Json;
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
@@ -1405,6 +1414,10 @@ export type Database = {
       };
       finalize_game_instance: {
         Args: { p_session_id: string };
+        Returns: undefined;
+      };
+      end_rehearsal: {
+        Args: { p_instance_id: string };
         Returns: undefined;
       };
       refresh_student_performance: {
