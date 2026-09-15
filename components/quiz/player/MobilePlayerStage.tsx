@@ -19,6 +19,7 @@ export function MobilePlayerStage({
   answers,
   floating,
   paused,
+  initialScroll,
 }: {
   debug?: boolean;
   headerLeft: ReactNode;
@@ -32,6 +33,7 @@ export function MobilePlayerStage({
   answers: ReactNode;
   floating?: ReactNode;
   paused?: boolean;
+  initialScroll?: "top" | "mid";
 }) {
   const zoneRef = useRef<HTMLDivElement>(null);
   const [overflowHint, setOverflowHint] = useState(false);
@@ -39,15 +41,25 @@ export function MobilePlayerStage({
   useEffect(() => {
     const el = zoneRef.current;
     if (!el) return;
-    const overflowing = el.scrollHeight > el.clientHeight + 12;
-    if (!overflowing) {
-      setOverflowHint(false);
-      return;
-    }
-    setOverflowHint(true);
-    const timer = window.setTimeout(() => setOverflowHint(false), 3000);
-    return () => window.clearTimeout(timer);
-  }, [questionKey, revealPanel]);
+    let timer: number | undefined;
+    const measure = () => {
+      const overflowing = el.scrollHeight > el.clientHeight + 12;
+      if (initialScroll === "mid" && overflowing) {
+        el.scrollTop = Math.max(0, (el.scrollHeight - el.clientHeight) * 0.45);
+      }
+      if (!overflowing) {
+        setOverflowHint(false);
+        return;
+      }
+      setOverflowHint(true);
+      timer = window.setTimeout(() => setOverflowHint(false), 3000);
+    };
+    const frame = window.requestAnimationFrame(measure);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [questionKey, revealPanel, initialScroll]);
 
   return (
     <div

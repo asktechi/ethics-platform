@@ -20,9 +20,11 @@ const LONG = `A CFA charterholder employed as a research analyst at a mid-sized 
 function Fixture({
   view,
   debug,
+  scrollMid,
 }: {
   view: string;
   debug: boolean;
+  scrollMid: boolean;
 }) {
   const long = view === "long";
   const reveal = view === "reveal";
@@ -50,6 +52,7 @@ function Fixture({
             I&apos;m ready
           </button>
         }
+        initialScroll={scrollMid ? "mid" : "top"}
       />
     );
   }
@@ -107,6 +110,7 @@ function Fixture({
           disabled={reveal || boss}
         />
       }
+      initialScroll={scrollMid ? "mid" : "top"}
     />
   );
 }
@@ -115,9 +119,10 @@ function Inner() {
   const params = useSearchParams();
   const view = params.get("view") ?? "short";
   const debug = params.get("layout") === "debug" || params.get("debug") === "1";
+  const scrollMid = params.get("scroll") === "mid";
   return (
     <div className="flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden bg-navy text-ivory">
-      <Fixture view={view} debug={debug} />
+      <Fixture view={view} debug={debug} scrollMid={scrollMid} />
     </div>
   );
 }

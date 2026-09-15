@@ -150,9 +150,9 @@ export function RapidFirePlayer({
           answers={
             <MobileAnswerButtons
               choices={question.choices}
-              phase={flash ? "reveal" : "question"}
+              phase="question"
               choice={choice}
-              correctKey={flash === "correct" ? choice : flash === "wrong" ? "__none__" : null}
+              correctKey={null}
               onLock={(key) => void pick(key)}
               disabled={busy || frozen}
             />

@@ -39,6 +39,7 @@ pass("framer 400ms ease", answers.includes("duration: 0.4") && stage.includes("d
 pass("desktop Jeopardy unchanged max-h-[22vh]", jeopardy.includes("max-h-[22vh]") && jeopardy.includes('data-player-stage="desktop"'), "");
 pass("mobile hidden at md", jeopardy.includes("md:hidden") && jeopardy.includes("hidden min-h-0 flex-1 flex-col md:flex"), "");
 pass("Rapid Fire dual layout", rapid.includes("MobilePlayerStage") && rapid.includes('data-player-stage="desktop"'), "");
+pass("Rapid Fire keeps full-size answers", rapid.includes('phase="question"') && !rapid.includes("flash ? \"reveal\""), "");
 pass("Adaptive drill label + hint pill", adaptive.includes("Drill: Q") && adaptive.includes("Hint") && adaptive.includes("800"), "");
 pass("Team chip below header", team.includes("headerBelow") && team.includes("hidden") && team.includes("md:flex"), "");
 pass("Boss thin HP above header", boss.includes("headerAbove") && boss.includes("ThinHpBar") && boss.includes("h-1"), "");
