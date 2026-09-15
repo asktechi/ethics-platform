@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { JeopardyPlayer } from "@/app/quiz/play/[sessionId]/modes/JeopardyPlayer";
+import { MobilePlayerStage } from "@/components/quiz/player/MobilePlayerStage";
 import { BrandNavLink } from "@/components/quiz/EndNavBar";
 import { cn } from "@/lib/utils";
 import type { QuizPlayQuestion } from "@/lib/quiz/types";
@@ -30,6 +31,7 @@ export function CaseStudyPlayer({
   allowAdvance = false,
   advancePressed = false,
   onAdvance,
+  debug = false,
 }: {
   intro: { title: string; scenario: string } | null;
   complete: boolean;
@@ -54,6 +56,7 @@ export function CaseStudyPlayer({
   allowAdvance?: boolean;
   advancePressed?: boolean;
   onAdvance?: () => void;
+  debug?: boolean;
 }) {
   const [holdComplete, setHoldComplete] = useState(complete);
 
@@ -69,20 +72,46 @@ export function CaseStudyPlayer({
 
   if (intro && !ready) {
     return (
-      <div className="flex min-h-0 flex-1 flex-col bg-navy text-ivory">
-        <p className="text-xs uppercase tracking-[0.18em] text-[#2A9D8F]">Case study</p>
-        <h1 className="mt-3 font-display text-3xl">{intro.title}</h1>
-        <div className="mt-4 min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-ivory/80">
-          {intro.scenario}
+      <>
+        <div className="hidden min-h-0 flex-1 flex-col bg-navy text-ivory md:flex" data-player-stage="desktop">
+          <p className="text-xs uppercase tracking-[0.18em] text-[#2A9D8F]">Case study</p>
+          <h1 className="mt-3 font-display text-3xl">{intro.title}</h1>
+          <div className="mt-4 min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-ivory/80">
+            {intro.scenario}
+          </div>
+          <button
+            type="button"
+            onClick={onReady}
+            className="mt-4 bg-gold px-4 py-3 font-medium text-navy hover:bg-gold/90"
+          >
+            I&apos;m ready
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={onReady}
-          className="mt-4 bg-gold px-4 py-3 font-medium text-navy hover:bg-gold/90"
-        >
-          I&apos;m ready
-        </button>
-      </div>
+        <div className="flex min-h-0 flex-1 flex-col md:hidden">
+          <MobilePlayerStage
+            debug={debug}
+            headerLeft={<span>Case study</span>}
+            headerCenter={<span className="text-[#2A9D8F]">Scenario</span>}
+            headerRight={<span />}
+            questionKey={intro.title}
+            question={
+              <>
+                <p className="font-display text-[1.35em] leading-snug">{intro.title}</p>
+                <p className="mt-4 whitespace-pre-wrap text-[0.95em] leading-[1.6] text-ivory/85">{intro.scenario}</p>
+              </>
+            }
+            answers={
+              <button
+                type="button"
+                onClick={onReady}
+                className="min-h-14 w-full touch-manipulation rounded-xl bg-gold px-4 py-3 text-base font-medium text-navy"
+              >
+                I&apos;m ready
+              </button>
+            }
+          />
+        </div>
+      </>
     );
   }
 
@@ -103,7 +132,7 @@ export function CaseStudyPlayer({
   return (
     <>
       {caseTitle ? (
-        <p className={cn("mb-2 text-xs uppercase tracking-[0.14em] text-[#2A9D8F]")}>Case: {caseTitle}</p>
+        <p className={cn("mb-2 hidden text-xs uppercase tracking-[0.14em] text-[#2A9D8F] md:block")}>Case: {caseTitle}</p>
       ) : null}
       <JeopardyPlayer
         question={question}
@@ -124,6 +153,12 @@ export function CaseStudyPlayer({
         allowAdvance={allowAdvance}
         advancePressed={advancePressed}
         onAdvance={onAdvance}
+        debug={debug}
+        headerBelow={
+          caseTitle ? (
+            <p className="text-[11px] uppercase tracking-[0.14em] text-[#2A9D8F]">Case: {caseTitle}</p>
+          ) : null
+        }
       />
     </>
   );

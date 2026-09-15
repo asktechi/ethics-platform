@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { nextAdaptiveQuestionAction, submitAnswerAction } from "@/app/quiz/_actions/player.actions";
+import { MobileAnswerButtons } from "@/components/quiz/player/MobileAnswerButtons";
+import { MobilePlayerStage, MobileRevealPanel } from "@/components/quiz/player/MobilePlayerStage";
 import type { PlayerIdentity } from "@/lib/quiz/types";
 import { cn } from "@/lib/utils";
 
@@ -25,6 +27,7 @@ export function AdaptivePlayer({
   allowHint,
   onDelta,
   onProgress,
+  debug = false,
 }: {
   identity: PlayerIdentity;
   sessionId: string;
@@ -32,6 +35,7 @@ export function AdaptivePlayer({
   allowHint: boolean;
   onDelta: (delta: number) => void;
   onProgress?: (payload: { question_index: number; standard_id: string | null }) => void;
+  debug?: boolean;
 }) {
   const [question, setQuestion] = useState<PlayQuestion | null>(null);
   const [choice, setChoice] = useState<string | null>(null);
@@ -142,48 +146,104 @@ export function AdaptivePlayer({
     return <p className="m-auto text-ivory/60">Picking your next question…</p>;
   }
 
+  const hintControl =
+    allowHint && !hint ? (
+      <button
+        type="button"
+        className="absolute bottom-full right-1 mb-2 min-h-12 touch-manipulation rounded-full border border-[#4C8BF5]/50 bg-navy px-3 py-1.5 text-sm text-[#4C8BF5]"
+        onClick={() => void requestHint()}
+      >
+        Hint
+      </button>
+    ) : null;
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center justify-between text-xs uppercase tracking-[0.14em] text-ivory/45">
-        <span>
-          Question {question.question_index + 1} of {question.total_questions}
-        </span>
-        <span className="text-[#4C8BF5]">
-          {question.standard_code ? `${question.standard_code} — ${question.standard_title}` : "Adaptive"}
-        </span>
+    <>
+      <div className="hidden min-h-0 flex-1 flex-col md:flex" data-player-stage="desktop">
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="flex items-center justify-between text-xs uppercase tracking-[0.14em] text-ivory/45">
+            <span>
+              Question {question.question_index + 1} of {question.total_questions}
+            </span>
+            <span className="text-[#4C8BF5]">
+              {question.standard_code ? `${question.standard_code} — ${question.standard_title}` : "Adaptive"}
+            </span>
+          </div>
+          <h1 className="mt-3 max-h-[22vh] overflow-y-auto font-display text-xl leading-snug">{question.stem}</h1>
+          {hint ? <p className="mt-3 border border-[#4C8BF5]/40 bg-[#4C8BF5]/10 px-3 py-2 text-sm">{hint}</p> : null}
+          {hintError ? <p className="mt-2 text-sm text-red-300">{hintError}</p> : null}
+          <div className="mt-4 grid min-h-0 flex-1 content-start gap-2 overflow-y-auto">
+            {question.choices.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                disabled={busy}
+                onClick={() => void pick(item.key)}
+                className={cn(
+                  "min-h-14 rounded-md border px-3 py-3 text-left text-base font-medium",
+                  "border-ivory/20 bg-card active:bg-gold active:text-navy",
+                  choice === item.key && flash === "correct" && "border-emerald-400 bg-emerald-900/50",
+                  choice === item.key && flash === "wrong" && "border-red-400 bg-red-900/50",
+                )}
+              >
+                <span className="mr-3 text-gold">{item.key}</span>
+                {item.text}
+              </button>
+            ))}
+          </div>
+          <div className="mt-3 flex items-center justify-between border border-white/10 bg-card px-3 py-3">
+            <p className="text-sm text-ivory/70">
+              {flash === "correct" ? `+${delta ?? 0}` : flash === "wrong" ? "+0" : "Tap an answer"}
+            </p>
+            {allowHint && !hint ? (
+              <button type="button" className="text-sm text-[#4C8BF5]" onClick={() => void requestHint()}>
+                Hint
+              </button>
+            ) : null}
+          </div>
+        </div>
       </div>
-      <h1 className="mt-3 max-h-[22vh] overflow-y-auto font-display text-xl leading-snug">{question.stem}</h1>
-      {hint ? <p className="mt-3 border border-[#4C8BF5]/40 bg-[#4C8BF5]/10 px-3 py-2 text-sm">{hint}</p> : null}
-      {hintError ? <p className="mt-2 text-sm text-red-300">{hintError}</p> : null}
-      <div className="mt-4 grid min-h-0 flex-1 content-start gap-2 overflow-y-auto">
-        {question.choices.map((item) => (
-          <button
-            key={item.key}
-            type="button"
-            disabled={busy}
-            onClick={() => void pick(item.key)}
-            className={cn(
-              "min-h-14 rounded-md border px-3 py-3 text-left text-base font-medium",
-              "border-ivory/20 bg-card active:bg-gold active:text-navy",
-              choice === item.key && flash === "correct" && "border-emerald-400 bg-emerald-900/50",
-              choice === item.key && flash === "wrong" && "border-red-400 bg-red-900/50",
-            )}
-          >
-            <span className="mr-3 text-gold">{item.key}</span>
-            {item.text}
-          </button>
-        ))}
+
+      <div className="flex min-h-0 flex-1 flex-col md:hidden">
+        <MobilePlayerStage
+          debug={debug}
+          headerLeft={
+            <span>
+              Drill: Q {question.question_index + 1} / {question.total_questions}
+            </span>
+          }
+          headerCenter={<span className="max-w-[9rem] truncate text-[11px] text-[#4C8BF5]">{question.standard_code ?? "Adaptive"}</span>}
+          headerRight={<span>{delta != null ? (delta > 0 ? `+${delta}` : "0") : ""}</span>}
+          questionKey={question.question_id}
+          question={
+            <>
+              <p>{question.stem}</p>
+              {hint ? <p className="mt-3 border border-[#4C8BF5]/40 bg-[#4C8BF5]/10 px-3 py-2 text-sm">{hint}</p> : null}
+              {hintError ? <p className="mt-2 text-sm text-red-300">{hintError}</p> : null}
+            </>
+          }
+          revealPanel={
+            flash ? (
+              <MobileRevealPanel
+                lastDelta={flash === "correct" ? Math.max(delta ?? 1, 1) : 0}
+                correctKey={flash === "correct" ? choice : null}
+                explanation=""
+              />
+            ) : null
+          }
+          answers={
+            <MobileAnswerButtons
+              choices={question.choices}
+              phase={flash ? "reveal" : "question"}
+              choice={choice}
+              correctKey={flash === "correct" ? choice : flash === "wrong" ? "__none__" : null}
+              onLock={(key) => void pick(key)}
+              disabled={busy}
+            />
+          }
+          floating={hintControl}
+        />
       </div>
-      <div className="mt-3 flex items-center justify-between border border-white/10 bg-card px-3 py-3">
-        <p className="text-sm text-ivory/70">
-          {flash === "correct" ? `+${delta ?? 0}` : flash === "wrong" ? "+0" : "Tap an answer"}
-        </p>
-        {allowHint && !hint ? (
-          <button type="button" className="text-sm text-[#4C8BF5]" onClick={() => void requestHint()}>
-            Hint
-          </button>
-        ) : null}
-      </div>
-    </div>
+    </>
   );
 }

@@ -2,7 +2,7 @@
 
 Personal teaching platform for CFA Institute ethics instruction (Levels I–III). The owner is the sole instructor-author. Students join live quizzes with an open link and a display name.
 
-This repository is at **Phase 7.2**: every game can be rehearsed end-to-end with simulated students before going live. Rehearsal data is never saved to Sessions, analytics, or `student_performance`.
+This repository is at **Phase 7.3**: the mobile player fills the phone stage — question text uses the leftover space and scrolls if needed, while answers stay pinned at the bottom. Desktop player layout is unchanged.
 
 Never commit `.env.local`, `SUPABASE_SERVICE_ROLE_KEY`, or `SUPABASE_DB_URL`.
 
@@ -61,7 +61,7 @@ Open a class and use the **Questions** tab, or go to `/class/{id}/questions`.
 
 Sample ethics CSV: [`fixtures/samples/questions-1.csv`](fixtures/samples/questions-1.csv).
 
-Phase 6: from a pool, **Launch live quiz** → `/quiz/host/{sessionId}` (ready room, live dashboard, keyboard controls). Students open `/quiz/join/{code}` (or the QR page), enter a display name, and play on `/quiz/play/{sessionId}`. After the last question or **End session**, the host lands on `/quiz/host/{sessionId}/summary` (podium, analytics, CSV/PDF, replay). Host events go through `lib/quiz/bus.ts` on channel `quiz:{session_id}` and must include `sender` + `host_token`.
+Phase 6: from a pool, **Launch live quiz** → `/quiz/host/{sessionId}` (ready room, live dashboard, keyboard controls). Students play on `/quiz/play/{sessionId}`. On phones (< 768px) the question fills leftover height and scrolls if needed; the four answers stay pinned at the bottom. Desktop player layout is unchanged. Append `?layout=debug` to outline the header / question / answer zones.
 
 Host keys: Space / → / PageDown next, ← / PageUp previous, **R** reveal, **P** pause, **E** end (confirm), **F** fullscreen, **G** leaderboard overlay.
 
@@ -141,6 +141,7 @@ Next.js 14 App Router, TypeScript, Tailwind, shadcn/ui, Framer Motion, dnd-kit, 
 6E. **Student analytics + CFA linkage**
 7.1 **Quiz UX** — auto-reveal when all answered, audience advance, end-screen navigation
 7.2 **Rehearsal mode** — practice any of the six games with bots before class; data is discarded
+7.3 **Mobile player** — fill the phone stage; answers pinned; desktop unchanged
 7. **Polish** — shortcuts, offline cache, expand beyond CFA
 
 Work phase by phase. Do not start the next phase until the instructor confirms.
