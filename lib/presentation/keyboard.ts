@@ -7,7 +7,6 @@ export type HostUiAction =
   | { kind: "exit-fullscreen" }
   | { kind: "rehearsal" }
   | { kind: "toggle-prompter" }
-  | { kind: "generate-image" }
   | { kind: "confirm-end" };
 
 function isEditableTarget(target: EventTarget | null) {
@@ -22,7 +21,7 @@ function isEditableTarget(target: EventTarget | null) {
  * Map presenter key events to bus events or chrome actions.
  * Clickers emit Space / PageDown as ordinary keydown.
  * B advances the audience beat without leaving the slide.
- * I generates (or regenerates) an AI background for the current slide.
+ * Image generation is never bound to a key — it is opt-in in the slide editor.
  * Phase 4.5 voice advance will skip this file and call dispatch({ type: "NEXT" }).
  */
 export function mapHostKey(event: KeyboardEvent): HostUiAction | null {
@@ -42,7 +41,6 @@ export function mapHostKey(event: KeyboardEvent): HostUiAction | null {
   if (key === "p" || key === "P") return { kind: "toggle-prompter" };
   if (key === "f" || key === "F") return { kind: "fullscreen" };
   if (key === "r" || key === "R") return { kind: "rehearsal" };
-  if (key === "i" || key === "I") return { kind: "generate-image" };
   if (key === "Escape") return { kind: "exit-fullscreen" };
   if ((event.metaKey || event.ctrlKey) && (key === "e" || key === "E")) {
     return { kind: "confirm-end" };

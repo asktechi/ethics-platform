@@ -87,7 +87,9 @@ function toAssignment(
     generatedUrl,
     assignmentUrl: assignment?.imageUrl,
     poolUrl,
+    stockUrl: slide.stock_image_url,
   });
+  const stockAttribution = slide.stock_attribution ?? assignment?.imageAttribution ?? poolAttribution;
   return {
     slideId: slide.id,
     title: includeInstructorFields || !isCue ? (slide.title ?? "Untitled slide") : "Break",
@@ -97,12 +99,10 @@ function toAssignment(
     layout,
     theme: assignment?.theme ?? FALLBACK_THEME,
     imageUrl: picked.source === "pool" ? picked.url : null,
-    imageAttribution: includeInstructorFields
-      ? (assignment?.imageAttribution ?? poolAttribution)
-      : null,
+    imageAttribution: includeInstructorFields && picked.source === "pool" ? stockAttribution : null,
     generatedImageUrl: picked.source === "ai" ? picked.url : null,
     imageStatus: slide.image_status ?? "none",
-    imagePreference: slide.image_preference ?? "auto",
+    imagePreference: slide.image_preference === "pool" || slide.image_preference === "ai" ? slide.image_preference : "none",
   };
 }
 

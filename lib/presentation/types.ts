@@ -22,8 +22,8 @@ export type SlideAssignment = {
   imageUrl: string | null;
   imageAttribution: string | null;
   /**
-   * Phase 7.5 hook. When a generated image exists, it overrides the curated
-   * `imageUrl` on the audience stage. Do not populate this in 7.4.
+   * Attached AI image for preference `ai`. Null unless the instructor opted in
+   * and clicked Use this image. Never a prerequisite for presenting.
    */
   generatedImageUrl?: string | null;
   imageStatus?: "none" | "queued" | "generating" | "ready" | "failed";

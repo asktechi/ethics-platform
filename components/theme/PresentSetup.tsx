@@ -32,14 +32,18 @@ export function PresentSetup({ classId }: { classId: string }) {
   const [lockedThemeId, setLockedThemeId] = useState<string>("");
   const [allowAudienceAdvance, setAllowAudienceAdvance] = useState(false);
   const [revealMode, setRevealMode] = useState<"progressive" | "instant">("progressive");
-  const [autoGenerate, setAutoGenerate] = useState(false);
   const [themes, setThemes] = useState<Array<{ id: string; name: string; palette_json: Json }>>([]);
   const [visualSlides, setVisualSlides] = useState<
-    Array<{ id: string; title: string | null; image_status?: string | null; image_preference?: string | null }>
+    Array<{
+      id: string;
+      title: string | null;
+      image_status?: string | null;
+      image_preference?: string | null;
+      stock_image_url?: string | null;
+    }>
   >([]);
   const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
-  const [spend, setSpend] = useState(0);
-  const [imageToday, setImageToday] = useState({ count: 0, spend: 0 });
+  const [imageMonth, setImageMonth] = useState(0);
   const [costEach, setCostEach] = useState(0.04);
   const [origin, setOrigin] = useState("");
   const router = useRouter();
@@ -61,12 +65,10 @@ export function PresentSetup({ classId }: { classId: string }) {
       setLockedThemeId(result.settings.locked_theme_id ?? "");
       setAllowAudienceAdvance(result.settings.allow_audience_advance === true);
       setRevealMode(result.settings.audience_reveal_mode === "instant" ? "instant" : "progressive");
-      setAutoGenerate(result.settings.auto_generate_images === true);
       setThemes(result.themes as Array<{ id: string; name: string; palette_json: Json }>);
       setVisualSlides(result.slides);
       setImageUrls(result.imageUrls ?? {});
-      setSpend(result.spend ?? 0);
-      setImageToday(result.imageToday ?? { count: 0, spend: 0 });
+      setImageMonth(result.imageMonth ?? 0);
       setCostEach(result.imageCostEach ?? 0.04);
       setReel(
         result.assignments.map((row) => {
@@ -106,7 +108,6 @@ export function PresentSetup({ classId }: { classId: string }) {
           locked_theme_id: themeMode === "locked" ? lockedThemeId || null : null,
           allow_audience_advance: allowAudienceAdvance,
           audience_reveal_mode: revealMode,
-          auto_generate_images: autoGenerate,
         },
       });
       if (!result.ok) setError(result.error);
@@ -155,15 +156,11 @@ export function PresentSetup({ classId }: { classId: string }) {
 
       <SlideVisualsCard
         classId={classId}
-        publicRunId={run?.run_id ?? null}
         slides={visualSlides}
         curatedBySlide={Object.fromEntries(reel.map((item) => [item.slide_id, item.image_url]))}
         imageUrls={imageUrls}
-        spend={spend}
-        imageToday={imageToday}
+        monthSpend={imageMonth}
         costEach={costEach}
-        autoGenerate={autoGenerate}
-        onAutoGenerateChange={setAutoGenerate}
       />
 
       <Tabs defaultValue="settings">

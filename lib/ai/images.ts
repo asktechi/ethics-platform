@@ -5,6 +5,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import {
   IMAGE_DAILY_CAP,
   IMAGE_GENERATION_COST_USD,
+  aiImageMonthlyCapUsd,
+  classImageSpendMonth,
   logAiUsage,
 } from "@/lib/ai/usage";
 import { signedGeneratedUrl, uploadGeneratedPng } from "@/lib/storage/generated-images";
@@ -29,6 +31,8 @@ export type GenerateSlideImageResult = {
   url: string;
   cost: number;
   model: string;
+  attached: boolean;
+  monthSpend: number;
 };
 
 export class ImageGenerationError extends Error {
@@ -83,7 +87,15 @@ export async function generateSlideImage(input: {
   regenerate?: boolean;
   forceFail?: boolean;
   mock?: boolean;
+  confirm?: boolean;
+  attach?: boolean;
 }): Promise<GenerateSlideImageResult> {
+  if (input.confirm !== true) {
+    throw new ImageGenerationError(
+      "Confirmation required. Generate AI image is opt-in per slide.",
+    );
+  }
+
   const admin = createAdminClient();
   const owned = await instructorOwnsSlide(input.userId, input.slideId);
   if (!owned.ok || !owned.classId) {
@@ -93,7 +105,14 @@ export async function generateSlideImage(input: {
   const today = await classImageCountToday(owned.classId);
   if (today >= IMAGE_DAILY_CAP) {
     throw new ImageGenerationError(
-      `Daily image cap reached (${IMAGE_DAILY_CAP} per class). Disable auto-generation or try tomorrow.`,
+      `Daily image cap reached (${IMAGE_DAILY_CAP} per class). Try stock photos or wait until tomorrow.`,
+    );
+  }
+
+  const monthSpend = await classImageSpendMonth(owned.classId);
+  if (monthSpend + IMAGE_GENERATION_COST_USD > aiImageMonthlyCapUsd() + 1e-9) {
+    throw new ImageGenerationError(
+      "AI image budget reached for this class this month. Use stock photos or raise the cap.",
     );
   }
 
@@ -109,11 +128,7 @@ export async function generateSlideImage(input: {
     slide.image_prompt?.trim() ||
     [slide.title, slide.body].filter(Boolean).join(". ").slice(0, 400);
   const prompt = buildImagePrompt(subject, input.style);
-
-  await admin
-    .from("slides")
-    .update({ image_status: "generating", updated_at: new Date().toISOString() })
-    .eq("id", input.slideId);
+  const attach = input.attach === true;
 
   try {
     if (input.forceFail || process.env.ETHICS_IMAGE_FAIL === "1") {
@@ -132,15 +147,6 @@ export async function generateSlideImage(input: {
       bytes: generated.bytes,
     });
 
-    if (input.regenerate || slide.generated_image_id) {
-      await admin
-        .from("slide_generated_images")
-        .update({ is_current: false, updated_at: new Date().toISOString() })
-        .eq("slide_id", input.slideId)
-        .eq("is_current", true)
-        .is("deleted_at", null);
-    }
-
     const cost = generated.model === "mock" ? 0 : IMAGE_GENERATION_COST_USD;
     const { data: row, error: insertError } = await admin
       .from("slide_generated_images")
@@ -152,21 +158,21 @@ export async function generateSlideImage(input: {
         height: generated.height,
         model: generated.model,
         cost_usd: cost,
-        is_current: true,
+        is_current: attach,
       })
       .select("id")
       .single();
     if (insertError || !row) throw new ImageGenerationError(insertError?.message ?? "Insert failed");
 
-    await admin
-      .from("slides")
-      .update({
-        generated_image_id: row.id,
-        image_status: "ready",
-        image_prompt: input.prompt?.trim() || slide.image_prompt,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", input.slideId);
+    if (input.prompt?.trim()) {
+      await admin
+        .from("slides")
+        .update({
+          image_prompt: input.prompt.trim(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", input.slideId);
+    }
 
     await logAiUsage({
       userId: input.userId,
@@ -176,16 +182,125 @@ export async function generateSlideImage(input: {
       costUsd: cost,
     });
 
+    if (attach) {
+      await attachGeneratedImage({
+        slideId: input.slideId,
+        userId: input.userId,
+        imageId: row.id,
+      });
+    }
+
     const url = await signedGeneratedUrl(storagePath);
-    return { imageId: row.id, storagePath, url, cost, model: generated.model };
+    const nextMonthSpend = monthSpend + cost;
+    return {
+      imageId: row.id,
+      storagePath,
+      url,
+      cost,
+      model: generated.model,
+      attached: attach,
+      monthSpend: nextMonthSpend,
+    };
   } catch (caught) {
-    await admin
-      .from("slides")
-      .update({ image_status: "failed", updated_at: new Date().toISOString() })
-      .eq("id", input.slideId);
     if (caught instanceof ImageGenerationError) throw caught;
     throw new ImageGenerationError(caught instanceof Error ? caught.message : "Image generation failed");
   }
+}
+
+export async function attachGeneratedImage(input: {
+  slideId: string;
+  userId: string;
+  imageId: string;
+}) {
+  const owned = await instructorOwnsSlide(input.userId, input.slideId);
+  if (!owned.ok) throw new ImageGenerationError("You do not own this slide.");
+  const admin = createAdminClient();
+  const now = new Date().toISOString();
+  const { data: row, error } = await admin
+    .from("slide_generated_images")
+    .select("id, slide_id, deleted_at")
+    .eq("id", input.imageId)
+    .eq("slide_id", input.slideId)
+    .maybeSingle();
+  if (error) throw new ImageGenerationError(error.message);
+  if (!row || row.deleted_at) throw new ImageGenerationError("Generated image not found.");
+
+  await admin
+    .from("slide_generated_images")
+    .update({ is_current: false, updated_at: now })
+    .eq("slide_id", input.slideId)
+    .eq("is_current", true)
+    .is("deleted_at", null);
+
+  await admin
+    .from("slide_generated_images")
+    .update({ is_current: true, deleted_at: null, updated_at: now })
+    .eq("id", input.imageId);
+
+  await admin
+    .from("slides")
+    .update({
+      generated_image_id: input.imageId,
+      image_status: "ready",
+      image_preference: "ai",
+      updated_at: now,
+    })
+    .eq("id", input.slideId);
+}
+
+export async function discardGeneratedImage(input: {
+  slideId: string;
+  userId: string;
+  imageId: string;
+}) {
+  const owned = await instructorOwnsSlide(input.userId, input.slideId);
+  if (!owned.ok) throw new ImageGenerationError("You do not own this slide.");
+  const admin = createAdminClient();
+  const now = new Date().toISOString();
+  const { data: slide } = await admin
+    .from("slides")
+    .select("generated_image_id")
+    .eq("id", input.slideId)
+    .maybeSingle();
+
+  await admin
+    .from("slide_generated_images")
+    .update({ is_current: false, deleted_at: now, updated_at: now })
+    .eq("id", input.imageId)
+    .eq("slide_id", input.slideId);
+
+  if (slide?.generated_image_id === input.imageId) {
+    await admin
+      .from("slides")
+      .update({
+        generated_image_id: null,
+        image_status: "none",
+        image_preference: "none",
+        updated_at: now,
+      })
+      .eq("id", input.slideId);
+  }
+}
+
+export async function setSlideStockImage(input: {
+  slideId: string;
+  userId: string;
+  url: string | null;
+  attribution?: string | null;
+}) {
+  const owned = await instructorOwnsSlide(input.userId, input.slideId);
+  if (!owned.ok) throw new ImageGenerationError("You do not own this slide.");
+  const admin = createAdminClient();
+  const url = input.url?.trim() || null;
+  await admin
+    .from("slides")
+    .update({
+      stock_image_url: url,
+      stock_attribution: url ? (input.attribution ?? null) : null,
+      image_preference: url ? "pool" : "none",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", input.slideId);
 }
 
 export async function softDeleteCurrentImage(slideId: string, userId: string) {
@@ -204,6 +319,7 @@ export async function softDeleteCurrentImage(slideId: string, userId: string) {
     .update({
       generated_image_id: null,
       image_status: "none",
+      image_preference: "none",
       updated_at: now,
     })
     .eq("id", slideId);
@@ -212,10 +328,11 @@ export async function softDeleteCurrentImage(slideId: string, userId: string) {
 export async function setImagePreference(slideId: string, userId: string, preference: ImagePreference) {
   const owned = await instructorOwnsSlide(userId, slideId);
   if (!owned.ok) throw new ImageGenerationError("You do not own this slide.");
+  const next = preference === "auto" ? "none" : preference;
   const admin = createAdminClient();
   await admin
     .from("slides")
-    .update({ image_preference: preference, updated_at: new Date().toISOString() })
+    .update({ image_preference: next, updated_at: new Date().toISOString() })
     .eq("id", slideId);
 }
 
@@ -306,6 +423,27 @@ async function requestImage(options: {
     return { bytes: Buffer.from(await download.arrayBuffer()) };
   }
   return null;
+}
+
+export async function listPendingGeneratedForSlide(slideId: string) {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("slide_generated_images")
+    .select("id, storage_path, cost_usd, model, created_at")
+    .eq("slide_id", slideId)
+    .eq("is_current", false)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  if (error) throw new Error(error.message);
+  const row = data?.[0];
+  if (!row) return null;
+  return {
+    id: row.id,
+    storagePath: row.storage_path,
+    cost: Number(row.cost_usd ?? 0),
+    model: row.model,
+  };
 }
 
 export async function listCurrentGeneratedForSlides(slideIds: string[]) {

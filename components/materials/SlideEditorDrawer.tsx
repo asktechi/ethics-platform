@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { SlideImageTabs } from "@/components/materials/SlideImageTabs";
 import { updateSlideAction } from "@/app/(app)/_actions/material.actions";
 import type { Slide } from "@/types/db.helpers";
 
@@ -26,6 +27,12 @@ const LAYOUTS = [
 ] as const;
 
 type SlideLayout = (typeof LAYOUTS)[number];
+type ImageTab = "none" | "pool" | "ai";
+
+function tabFromPreference(value: string | null | undefined): ImageTab {
+  if (value === "pool" || value === "ai") return value;
+  return "none";
+}
 
 export function SlideEditorDrawer({
   classId,
@@ -48,10 +55,7 @@ export function SlideEditorDrawer({
   const [speakerNote, setSpeakerNote] = useState("");
   const [layout, setLayout] = useState<SlideLayout>("point");
   const [imagePrompt, setImagePrompt] = useState("");
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [preference, setPreference] = useState<"auto" | "pool" | "ai" | "none">("auto");
-  const [imageBusy, setImageBusy] = useState(false);
-  const [poolHint, setPoolHint] = useState<string | null>(null);
+  const [preference, setPreference] = useState<ImageTab>("none");
 
   useEffect(() => {
     if (!slide) return;
@@ -61,18 +65,8 @@ export function SlideEditorDrawer({
     setSpeakerNote(slide.speaker_note ?? "");
     setLayout((slide.layout as SlideLayout | null) ?? "point");
     setImagePrompt(slide.image_prompt ?? "");
-    setPreference((slide.image_preference as typeof preference | undefined) ?? "auto");
-    setPreviewUrl(null);
-    setPoolHint(null);
+    setPreference(tabFromPreference(slide.image_preference));
     setError(null);
-    void fetch(`/api/slides/${slide.id}/image`)
-      .then((response) => response.json())
-      .then((json: { url?: string | null; preference?: typeof preference; poolHint?: string | null }) => {
-        if (json.url) setPreviewUrl(json.url);
-        if (json.preference) setPreference(json.preference);
-        setPoolHint(json.poolHint ?? null);
-      })
-      .catch(() => undefined);
   }, [slide]);
 
   function save() {
@@ -104,7 +98,8 @@ export function SlideEditorDrawer({
         <SheetHeader>
           <SheetTitle>Edit slide</SheetTitle>
           <SheetDescription>
-            Speaker notes, layout, and optional AI background. Generate an image from the prompt, or keep the curated pool / gradient.
+            Speaker notes, layout, and an optional background. Every slide is presentable on the
+            theme gradient with no photo.
           </SheetDescription>
         </SheetHeader>
         <div className="mt-6 space-y-4">
@@ -157,90 +152,15 @@ export function SlideEditorDrawer({
               ))}
             </select>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="slide-image-prompt">Image prompt</Label>
-            <Textarea
-              id="slide-image-prompt"
-              rows={3}
-              value={imagePrompt}
-              onChange={(event) => setImagePrompt(event.target.value)}
+          {slide ? (
+            <SlideImageTabs
+              slideId={slide.id}
+              imagePrompt={imagePrompt}
+              onImagePromptChange={setImagePrompt}
+              preference={preference}
+              onPreferenceChange={setPreference}
             />
-          </div>
-          <div className="space-y-3 border border-white/10 p-3">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gold">Slide image</p>
-            <div className="aspect-video overflow-hidden bg-navy">
-              {previewUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={previewUrl} alt="" className="h-full w-full object-cover" />
-              ) : (
-                <p className="flex h-full items-center justify-center text-xs text-ivory/40">
-                  Gradient fallback (no image)
-                </p>
-              )}
-            </div>
-            {poolHint ? (
-              <p className="text-xs text-ivory/50" data-pool-hint="true">
-                {poolHint}
-              </p>
-            ) : null}
-            <div className="flex flex-wrap gap-2">
-              {(["auto", "pool", "ai", "none"] as const).map((value) => (
-                <Button
-                  key={value}
-                  type="button"
-                  size="sm"
-                  variant={preference === value ? "default" : "outline"}
-                  onClick={() => {
-                    setPreference(value);
-                    if (!slide) return;
-                    if (value === "none") {
-                      setPreviewUrl(null);
-                      void fetch(`/api/slides/${slide.id}/image`, { method: "DELETE" });
-                      return;
-                    }
-                    void fetch(`/api/slides/${slide.id}/image`, {
-                      method: "PATCH",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ preference: value }),
-                    });
-                  }}
-                >
-                  {value === "auto"
-                    ? "Auto"
-                    : value === "pool"
-                      ? "Use curated pool"
-                      : value === "ai"
-                        ? "Use AI image"
-                        : "Use none"}
-                </Button>
-              ))}
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={imageBusy || !slide}
-              onClick={() => {
-                if (!slide) return;
-                setImageBusy(true);
-                void fetch(`/api/slides/${slide.id}/generate-image`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ prompt: imagePrompt }),
-                })
-                  .then(async (response) => {
-                    const json = (await response.json()) as { url?: string; error?: string };
-                    if (!response.ok) throw new Error(json.error ?? "Generation failed");
-                    if (json.url) setPreviewUrl(json.url);
-                  })
-                  .catch((caught: unknown) =>
-                    setError(caught instanceof Error ? caught.message : "Generation failed"),
-                  )
-                  .finally(() => setImageBusy(false));
-              }}
-            >
-              {imageBusy ? "Generating…" : "Generate AI image"}
-            </Button>
-          </div>
+          ) : null}
           {error ? <p className="text-sm text-red-300">{error}</p> : null}
           <Button type="button" onClick={save} disabled={pending}>
             {pending ? "Saving…" : "Save slide"}

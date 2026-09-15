@@ -15,6 +15,8 @@ export async function POST(
       prompt?: string;
       style?: string;
       mock?: boolean;
+      confirm?: boolean;
+      attach?: boolean;
     };
     const result = await generateSlideImage({
       slideId: params.slideId,
@@ -22,6 +24,8 @@ export async function POST(
       prompt: body.prompt,
       style: body.style,
       mock: body.mock,
+      confirm: body.confirm === true,
+      attach: false,
       regenerate: true,
     });
     return NextResponse.json(result);

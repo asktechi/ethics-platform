@@ -120,7 +120,7 @@ export function AudienceMirror({
     slide.layout === "hook" || slide.layout === "question" || slide.layout === "cue"
       ? "center"
       : "left";
-  const stageImage = slide.generatedImageUrl || imageUrl;
+  const stageImage = slide.generatedImageUrl || imageUrl || null;
   const assignments = usePresentationBus((s) => s.assignments);
   const nextUrl = slideStageImage(assignments[slideIndex + 1] ?? null);
   const progress =

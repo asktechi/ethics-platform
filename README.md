@@ -2,7 +2,7 @@
 
 Personal teaching platform for CFA Institute ethics instruction (Levels I–III). The owner is the sole instructor-author. Students join live quizzes with an open link and a display name.
 
-This repository is at **Phase 7.5**: slides can use a curated pool image, an AI-generated background (OpenAI Images, cached in Supabase Storage), or the theme gradient. Generation is opt-in from Present setup. The Phase 7.4 audience stage (viewport fill, clamp type, host ↔ audience lock) is unchanged.
+This repository is at **Phase 7.5a**: every slide is presentable with zero images. The theme gradient is the default visual. Stock photos (Unsplash) and AI backgrounds (`gpt-image-1`) are per-slide, opt-in, and never generated automatically. The Phase 7.4 audience stage (viewport fill, clamp type, host ↔ audience lock) is unchanged.
 
 Never commit `.env.local`, `SUPABASE_SERVICE_ROLE_KEY`, or `SUPABASE_DB_URL`.
 
@@ -27,12 +27,13 @@ From a class, open **Present**, review the reel, then **Start presentation**.
 - Audience (open): `/present/{runId}/audience`
 - Join QR: `/present/{runId}/audience/join`
 
-Keyboard on the host: Space / → / PageDown next slide (skips leftover beats), ← / PageUp previous beat then previous slide, **B** next beat, **I** generate an AI image for the current slide, G jump grid, P teleprompter pause, F fullscreen, R rehearsal (does not broadcast), Cmd/Ctrl+E or **End & View Summary** to confirm and open the run summary. Voice input should call `dispatch({ type: "NEXT" })` from `lib/presentation/bus.ts`.
+Keyboard on the host: Space / → / PageDown next slide (skips leftover beats), ← / PageUp previous beat then previous slide, **B** next beat, G jump grid, P teleprompter pause, F fullscreen, R rehearsal (does not broadcast), Cmd/Ctrl+E or **End & View Summary** to confirm and open the run summary. Voice input should call `dispatch({ type: "NEXT" })` from `lib/presentation/bus.ts`. AI images are not bound to a host key.
 
-On Present setup, the **Slide visuals** card can generate backgrounds for slides without a curated pool photo (default off; ~$0.04 per 1536×1024 image, 100/class/day cap). The audience stage uses the generated image when present, then the pool image, then the gradient.
+On Present setup, each slide lists its image source (No image / Stock / AI). Edit sources in the deck editor. The **No image** tab is the default and uses the designed theme gradient. **Stock photo** searches Unsplash (free). **AI generated** asks for confirmation (~$0.04, monthly cap `AI_IMAGE_MONTHLY_CAP_USD`, default $5) and does not attach the image until **Use this image**.
 
 Typography fixtures (Phase 4.6): open `/dev/phase46`.  
-Audience stage fixtures (Phase 7.4): open `/dev/phase74` (`?view=short|long|host`, `?aspect=16x9|21x9|4x3|9x16|3x2`, `?scroll=mid`, `?sync=debug`).
+Audience stage fixtures (Phase 7.4): open `/dev/phase74` (`?view=short|long|host`, `?aspect=16x9|21x9|4x3|9x16|3x2`, `?scroll=mid`, `?sync=debug`).  
+Gradient quality fixture (Phase 7.5a): open `/dev/phase75a`.
 
 `npm` works the same way (`npm install`, `npm run dev`) if you prefer it over pnpm.
 

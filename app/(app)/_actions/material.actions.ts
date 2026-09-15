@@ -42,6 +42,8 @@ export async function updateSlideAction(input: unknown) {
         .optional(),
       image_prompt: z.string().optional(),
       image_preference: z.enum(["auto", "pool", "ai", "none"]).optional(),
+      stock_image_url: z.string().nullable().optional(),
+      stock_attribution: z.string().nullable().optional(),
     })
     .safeParse(input);
   if (!parsed.success) return { ok: false as const, error: "Invalid slide" };

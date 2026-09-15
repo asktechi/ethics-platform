@@ -196,7 +196,7 @@ export async function listClassSlides(classId: string): Promise<ClassSlide[]> {
   const { data, error } = await admin
     .from("slides")
     .select(
-      "id, material_id, concept_id, order, title, body, cue, speaker_note, layout, status, image_prompt, image_id, generated_image_id, image_status, image_preference, deleted_at, materials!inner(id, class_id, concept_id, original_filename, is_current, deleted_at, list_order, created_at)",
+      "id, material_id, concept_id, order, title, body, cue, speaker_note, layout, status, image_prompt, image_id, generated_image_id, image_status, image_preference, stock_image_url, stock_attribution, deleted_at, materials!inner(id, class_id, concept_id, original_filename, is_current, deleted_at, list_order, created_at)",
     )
     .eq("materials.class_id", classId)
     .eq("materials.is_current", true)

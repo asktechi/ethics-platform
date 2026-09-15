@@ -16,6 +16,8 @@ export async function POST(
       style?: string;
       mock?: boolean;
       forceFail?: boolean;
+      confirm?: boolean;
+      attach?: boolean;
     };
     const result = await generateSlideImage({
       slideId: params.slideId,
@@ -24,6 +26,8 @@ export async function POST(
       style: body.style,
       mock: body.mock,
       forceFail: body.forceFail,
+      confirm: body.confirm === true,
+      attach: body.attach === true,
     });
     return NextResponse.json(result);
   } catch (caught) {

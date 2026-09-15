@@ -11,6 +11,13 @@ export type AiFeature = "tagging" | "generation" | "hint" | "image_generation";
 export const IMAGE_GENERATION_COST_USD = 0.04;
 export const IMAGE_DAILY_CAP = Number(process.env.IMAGE_GENERATION_DAILY_CAP ?? 100) || 100;
 
+export function aiImageMonthlyCapUsd() {
+  const raw = process.env.AI_IMAGE_MONTHLY_CAP_USD;
+  if (raw === undefined || raw === "") return 5;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : 5;
+}
+
 export function estimateCostUsd(model: string, inputTokens: number, outputTokens: number) {
   const rate = RATES[model] ?? RATES["gpt-4o-mini"];
   return Number((inputTokens * rate.input + outputTokens * rate.output).toFixed(6));
@@ -67,6 +74,22 @@ export async function classImageSpendToday(classId: string) {
   const count = data?.length ?? 0;
   const spend = (data ?? []).reduce((sum, row) => sum + Number(row.cost_usd ?? 0), 0);
   return { count, spend };
+}
+
+export function utcMonthStart(now = new Date()) {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0));
+}
+
+export async function classImageSpendMonth(classId: string) {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("ai_usage_log")
+    .select("cost_usd")
+    .eq("class_id", classId)
+    .eq("feature", "image_generation")
+    .gte("created_at", utcMonthStart().toISOString());
+  if (error) throw new Error(error.message);
+  return (data ?? []).reduce((sum, row) => sum + Number(row.cost_usd ?? 0), 0);
 }
 
 export function getOpenAiKey() {

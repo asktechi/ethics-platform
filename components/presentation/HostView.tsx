@@ -24,7 +24,6 @@ import {
 } from "@/components/ui/dialog";
 import {
   dispatch,
-  getPresentationState,
   toggleRehearsalMode,
   usePresentationBus,
 } from "@/lib/presentation/bus";
@@ -67,8 +66,6 @@ export function HostView(props: HostViewProps) {
   const [slideElapsed, setSlideElapsed] = useState(0);
   const [reshuffleError, setReshuffleError] = useState<string | null>(null);
   const [audienceHref, setAudienceHref] = useState(props.audienceUrl);
-  const [imageBusy, setImageBusy] = useState(false);
-  const [prep, setPrep] = useState<{ ready: number; total: number } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const slideClock = useRef(Date.now());
   const realtimeRef = useRef<{ disconnect: () => void } | null>(null);
@@ -141,55 +138,6 @@ export function HostView(props: HostViewProps) {
     prefetchUpcomingImages(urls, index, 1);
     injectPreloadLink(urls[index + 1] ?? null);
   }, [assignments, index]);
-
-  useEffect(() => {
-    if (props.status !== "live" || !props.settings.auto_generate_images) return;
-    let cancelled = false;
-    async function preload() {
-      setPrep({ ready: 0, total: Math.max(1, props.slides.length) });
-      let remaining = 1;
-      while (!cancelled && remaining > 0) {
-        const response = await fetch(`/api/present/${props.publicRunId}/preload-images`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ limit: 1 }),
-        });
-        const json = (await response.json()) as {
-          remaining?: number;
-          ready?: number;
-          total?: number;
-          done?: boolean;
-          results?: Array<{ slideId: string; url: string }>;
-        };
-        if (!response.ok) break;
-        remaining = json.remaining ?? 0;
-        setPrep({
-          ready: json.ready ?? 0,
-          total: json.total ?? props.slides.length,
-        });
-        if (json.results?.length) {
-          dispatch({
-            type: "SET_ASSIGNMENTS",
-            assignments: getPresentationState().assignments.map((slide) => {
-              const hit = json.results?.find((row) => row.slideId === slide.slideId);
-              if (!hit) return slide;
-              return {
-                ...slide,
-                generatedImageUrl: hit.url,
-                imageStatus: "ready" as const,
-              };
-            }),
-          });
-        }
-        if (json.done) break;
-      }
-      if (!cancelled) setPrep(null);
-    }
-    void preload();
-    return () => {
-      cancelled = true;
-    };
-  }, [props.publicRunId, props.settings.auto_generate_images, props.status, props.slides.length]);
 
   useEffect(() => {
     if (props.status !== "live" || props.slides.length === 0) return;
@@ -285,54 +233,6 @@ export function HostView(props: HostViewProps) {
     slidesAdvanced,
   ]);
 
-  const generateCurrentImage = useCallback(async () => {
-    if (!current || imageBusy) return;
-    setImageBusy(true);
-    dispatch({
-      type: "SET_ASSIGNMENTS",
-      assignments: getPresentationState().assignments.map((slide) =>
-        slide.slideId === current.slideId
-          ? { ...slide, imageStatus: "generating" as const }
-          : slide,
-      ),
-    });
-    try {
-      const hasAi = Boolean(current.generatedImageUrl);
-      const path = hasAi
-        ? `/api/slides/${current.slideId}/regenerate-image`
-        : `/api/slides/${current.slideId}/generate-image`;
-      const response = await fetch(path, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
-      });
-      const json = (await response.json()) as { url?: string; error?: string };
-      dispatch({
-        type: "SET_ASSIGNMENTS",
-        assignments: getPresentationState().assignments.map((slide) => {
-          if (slide.slideId !== current.slideId) return slide;
-          if (!response.ok) return { ...slide, imageStatus: "failed" as const };
-          return {
-            ...slide,
-            generatedImageUrl: json.url ?? slide.generatedImageUrl,
-            imageStatus: "ready" as const,
-          };
-        }),
-      });
-    } catch {
-      dispatch({
-        type: "SET_ASSIGNMENTS",
-        assignments: getPresentationState().assignments.map((slide) =>
-          slide.slideId === current.slideId
-            ? { ...slide, imageStatus: "failed" as const }
-            : slide,
-        ),
-      });
-    } finally {
-      setImageBusy(false);
-    }
-  }, [current, imageBusy]);
-
   const onKey = useCallback(
     (event: KeyboardEvent) => {
       const action = mapHostKey(event);
@@ -354,10 +254,6 @@ export function HostView(props: HostViewProps) {
         toggleRehearsalMode();
         return;
       }
-      if (action.kind === "generate-image") {
-        void generateCurrentImage();
-        return;
-      }
       if (action.kind === "fullscreen") {
         if (!document.fullscreenElement) void rootRef.current?.requestFullscreen();
         return;
@@ -369,7 +265,7 @@ export function HostView(props: HostViewProps) {
       }
       if (action.kind === "confirm-end") setEndOpen(true);
     },
-    [generateCurrentImage, scrolling],
+    [scrolling],
   );
 
   useEffect(() => {
@@ -421,19 +317,6 @@ export function HostView(props: HostViewProps) {
           Rehearsal — not broadcasting
         </div>
       ) : null}
-      {prep ? (
-        <div className="bg-navy/90 px-4 py-1.5" data-preparing-visuals="true">
-          <p className="text-center text-[11px] uppercase tracking-[0.16em] text-ivory/70">
-            Preparing visuals… {prep.ready} of {prep.total}
-          </p>
-          <div className="mx-auto mt-1 h-1 max-w-md bg-white/10">
-            <div
-              className="h-full bg-gold"
-              style={{ width: `${Math.min(100, (prep.ready / Math.max(1, prep.total)) * 100)}%` }}
-            />
-          </div>
-        </div>
-      ) : null}
 
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <div className="min-h-[28vh] lg:h-full" style={{ flexBasis: `${widths[0]}%`, flexGrow: 0, flexShrink: 0 }}>
@@ -451,7 +334,7 @@ export function HostView(props: HostViewProps) {
                 slide={current}
                 beat={mirror.beatIndex}
                 theme={current.theme}
-                imageUrl={current.generatedImageUrl || current.imageUrl}
+                imageUrl={current.generatedImageUrl || current.imageUrl || null}
                 imageAttribution={current.imageAttribution}
                 revealLineCount={mirror.revealLineCount}
                 showChrome
@@ -466,7 +349,7 @@ export function HostView(props: HostViewProps) {
             className="pointer-events-none absolute left-4 top-9 text-[11px] uppercase tracking-[0.16em] text-ivory/55"
             data-image-status={hostImageStatus(current)}
           >
-            image: {hostImageStatus(current)}
+            {hostImageStatus(current) === "gradient" ? "Using theme gradient" : `image: ${hostImageStatus(current)}`}
           </div>
           <div className="pointer-events-none absolute right-4 top-4 font-mono text-[11px] text-ivory/70">
             {formatClock(totalElapsed)}
@@ -496,15 +379,6 @@ export function HostView(props: HostViewProps) {
         </Button>
         <Button type="button" size="sm" variant="ghost" onClick={() => dispatch({ type: "BEAT", direction: 1 })}>
           Beat (B)
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          disabled={imageBusy || !current}
-          onClick={() => void generateCurrentImage()}
-        >
-          {imageBusy ? "Image…" : "Image (I)"}
         </Button>
         <Button type="button" size="sm" variant="ghost" onClick={() => setGridOpen(true)}>
           Jump-to-grid
@@ -591,10 +465,10 @@ export function HostView(props: HostViewProps) {
 }
 
 function hostImageStatus(slide: SlideAssignment | null) {
-  if (!slide) return "none";
-  if (slide.imageStatus === "generating" || slide.imageStatus === "queued") return "generating";
-  if (slide.generatedImageUrl || slide.imageUrl || slide.imageStatus === "ready") return "ready";
-  return "none";
+  if (!slide) return "gradient";
+  if (slide.generatedImageUrl) return "ai";
+  if (slide.imageUrl) return "stock";
+  return "gradient";
 }
 
 function DragHandle({ onDrag }: { onDrag: (delta: number) => void }) {

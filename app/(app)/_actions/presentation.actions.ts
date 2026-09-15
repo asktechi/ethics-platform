@@ -12,7 +12,7 @@ import {
   syncRunProgress,
   updateRunSettings,
 } from "@/lib/data/presentation-runs";
-import { classAiSpend, classImageSpendToday, IMAGE_GENERATION_COST_USD } from "@/lib/ai/usage";
+import { classAiSpend, classImageSpendMonth, classImageSpendToday, IMAGE_GENERATION_COST_USD } from "@/lib/ai/usage";
 import { signedUrlMap } from "@/lib/ai/images";
 import { loadApprovedDeck } from "@/lib/presentation/deck";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -49,7 +49,7 @@ export async function loadPresentSetupAction(input: unknown) {
       }));
     }
     const admin = createAdminClient();
-    const [themesResult, spend, today, imageUrls] = await Promise.all([
+    const [themesResult, spend, today, monthSpend, imageUrls] = await Promise.all([
       admin
         .from("themes")
         .select("id, name, palette_json")
@@ -58,6 +58,7 @@ export async function loadPresentSetupAction(input: unknown) {
         .order("name"),
       classAiSpend(parsed.data.classId),
       classImageSpendToday(parsed.data.classId),
+      classImageSpendMonth(parsed.data.classId),
       signedUrlMap(slides.map((slide) => slide.id)),
     ]);
     return {
@@ -69,6 +70,7 @@ export async function loadPresentSetupAction(input: unknown) {
       themes: themesResult.data ?? [],
       spend,
       imageToday: today,
+      imageMonth: monthSpend,
       imageCostEach: IMAGE_GENERATION_COST_USD,
       imageUrls: Object.fromEntries(imageUrls),
       counts: {
@@ -96,7 +98,6 @@ export async function saveRunSettingsAction(input: unknown) {
         theme_overrides: z.record(z.string(), z.string()).optional(),
         allow_audience_advance: z.boolean().optional(),
         audience_reveal_mode: z.enum(["progressive", "instant"]).optional(),
-        auto_generate_images: z.boolean().optional(),
       }),
     })
     .safeParse(input);
@@ -115,8 +116,7 @@ export async function saveRunSettingsAction(input: unknown) {
         parsed.data.settings.allow_audience_advance ?? current.allow_audience_advance,
       audience_reveal_mode:
         parsed.data.settings.audience_reveal_mode ?? current.audience_reveal_mode,
-      auto_generate_images:
-        parsed.data.settings.auto_generate_images ?? current.auto_generate_images,
+      auto_generate_images: false,
     };
     await updateRunSettings(parsed.data.runId, settings);
     revalidatePresent(parsed.data.classId);

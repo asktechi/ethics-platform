@@ -325,6 +325,8 @@ export type Database = {
           generated_image_id: string | null;
           image_status: "none" | "queued" | "generating" | "ready" | "failed";
           image_preference: "auto" | "pool" | "ai" | "none";
+          stock_image_url: string | null;
+          stock_attribution: string | null;
           created_at: string;
           updated_at: string;
           deleted_at: string | null;
@@ -353,6 +355,8 @@ export type Database = {
           generated_image_id?: string | null;
           image_status?: "none" | "queued" | "generating" | "ready" | "failed";
           image_preference?: "auto" | "pool" | "ai" | "none";
+          stock_image_url?: string | null;
+          stock_attribution?: string | null;
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
@@ -381,6 +385,8 @@ export type Database = {
           generated_image_id?: string | null;
           image_status?: "none" | "queued" | "generating" | "ready" | "failed";
           image_preference?: "auto" | "pool" | "ai" | "none";
+          stock_image_url?: string | null;
+          stock_attribution?: string | null;
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;

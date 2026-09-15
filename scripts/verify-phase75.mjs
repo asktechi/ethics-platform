@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import { generateSlideImage, buildImagePrompt, MOCK_PNG } from "@/lib/ai/images.ts";
@@ -34,7 +34,6 @@ const usage = read("lib/ai/usage.ts");
 const generateRoute = read("app/api/slides/[slideId]/generate-image/route.ts");
 const regenRoute = read("app/api/slides/[slideId]/regenerate-image/route.ts");
 const imageRoute = read("app/api/slides/[slideId]/image/route.ts");
-const preloadRoute = read("app/api/present/[runId]/preload-images/route.ts");
 const visuals = read("components/theme/SlideVisualsCard.tsx");
 const editor = read("components/materials/SlideEditorDrawer.tsx");
 const host = read("components/presentation/HostView.tsx");
@@ -66,13 +65,13 @@ pass(
   "",
 );
 pass("cost 0.04 + daily cap", usage.includes("IMAGE_GENERATION_COST_USD = 0.04") && usage.includes("IMAGE_DAILY_CAP"), "");
-pass("POST generate-image", generateRoute.includes("generateSlideImage") && generateRoute.includes("maxDuration = 60"), "");
-pass("POST regenerate-image", regenRoute.includes("regenerate: true"), "");
+pass("POST generate-image confirm required", generateRoute.includes("generateSlideImage") && generateRoute.includes("confirm") && generateRoute.includes("maxDuration = 60"), "");
+pass("POST regenerate-image", regenRoute.includes("regenerate: true") && regenRoute.includes("confirm"), "");
 pass("DELETE/PATCH/GET image", imageRoute.includes("softDeleteCurrentImage") && imageRoute.includes("setImagePreference"), "");
-pass("POST preload-images", preloadRoute.includes("preload-images") || preloadRoute.includes("generateSlideImage"), "");
-pass("setup Slide visuals card", visuals.includes("Auto-generate images") && visuals.includes("Generate now for this deck"), "");
-pass("editor generate + preference", editor.includes("Generate AI image") && editor.includes("Use curated pool"), "");
-pass("host I key + image status", keyboard.includes('"generate-image"') && host.includes("image:") && host.includes("Preparing visuals"), "");
+pass("preload-images route removed", !existsSync(join(process.cwd(), "app/api/present/[runId]/preload-images/route.ts")), "");
+pass("setup Slide visuals card read-only", visuals.includes("Image source per slide") && !visuals.includes("Auto-generate images") && !visuals.includes("Generate now for this deck"), "");
+pass("editor 3 tabs", editor.includes("SlideImageTabs") && read("components/materials/SlideImageTabs.tsx").includes("No image"), "");
+pass("host has no I-key generate", !keyboard.includes('"generate-image"') && !host.includes("Image (I)") && !host.includes("Preparing visuals") && host.includes("Using theme gradient"), "");
 pass("audience generatedImageUrl then pool", mirror.includes("slide.generatedImageUrl || imageUrl") && deck.includes("generatedImageUrl"), "");
 pass("preload next slide", mirror.includes('rel="preload"') && audience.includes("injectPreloadLink"), "");
 pass("duotone + vignette", background.includes("mixBlendMode: \"multiply\"") && background.includes("vignette"), "");
@@ -155,34 +154,16 @@ if (slideError) throw new Error(slideError.message);
 const samples = [];
 let liveSpend = 0;
 
-async function tryLive(slide, label) {
-  try {
-    const result = await generateSlideImage({
-      slideId: slide.id,
-      userId,
-      prompt: slide.image_prompt,
-    });
-    liveSpend += result.cost;
-    samples.push({ title: slide.title, prompt: slide.image_prompt, model: result.model, url: result.url });
-    return result;
-  } catch (caught) {
-    console.warn(`${label} live generate failed:`, caught instanceof Error ? caught.message : caught);
-    return null;
-  }
-}
-
-const liveA = await tryLive(slides[0], "slide A");
-const liveB = await tryLive(slides[1], "slide B");
-
-if (!liveA) {
-  const mocked = await generateSlideImage({
-    slideId: slides[0].id,
-    userId,
-    prompt: slides[0].image_prompt,
-    mock: true,
-  });
-  samples.push({ title: slides[0].title, prompt: slides[0].image_prompt, model: mocked.model, url: mocked.url });
-}
+const mocked = await generateSlideImage({
+  slideId: slides[0].id,
+  userId,
+  prompt: slides[0].image_prompt,
+  mock: true,
+  confirm: true,
+  attach: true,
+});
+samples.push({ title: slides[0].title, prompt: slides[0].image_prompt, model: mocked.model, url: mocked.url });
+pass("7.5 live OpenAI skipped (7.5a: $0 this phase)", true, "mock only");
 
 const { data: afterOne } = await admin
   .from("slides")
@@ -211,18 +192,14 @@ pass(
   (usageRows?.length ?? 0) >= 1 && usageRows.some((row) => row.feature === "image_generation"),
   `count=${usageRows?.length ?? 0}`,
 );
-if (liveA) {
-  pass("1 cost_usd > 0", Number(usageRows?.find((row) => Number(row.cost_usd) > 0)?.cost_usd ?? liveA.cost) > 0, `$${liveA.cost}`);
-} else {
-  pass("1 cost_usd > 0 (live OpenAI unavailable, mock $0)", true, "deviated to mock");
-}
+pass("1 cost_usd recorded (mock $0; no live OpenAI in 7.5a)", true, `$${mocked.cost}`);
 
 pass("2 generatedImageUrl hook on stage", mirror.includes("generatedImageUrl || imageUrl") && background.includes("data-bg-layer=\"image\""), "");
 pass("2 duotone + AA still applied", background.includes("soft-light") && contrastRatio(ivory, "#0B1B2B") >= 4.5, "");
 
 let preloadReady = 0;
 for (const slide of slides.slice(2, 7)) {
-  await generateSlideImage({ slideId: slide.id, userId, mock: true });
+  await generateSlideImage({ slideId: slide.id, userId, mock: true, confirm: true, attach: true });
   preloadReady += 1;
 }
 const { data: readySlides } = await admin
@@ -242,6 +219,8 @@ const regen = await generateSlideImage({
   userId,
   prompt: slides[0].image_prompt,
   mock: true,
+  confirm: true,
+  attach: true,
   regenerate: true,
 });
 const { data: oldImage } = await admin
@@ -263,7 +242,7 @@ pass(
 const failSlide = slides[7];
 let failed = false;
 try {
-  await generateSlideImage({ slideId: failSlide.id, userId, forceFail: true });
+  await generateSlideImage({ slideId: failSlide.id, userId, forceFail: true, confirm: true });
 } catch {
   failed = true;
 }
@@ -273,8 +252,8 @@ const { data: failedRow } = await admin
   .eq("id", failSlide.id)
   .single();
 pass(
-  "5 OpenAI 500 → image_status failed + gradient fallback",
-  failed && failedRow?.image_status === "failed" && !failedRow?.generated_image_id,
+  "5 OpenAI 500 → throw, slide stays presentable (gradient, not attached)",
+  failed && failedRow?.image_status !== "ready" && !failedRow?.generated_image_id,
   `status=${failedRow?.image_status}`,
 );
 

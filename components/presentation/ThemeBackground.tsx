@@ -18,20 +18,23 @@ function layerParams(slideId: string, theme: ThemePalette) {
   const angle = (hash % 160) + 16;
   const glowX = 28 + (hash % 45);
   const glowY = 18 + ((hash >> 5) % 36);
+  const glow2X = 72 + ((hash >> 3) % 18);
+  const glow2Y = 68 + ((hash >> 7) % 22);
   const baseVignette = 0.28 + ((hash >> 9) % 28) / 100;
   const themeVignette = theme.vignette ?? 0.3;
+  const far = adjustHex(theme.bg, -0.42);
   const darker = adjustHex(theme.bg, -0.28);
   const lighter = adjustHex(theme.bg, 0.16);
   const mid = mixHex(theme.bg, theme.accent, 0.22);
+  const wash = mixHex(theme.bg, theme.accent, 0.14);
   const text = theme.text ?? "#F5F1E8";
   const vignette = deepenUntilContrast(text, mid, Math.max(baseVignette, themeVignette * 0.7));
-  return { angle, glowX, glowY, darker, lighter, vignette };
+  return { angle, glowX, glowY, glow2X, glow2Y, far, darker, lighter, wash, vignette };
 }
 
 /**
- * Stage backdrop. Curated `imageUrl` is full-bleed duotone; otherwise the
- * theme gradient. Phase 7.5: callers pass `slide.generatedImageUrl` as
- * `imageUrl` when present — that override is the only hook this layer needs.
+ * Stage backdrop. An optional image is full-bleed duotone. With no image,
+ * the theme gradient is the designed visual — not a placeholder.
  */
 export function ThemeBackground({
   slideId,
@@ -44,7 +47,8 @@ export function ThemeBackground({
   imageUrl: string | null;
   attribution?: string | null;
 }) {
-  const { angle, glowX, glowY, darker, lighter, vignette } = layerParams(slideId, theme);
+  const { angle, glowX, glowY, glow2X, glow2Y, far, darker, lighter, wash, vignette } =
+    layerParams(slideId, theme);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     setFailed(false);
@@ -57,28 +61,32 @@ export function ThemeBackground({
       aria-hidden
       data-theme-layers="5"
       data-has-image={showImage ? "true" : "false"}
+      data-gradient-quality="cinematic"
       data-image-attribution={attribution ?? ""}
     >
-      {/* Layer 1 — Base gradient */}
+      {/* Layer 1 — Multi-stop cinematic gradient from theme.bg */}
       <div
         data-bg-layer="base"
         className="absolute inset-0"
         style={{
-          background: `linear-gradient(${angle}deg, ${darker} 0%, ${theme.bg} 46%, ${lighter} 100%)`,
+          background: `linear-gradient(${angle}deg, ${far} 0%, ${darker} 22%, ${theme.bg} 48%, ${wash} 74%, ${lighter} 100%)`,
         }}
       />
 
-      {/* Layer 2 — Accent glow behind the headline */}
+      {/* Layer 2 — Accent glow + secondary wash */}
       <div
         data-bg-layer="glow"
         className="absolute inset-0"
         style={{
-          background: `radial-gradient(ellipse 80% 55% at ${glowX}% ${glowY}%, ${theme.accent} 0%, transparent 62%)`,
-          opacity: 0.18,
+          background: [
+            `radial-gradient(ellipse 80% 55% at ${glowX}% ${glowY}%, ${theme.accent} 0%, transparent 62%)`,
+            `radial-gradient(ellipse 55% 40% at ${glow2X}% ${glow2Y}%, ${theme.accent} 0%, transparent 70%)`,
+          ].join(", "),
+          opacity: showImage ? 0.18 : 0.28,
         }}
       />
 
-      {/* Layer 3 — Duotone image */}
+      {/* Layer 3 — Duotone image (skipped when imageUrl is null) */}
       {showImage ? (
         <motion.div
           key={`${slideId}:${imageUrl}`}
@@ -108,11 +116,11 @@ export function ThemeBackground({
         <div data-bg-layer="image" className="hidden" />
       )}
 
-      {/* Layer 4 — Static grain */}
+      {/* Layer 4 — SVG grain at 3% */}
       <div
         data-bg-layer="grain"
         className="pointer-events-none absolute inset-0 mix-blend-overlay"
-        style={{ backgroundImage: GRAIN, opacity: 0.04 }}
+        style={{ backgroundImage: GRAIN, opacity: 0.03 }}
       />
 
       {/* Layer 5 — Edge vignette (contrast-guarded) */}
