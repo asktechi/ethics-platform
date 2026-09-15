@@ -48,6 +48,7 @@ export function AudienceMirror({
   const slideIndex = usePresentationBus((s) => s.currentSlideIndex);
   const lineIndex = usePresentationBus((s) => s.teleprompterLineIndex);
   const lastBeatCount = useRef(0);
+  const prevBeatKey = useRef(`${slide.slideId}:0`);
   const contentRef = useRef<HTMLDivElement>(null);
   const [overflowing, setOverflowing] = useState(false);
   const [showHint, setShowHint] = useState(false);
@@ -71,9 +72,10 @@ export function AudienceMirror({
   }, [beatCount, beatIndex, lineIndex, pagination, slideIndex]);
 
   useEffect(() => {
-    const node = contentRef.current;
-    if (!node) return;
-    node.scrollTo({ top: 0, behavior: "smooth" });
+    const key = `${slide.slideId}:${beatIndex}`;
+    if (prevBeatKey.current === key) return;
+    prevBeatKey.current = key;
+    contentRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   }, [slide.slideId, beatIndex]);
 
   useEffect(() => {
@@ -143,19 +145,19 @@ export function AudienceMirror({
       ) : null}
       <div
         ref={contentRef}
-        className={`slide-content relative z-10 ${overflowing ? "is-overflowing" : ""}`}
+        className={`slide-content relative z-10 ${overflowing ? "" : "is-short"}`}
         data-slide-content="true"
       >
         {currentBeat ? (
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={`${slide.slideId}:${beatIndex}`}
-              className="w-full"
-              style={{ textAlign: align }}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1, transition: { duration: 0.3, ease: "easeOut" } }}
-              exit={{ opacity: 0, transition: { duration: 0.2 } }}
-            >
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={`${slide.slideId}:${beatIndex}`}
+                className="w-full"
+                style={{ textAlign: align }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1, transition: { duration: 0.3, ease: "easeOut" } }}
+                exit={{ opacity: 0, transition: { duration: 0.2 } }}
+              >
               {slide.layout === "cue" ? (
                 <CueCard accent={theme.accent} text={text} />
               ) : (
@@ -274,6 +276,7 @@ function BeatBody({
         visibleThrough={visibleThrough}
         hostCurrentLine={hostCurrentLine}
         accent={accent}
+        className={slide.layout === "hook" ? "slide-headline" : "slide-body"}
         style={{
           marginTop: title ? 28 : 0,
           textShadow: slide.layout === "reveal" ? `0 0 42px ${accent}99` : undefined,
@@ -290,26 +293,29 @@ function RevealStack({
   hostCurrentLine,
   accent,
   style,
+  className = "slide-body",
 }: {
   lines: string[];
   visibleThrough: number;
   hostCurrentLine: number;
   accent: string;
   style?: CSSProperties;
+  className?: string;
 }) {
   if (lines.length === 0) return null;
   return (
-    <div className="slide-body" style={style}>
+    <div className={className} style={style}>
       {lines.map((line, index) => {
         if (index > visibleThrough) return null;
         const older = index < visibleThrough - 2;
         const isHostCurrent = hostCurrentLine === index;
+        const isNew = index === visibleThrough && visibleThrough >= 0;
         return (
           <motion.p
             key={`${index}:${line}`}
             data-reveal-line={index}
             data-host-current={isHostCurrent ? "true" : "false"}
-            initial={{ opacity: 0, y: 8 }}
+            initial={isNew ? { opacity: 0, y: 8 } : false}
             animate={{ opacity: older ? 0.75 : 1, y: 0 }}
             transition={{ duration: 0.4, ease: "easeOut" }}
             className={isHostCurrent ? "border-l-2 pl-3" : undefined}

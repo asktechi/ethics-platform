@@ -110,8 +110,9 @@
 }
 
 .slide-content {
-  flex: 1 1 auto;
+  flex: 1 1 0%;
   min-height: 0;
+  max-height: 100%;
   overflow-x: hidden;
   overflow-y: auto;
   scroll-behavior: smooth;
@@ -119,11 +120,11 @@
   padding: clamp(24px, 4vw, 80px);
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
 }
 
-.slide-content.is-overflowing {
-  justify-content: flex-start;
+.slide-content.is-short {
+  justify-content: center;
 }
 
 .slide-content > * {

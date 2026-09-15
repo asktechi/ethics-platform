@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { AudienceMirror } from "@/components/presentation/AudienceMirror";
 import { SyncDebugDot } from "@/components/presentation/SyncDebugDot";
 import { Teleprompter } from "@/components/presentation/Teleprompter";
-import { dispatch, resetPresentationBus, usePresentationBus } from "@/lib/presentation/bus";
+import { dispatch, usePresentationBus } from "@/lib/presentation/bus";
 import { audienceMirrorModel } from "@/lib/presentation/mirror";
 import {
   PHASE74_ASPECTS,
@@ -86,9 +86,10 @@ function Inner() {
   const long = view === "long" || view === "host" || view === "dual";
   const slide = view === "hook" ? PHASE74_HOOK : long ? PHASE74_LONG : PHASE74_SHORT;
   const slides = useMemo(() => [slide, PHASE74_HOOK], [slide]);
-
-  useEffect(() => {
-    resetPresentationBus();
+  const bootKey = `${view}:${slide.slideId}:${reveal}`;
+  const booted = useRef("");
+  if (booted.current !== bootKey) {
+    booted.current = bootKey;
     dispatch({
       type: "HYDRATE",
       state: {
@@ -97,13 +98,13 @@ function Inner() {
         slideCount: slides.length,
         currentSlideIndex: 0,
         currentBeatIndex: 0,
-        teleprompterLineIndex: Number.isFinite(reveal) ? reveal : -1,
+        teleprompterLineIndex: reveal === -1 ? -1 : reveal,
         revealFlushed: reveal === -1,
-        teleprompterScrolling: view === "host" || view === "dual",
+        teleprompterScrolling: false,
         isPaused: false,
       },
     });
-  }, [reveal, slides, view]);
+  }
 
   useEffect(() => {
     if (!scrollMid) return;
@@ -111,17 +112,17 @@ function Inner() {
     if (!(node instanceof HTMLElement)) return;
     const timer = window.setTimeout(() => {
       node.scrollTop = Math.max(80, (node.scrollHeight - node.clientHeight) * 0.45);
-    }, 250);
+    }, 800);
     return () => window.clearTimeout(timer);
   }, [scrollMid, view, slide.slideId]);
 
   if (view === "host" || view === "dual") {
     return (
       <div className="flex h-[100dvh] overflow-hidden bg-[#050d14]">
-        <div className="hidden w-[32%] min-w-0 md:block">
+        <div className="hidden h-full w-[32%] min-w-0 shrink-0 md:block">
           <Teleprompter initialWpm={140} />
         </div>
-        <div className="relative min-h-0 min-w-0 flex-1">
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
           <Stage slide={slide} reveal={reveal} fillViewport={false} showChrome />
           <SyncDebugDot role="host" />
         </div>

@@ -258,7 +258,7 @@ export function HostView(props: HostViewProps) {
             setWidths((prev) => resize(prev, 0, delta))
           }
         />
-        <div className="relative min-h-0 flex-1" style={{ flexBasis: `${widths[1]}%` }}>
+        <div className="relative flex min-h-0 flex-1 flex-col" style={{ flexBasis: `${widths[1]}%` }}>
           {current && mirror ? (
             <>
               <AudienceMirror
