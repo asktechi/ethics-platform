@@ -2,7 +2,6 @@ import "server-only";
 import { createHash } from "crypto";
 import { requireUser } from "@/lib/data/auth";
 import { requireValue } from "@/lib/data/errors";
-import { materialTypeFromFilename, parseMaterial } from "@/lib/parsers/parseIndex";
 import {
   downloadOriginal,
   originalStoragePath,
@@ -201,6 +200,7 @@ export async function createMaterialFromUpload(input: {
     return { duplicate: true, existing_id: existing.id };
   }
 
+  const { materialTypeFromFilename, parseMaterial } = await import("@/lib/parsers/parseIndex");
   const parsed = await parseMaterial(input.bytes, input.filename, input.mime);
   const type = materialTypeFromFilename(input.filename);
   const { path } = await uploadOriginalImmutable({
@@ -362,6 +362,7 @@ export async function reorderMaterials(classId: string, orderedIds: string[]): P
 export async function reextractMaterial(id: string): Promise<{ slide_count: number; warnings: string[] }> {
   const detail = await getMaterial(id);
   const bytes = await downloadOriginal(detail.storage_path);
+  const { parseMaterial } = await import("@/lib/parsers/parseIndex");
   const parsed = await parseMaterial(bytes, detail.original_filename);
   const admin = createAdminClient();
   await admin.from("slides").update({ deleted_at: new Date().toISOString() }).eq("material_id", id);

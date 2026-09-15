@@ -38,6 +38,7 @@ export async function searchImages(
       "Accept-Version": "v1",
     },
     cache: "no-store",
+    signal: AbortSignal.timeout(5000),
   });
 
   if (!response.ok) {
