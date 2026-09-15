@@ -1,3 +1,4 @@
+import { cache } from "react";
 import type { Class, Level } from "@/types/db.helpers";
 import { ensureInstructorRow, requireUser } from "@/lib/data/auth";
 import { requireValue } from "@/lib/data/errors";
@@ -58,7 +59,7 @@ export async function listRecentClasses(limit = 5): Promise<Class[]> {
   return (data ?? []) as Class[];
 }
 
-export async function getClass(id: string): Promise<ClassDetail> {
+export const getClass = cache(async (id: string): Promise<ClassDetail> => {
   const { supabase } = await requireUser();
   const { data, error } = await supabase
     .from("classes")
@@ -107,7 +108,7 @@ export async function getClass(id: string): Promise<ClassDetail> {
     materialCount: materials.count ?? 0,
     questionCount: questions,
   };
-}
+});
 
 async function countClassQuestions(classId: string): Promise<number> {
   const { supabase } = await requireUser();

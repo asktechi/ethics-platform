@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 
 export async function ensureInstructorRow() {
@@ -16,7 +17,8 @@ export async function ensureInstructorRow() {
   return { supabase, user };
 }
 
-export async function requireUser() {
+/** One Auth round-trip per request. Every data helper used to call getUser() again. */
+export const requireUser = cache(async () => {
   const supabase = createClient();
   const {
     data: { user },
@@ -28,9 +30,9 @@ export async function requireUser() {
   }
 
   return { supabase, user };
-}
+});
 
-export async function getInstructorProfile() {
+export const getInstructorProfile = cache(async () => {
   const { supabase, user } = await requireUser();
   const { data } = await supabase
     .from("users")
@@ -47,4 +49,4 @@ export async function getInstructorProfile() {
     email,
     initials: name.slice(0, 2).toUpperCase(),
   };
-}
+});

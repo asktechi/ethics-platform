@@ -89,6 +89,25 @@ export async function listQuestions(classId: string, filters: QuestionFilters = 
   return (data ?? []) as unknown as QuestionRow[];
 }
 
+export async function countQuestionsForClasses(classIds: string[]): Promise<Record<string, number>> {
+  const unique = [...new Set(classIds.filter(Boolean))];
+  const counts: Record<string, number> = Object.fromEntries(unique.map((id) => [id, 0]));
+  if (unique.length === 0) return counts;
+  const { supabase } = await requireUser();
+  const rows = await Promise.all(
+    unique.map(async (id) => {
+      const { count, error } = await supabase
+        .from("questions")
+        .select("id", { count: "exact", head: true })
+        .eq("class_id", id)
+        .is("deleted_at", null);
+      if (error) throw new Error(error.message);
+      return [id, count ?? 0] as const;
+    }),
+  );
+  return Object.fromEntries(rows);
+}
+
 export async function countQuestions(classId: string, filters: QuestionFilters = {}) {
   const { supabase } = await requireUser();
   const query = applyQuestionFilters(
