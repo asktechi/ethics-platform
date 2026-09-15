@@ -52,6 +52,7 @@ export function SlideImageTabs({
   const [monthCap, setMonthCap] = useState(5);
   const [costEach, setCostEach] = useState(0.04);
   const [model, setModel] = useState("gpt-image-1");
+  const [poolHint, setPoolHint] = useState<string | null>(null);
 
   useEffect(() => {
     void fetch(`/api/slides/${slideId}/image`)
@@ -68,6 +69,7 @@ export function SlideImageTabs({
           monthCap?: number;
           costEach?: number;
           model?: string;
+          poolHint?: string | null;
           error?: string;
         }) => {
           if (json.error) return;
@@ -79,6 +81,7 @@ export function SlideImageTabs({
           setMonthCap(json.monthCap ?? 5);
           setCostEach(json.costEach ?? 0.04);
           setModel(json.model ?? "gpt-image-1");
+          setPoolHint(json.poolHint ?? null);
           if (json.preference === "pool" || json.preference === "ai" || json.preference === "none") {
             onPreferenceChange(json.preference);
           }
@@ -176,7 +179,7 @@ export function SlideImageTabs({
     }
   }
 
-  async function usePreview() {
+  async function applyPreview() {
     if (!preview) return;
     setBusy(true);
     setError(null);
@@ -280,6 +283,11 @@ export function SlideImageTabs({
           {stockAttribution ? (
             <p className="text-xs text-ivory/50">{stockAttribution}</p>
           ) : null}
+          {poolHint ? (
+            <p className="text-xs text-ivory/50" data-pool-hint="true">
+              {poolHint}
+            </p>
+          ) : null}
           <div className="flex gap-2">
             <Input
               value={query}
@@ -315,7 +323,7 @@ export function SlideImageTabs({
                 Stored, not attached. The slide still uses the theme gradient until you use this image.
               </p>
               <div className="flex flex-wrap gap-2">
-                <Button type="button" disabled={busy} onClick={() => void usePreview()}>
+                <Button type="button" disabled={busy} onClick={() => void applyPreview()}>
                   Use this image
                 </Button>
                 <Button

@@ -37,7 +37,7 @@ const deck = read("lib/presentation/deck.ts");
 const engine = read("lib/themes/engine.ts");
 const summaryPage = read("app/(app)/class/[id]/present/[runId]/summary/page.tsx");
 const summaryUi = read("components/presentation/RunSummary.tsx");
-const editor = read("components/materials/SlideEditorDrawer.tsx");
+const editor = read("components/materials/SlideEditorDrawer.tsx") + read("components/materials/SlideImageTabs.tsx");
 const games = read("components/quiz/player/MobilePlayerStage.tsx");
 
 pass("7.4 100dvh flex + slide-content overflow", css.includes("height: 100dvh") && css.includes("overflow-y: auto") && mirror.includes("slide-content"), "");
@@ -48,8 +48,8 @@ pass("7.4 teleprompter clamp + WPM highlight", tele.includes("teleprompter-copy"
 pass("7.4 RESYNC + debug dot", host.includes("SyncDebugDot") && audience.includes("SyncDebugDot"), "");
 pass("7.4 landscape aspect hooks", read("app/dev/phase74/page.tsx").includes("PHASE74_ASPECTS"), "");
 pass("image path ThemeBackground duotone", background.includes("mixBlendMode: \"multiply\"") && background.includes("data-has-image"), "");
-pass("pickStageImage generated > assignment > pool", pickStageImage({ generatedUrl: "g", assignmentUrl: "a", poolUrl: "p" }).url === "g", "");
-pass("pickStageImage assignment then pool", pickStageImage({ assignmentUrl: "a", poolUrl: "p" }).source === "pool" && pickStageImage({ poolUrl: "p" }).url === "p", "");
+pass("pickStageImage default is gradient", pickStageImage({ generatedUrl: "g", assignmentUrl: "a", poolUrl: "p" }).url === null, "");
+pass("pickStageImage pool then assignment", pickStageImage({ preference: "pool", assignmentUrl: "a", poolUrl: "p" }).source === "pool" && pickStageImage({ preference: "pool", poolUrl: "p" }).url === "p" && pickStageImage({ preference: "ai", generatedUrl: "g" }).url === "g", "");
 pass("dialog above host overlay z-200", dialog.includes("z-[200]") && host.includes("z-[100]"), "");
 pass("End & View Summary + loading", host.includes("End & View Summary") && host.includes("Ending…") && host.includes("confirmEnd"), "");
 pass("summary route", summaryPage.includes("RunSummary") && summaryUi.includes("Present Again") && summaryUi.includes("Back to Class"), "");

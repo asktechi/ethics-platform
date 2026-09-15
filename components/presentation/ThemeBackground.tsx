@@ -35,6 +35,8 @@ function layerParams(slideId: string, theme: ThemePalette) {
 /**
  * Stage backdrop. An optional image is full-bleed duotone. With no image,
  * the theme gradient is the designed visual — not a placeholder.
+ * Phase 7.5: callers pass `slide.generatedImageUrl` as `imageUrl` when an
+ * AI image is attached. Missing images never block the stage.
  */
 export function ThemeBackground({
   slideId,

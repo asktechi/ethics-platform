@@ -10,7 +10,6 @@ export default function Phase75aPreviewPage() {
   const index = usePresentationBus((s) => s.currentSlideIndex);
   const currentBeatIndex = usePresentationBus((s) => s.currentBeatIndex);
   const teleprompterLineIndex = usePresentationBus((s) => s.teleprompterLineIndex);
-  const revealFlushed = usePresentationBus((s) => s.revealFlushed);
   const slides = useMemo(() => [PHASE75A_GRADIENT, PHASE75A_NEXT], []);
   const slide = slides[Math.min(index, slides.length - 1)] ?? PHASE75A_GRADIENT;
   const booted = useRef(false);
