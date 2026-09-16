@@ -41,6 +41,9 @@ const dashboard = read("app/(app)/dashboard/page.tsx");
 const levelPage = read("app/(app)/level/[slug]/page.tsx");
 const classPage = read("app/(app)/class/[id]/page.tsx");
 const materialsPage = read("app/(app)/class/[id]/materials/page.tsx");
+const archivedPage = read("app/(app)/classes/archived/page.tsx");
+const workspace = read("components/ClassWorkspace.tsx");
+const toastSrc = read("components/ClassArchivedToast.tsx");
 
 const listMaterialsFn = materialsSrc.slice(
   materialsSrc.indexOf("export async function listMaterials"),
@@ -66,6 +69,27 @@ pass(
   "",
 );
 pass("listLevels uses slug + order", levelsSrc.includes('.eq("slug", slug)') && levelsSrc.includes('.order("order"'), "");
+pass(
+  "dashboard archived link only when N > 0",
+  dashboard.includes("archivedCount > 0") && dashboard.includes("View archived classes (") && dashboard.includes('href="/classes/archived"'),
+  "",
+);
+pass(
+  "archived page lists deleted_at IS NOT NULL",
+  archivedPage.includes("listArchivedClasses") &&
+    archivedPage.includes("Nothing archived") &&
+    archivedPage.includes("RestoreArchivedClassButton") &&
+    classesSrc.includes('.not("deleted_at", "is", null)'),
+  "",
+);
+pass(
+  "archive toast points at /classes/archived",
+  toastSrc.includes("Class archived. Restore it from") &&
+    toastSrc.includes("/classes/archived") &&
+    workspace.includes("ClassArchivedToast"),
+  "",
+);
+pass("existing listRecentClasses still excludes archived", classesSrc.includes("export async function listRecentClasses") && classesSrc.includes('.is("deleted_at", null)'), "");
 
 const { data: intro, error: introError } = await admin
   .from("classes")
@@ -186,6 +210,59 @@ if (!owner || !level1) {
     "materials href resolves (not 404)",
     materialsStatus !== 404 && materialsStatus !== 500,
     `GET /class/${klass.id}/materials → ${materialsStatus}`,
+  );
+
+  const archivedAt = new Date().toISOString();
+  const { error: archiveError } = await admin
+    .from("classes")
+    .update({ deleted_at: archivedAt })
+    .eq("id", klass.id);
+  if (archiveError) throw archiveError;
+
+  const { data: activeAfterArchive, error: activeAfterError } = await admin
+    .from("classes")
+    .select("id")
+    .eq("level_id", level1.id)
+    .is("deleted_at", null);
+  if (activeAfterError) throw activeAfterError;
+  pass(
+    "archived class leaves dashboard/level lists",
+    !(activeAfterArchive ?? []).some((row) => row.id === klass.id),
+    "",
+  );
+
+  const { data: archivedRows, error: archivedError } = await admin
+    .from("classes")
+    .select("id, title, deleted_at")
+    .not("deleted_at", "is", null)
+    .eq("id", klass.id);
+  if (archivedError) throw archivedError;
+  pass(
+    "archived class appears in /classes/archived query",
+    (archivedRows ?? []).some((row) => row.id === klass.id && row.deleted_at),
+    `n=${archivedRows?.length ?? 0}`,
+  );
+
+  const archivedStatus = await statusOf("/classes/archived");
+  pass(
+    "archived route resolves (not 404)",
+    archivedStatus !== 404 && archivedStatus !== 500,
+    `GET /classes/archived → ${archivedStatus}`,
+  );
+
+  const { error: restoreError } = await admin.from("classes").update({ deleted_at: null }).eq("id", klass.id);
+  if (restoreError) throw restoreError;
+
+  const { data: activeAfterRestore, error: restoreListError } = await admin
+    .from("classes")
+    .select("id")
+    .eq("level_id", level1.id)
+    .is("deleted_at", null);
+  if (restoreListError) throw restoreListError;
+  pass(
+    "restored class is back in dashboard/level lists",
+    (activeAfterRestore ?? []).some((row) => row.id === klass.id),
+    "",
   );
 
   const { error: cleanupError } = await admin.from("classes").delete().eq("id", klass.id);

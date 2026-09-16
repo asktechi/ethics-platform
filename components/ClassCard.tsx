@@ -9,6 +9,7 @@ import {
   duplicateClassAction,
   restoreClassAction,
 } from "@/app/(app)/_actions/class.actions";
+import { ClassArchivedToast, CLASS_ARCHIVED_TOAST } from "@/components/ClassArchivedToast";
 import { ClassFormModal } from "@/components/ClassFormModal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -84,7 +85,10 @@ export function ClassCard({
               </DropdownMenuItem>
             ) : (
               <DropdownMenuItem
-                onClick={() => void archiveClassAction({ id: item.id })}
+                onClick={async () => {
+                  const result = await archiveClassAction({ id: item.id });
+                  setMessage(result.ok ? CLASS_ARCHIVED_TOAST : result.error);
+                }}
               >
                 Archive
               </DropdownMenuItem>
@@ -100,7 +104,10 @@ export function ClassCard({
       <p className="mt-4 text-xs text-ivory/45">
         Updated {formatDistanceToNow(new Date(item.updated_at), { addSuffix: true })}
       </p>
-      {message ? <p className="mt-2 text-xs text-gold">{message}</p> : null}
+      {message && message !== CLASS_ARCHIVED_TOAST ? (
+        <p className="mt-2 text-xs text-gold">{message}</p>
+      ) : null}
+      {message === CLASS_ARCHIVED_TOAST ? <ClassArchivedToast /> : null}
       <ClassFormModal
         open={editOpen}
         onOpenChange={setEditOpen}

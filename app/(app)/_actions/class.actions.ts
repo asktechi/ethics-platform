@@ -35,6 +35,7 @@ function revalidateClassPaths(levelSlug: string, classId: string) {
   revalidatePath("/dashboard");
   revalidatePath(`/level/${levelSlug}`);
   revalidatePath(`/class/${classId}`);
+  revalidatePath("/classes/archived");
 }
 
 export async function createClassAction(input: unknown) {

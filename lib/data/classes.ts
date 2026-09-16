@@ -59,6 +59,60 @@ export async function listRecentClasses(limit = 5): Promise<Class[]> {
   return (data ?? []) as Class[];
 }
 
+export type ArchivedClassRow = {
+  id: string;
+  title: string;
+  deleted_at: string;
+  levelName: string;
+  levelSlug: string;
+  materialCount: number;
+};
+
+export async function countArchivedClasses(): Promise<number> {
+  const { supabase } = await requireUser();
+  const { count, error } = await supabase
+    .from("classes")
+    .select("id", { count: "exact", head: true })
+    .not("deleted_at", "is", null);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return count ?? 0;
+}
+
+export async function listArchivedClasses(): Promise<ArchivedClassRow[]> {
+  const { supabase } = await requireUser();
+  const { data, error } = await supabase
+    .from("classes")
+    .select("id, title, deleted_at, level:levels(name, slug), materials(id, deleted_at)")
+    .not("deleted_at", "is", null)
+    .order("deleted_at", { ascending: false });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return ((data ?? []) as Array<{
+    id: string;
+    title: string;
+    deleted_at: string | null;
+    level: { name: string; slug: string } | { name: string; slug: string }[] | null;
+    materials: Array<{ id: string; deleted_at: string | null }> | null;
+  }>).map((row) => {
+    const level = Array.isArray(row.level) ? row.level[0] : row.level;
+    return {
+      id: row.id,
+      title: row.title,
+      deleted_at: row.deleted_at ?? "",
+      levelName: level?.name ?? "Unknown level",
+      levelSlug: level?.slug ?? "",
+      materialCount: (row.materials ?? []).filter((item) => !item.deleted_at).length,
+    };
+  });
+}
+
 export const getClass = cache(async (id: string): Promise<ClassDetail> => {
   const { supabase } = await requireUser();
   const { data, error } = await supabase

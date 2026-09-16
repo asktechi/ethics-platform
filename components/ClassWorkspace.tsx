@@ -1,11 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import {
-  archiveClassAction,
-  restoreClassAction,
-  updateClassAction,
-} from "@/app/(app)/_actions/class.actions";
+import { archiveClassAction, restoreClassAction, updateClassAction } from "@/app/(app)/_actions/class.actions";
+import { ClassArchivedToast } from "@/components/ClassArchivedToast";
 import { ConceptList } from "@/components/ConceptList";
 import { InlineEditableText } from "@/components/InlineEditableText";
 import { MaterialsPanel } from "@/components/materials/MaterialsPanel";
@@ -45,6 +42,7 @@ export function ClassWorkspace({
   const [selectedId, setSelectedId] = useState<string | null>(firstActive);
   const [showArchived, setShowArchived] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [archivedToast, setArchivedToast] = useState(false);
 
   const selectedStillVisible = useMemo(() => {
     const selected = sections.find((section) => section.id === selectedId);
@@ -161,12 +159,21 @@ export function ClassWorkspace({
             <Button
               variant="outline"
               className="mt-4 border-red-300/40 text-red-200"
-              onClick={() => void archiveClassAction({ id: detail.id })}
+              onClick={async () => {
+                const result = await archiveClassAction({ id: detail.id });
+                if (!result.ok) {
+                  setError(result.error);
+                  return;
+                }
+                setError(null);
+                setArchivedToast(true);
+              }}
             >
               Archive class
             </Button>
           )}
         </div>
+        {archivedToast ? <ClassArchivedToast /> : null}
         {error ? <p className="text-sm text-red-300">{error}</p> : null}
       </TabsContent>
 
