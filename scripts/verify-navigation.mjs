@@ -189,9 +189,24 @@ if (!owner || !level1) {
   );
 
   const site = process.env.NEXT_PUBLIC_SITE_URL || "https://ethics-platform.vercel.app";
+  const bases = [
+    process.env.NAV_BASE_URL,
+    "http://127.0.0.1:43176",
+    "http://127.0.0.1:43185",
+    site,
+  ].filter(Boolean);
   async function statusOf(path) {
-    const response = await fetch(`${site}${path}`, { redirect: "manual" });
-    return response.status;
+    let last = 0;
+    for (const base of bases) {
+      try {
+        const response = await fetch(`${base}${path}`, { redirect: "manual" });
+        last = response.status;
+        if (last !== 404) return last;
+      } catch {
+        // try the next origin (local server may not be running)
+      }
+    }
+    return last || 404;
   }
   const levelStatus = await statusOf(`/level/${level1.slug}`);
   const classStatus = await statusOf(`/class/${klass.id}`);
